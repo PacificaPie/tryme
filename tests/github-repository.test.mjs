@@ -85,3 +85,14 @@ test('timeouts abort a stuck upstream request',async t=>{
   const pending=resolveGithubRepository('https://github.com/example/game',{fetchImpl:async(_url,options)=>{signal=options.signal;return new Promise(()=>{});}});
   const rejection=assert.rejects(pending,errorCode('GITHUB_TIMEOUT'));t.mock.timers.tick(10001);await rejection;assert.equal(signal.aborted,true);
 });
+
+test('REST rate limit falls back to public feed identity with the exact repository and immutable HEAD',async()=>{
+  const calls=[];
+  const fetchImpl=async(url,options)=>{calls.push({url,options});return url.startsWith('https://api.github.com/')?new Response('',{status:429}):new Response(`<feed xmlns="http://www.w3.org/2005/Atom"><id>tag:github.com,2008:/example/game/commits/${sha}</id><entry><id>irrelevant</id></entry></feed>`);};
+  const result=await resolveGithubRepository('https://github.com/example/game',{fetchImpl});
+  assert.equal(result.commitSha,sha);assert.equal(result.defaultBranch,'HEAD');assert.equal(result.license,null);
+  assert.equal(calls[1].url,'https://github.com/example/game/commits/HEAD.atom');assert.equal(calls[1].options.redirect,'manual');assert.equal(calls[1].options.headers.Authorization,undefined);
+  for(const body of [`<feed xmlns="http://www.w3.org/2005/Atom"><id>tag:github.com,2008:/other/game/commits/${sha}</id></feed>`,`<feed xmlns="http://www.w3.org/2005/Atom"><entry><id>tag:github.com,2008:/example/game/commits/${sha}</id></entry></feed>`,'<html>login</html>']){
+    await assert.rejects(resolveGithubRepository('https://github.com/example/game',{fetchImpl:async url=>url.startsWith('https://api.github.com/')?new Response('',{status:429}):new Response(body)}),errorCode('GITHUB_RESPONSE_INVALID'));
+  }
+});
