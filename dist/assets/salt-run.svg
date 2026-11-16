@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 560" role="img" aria-labelledby="title desc">
+  <title id="title">Salt Run 游戏封面</title><desc id="desc">暖白色跑道上，朱红小方块跃过深灰障碍。</desc>
+  <rect width="900" height="560" fill="#f3f0e9"/>
+  <g fill="none" stroke="#d6d7cd"><path d="M0 170h900M0 225h900M0 280h900"/><path d="M140 170v110M310 170v110M480 170v110M650 170v110M820 170v110"/></g>
+  <path d="M130 378q140-264 275 0" fill="none" stroke="#c84936" stroke-width="2" stroke-dasharray="5 9" opacity=".45"/>
+  <path d="M0 408h900v152H0z" fill="#e8e5dc"/>
+  <path d="M0 408h900" stroke="#56594e"/>
+  <ellipse cx="305" cy="415" rx="42" ry="8" fill="#d0cfc4"/>
+  <g transform="translate(275 231) rotate(-12 29 29)"><rect width="58" height="58" rx="8" fill="#c84936"/><rect x="40" y="14" width="6" height="7" fill="#f3f0e9"/></g>
+  <rect x="416" y="340" width="42" height="68" rx="4" fill="#282a27"/><rect x="690" y="356" width="32" height="52" rx="4" fill="#282a27"/>
+  <g stroke="#c5c8bc" stroke-width="3"><path d="M62 451h31m96 29h18m152-21h26m126 25h18m153-25h32m93 21h20"/></g>
+</svg>

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 560" role="img" aria-labelledby="title desc">
+  <title id="title">点亮九宫格游戏封面</title><desc id="desc">暖灰色背景上，九块圆角方格部分亮起芥黄色灯光。</desc>
+  <rect width="900" height="560" fill="#f3f0e9"/>
+  <g transform="translate(455 126) rotate(9 150 150)">
+    <g fill="#d7d3c7"><rect x="0" y="7" width="91" height="91" rx="13"/><rect x="107" y="7" width="91" height="91" rx="13"/><rect x="214" y="7" width="91" height="91" rx="13"/><rect x="0" y="114" width="91" height="91" rx="13"/><rect x="107" y="114" width="91" height="91" rx="13"/><rect x="214" y="114" width="91" height="91" rx="13"/><rect x="0" y="221" width="91" height="91" rx="13"/><rect x="107" y="221" width="91" height="91" rx="13"/><rect x="214" y="221" width="91" height="91" rx="13"/></g>
+    <g fill="#dfdfd5"><rect width="91" height="91" rx="13"/><rect x="214" width="91" height="91" rx="13"/><rect y="214" width="91" height="91" rx="13"/><rect x="214" y="214" width="91" height="91" rx="13"/></g>
+    <g fill="#c4a148"><rect x="107" width="91" height="91" rx="13"/><rect y="107" width="91" height="91" rx="13"/><rect x="107" y="107" width="91" height="91" rx="13"/><rect x="214" y="107" width="91" height="91" rx="13"/><rect x="107" y="214" width="91" height="91" rx="13"/></g>
+    <g fill="#f7edc7"><circle cx="152.5" cy="45.5" r="8"/><circle cx="45.5" cy="152.5" r="8"/><circle cx="152.5" cy="152.5" r="8"/><circle cx="259.5" cy="152.5" r="8"/><circle cx="152.5" cy="259.5" r="8"/></g>
+    <g fill="#c3c5b9"><circle cx="45.5" cy="45.5" r="8"/><circle cx="259.5" cy="45.5" r="8"/><circle cx="45.5" cy="259.5" r="8"/><circle cx="259.5" cy="259.5" r="8"/></g>
+  </g>
+  <text x="62" y="332" fill="#282a27" font-family="Arial,sans-serif" font-size="106" font-weight="700" letter-spacing="-7">3 × 3</text>
+  <path d="M62 429h226" stroke="#d1d2c7"/>
+</svg>

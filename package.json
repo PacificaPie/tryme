@@ -1,0 +1,1 @@
+{"name":"funtrack-prototype","private":true,"type":"module","scripts":{"check":"node --check dist/app.js && node --check dist/store.js && node --check dist/games.js","test":"node --test tests/store.test.mjs","dev":"python3 -m http.server 8766 --bind 127.0.0.1 --directory dist"}}
