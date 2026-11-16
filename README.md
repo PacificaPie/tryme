@@ -2,6 +2,16 @@
 
 A frontend prototype for discovering games, playing and leaving feedback, publishing a linked work, and generating an expandable creator card.
 
+## Structure review wireframe
+
+Open `dist/wireframe.html` directly, or visit `/wireframe.html` on the served site. This standalone HTML file is the current planning artifact; the earlier prototype at `/` is retained for comparison.
+
+The default page is a clickable architecture board. Its three product destinations are work discovery, public creator cards, and the creator center. The center has an overview with a visible personal card, works, analytics, feedback, and a card editor. Cards follow edit → preview → publish → public profile → expandable works. The reviewer toolbar can switch between an established creator, a new creator, and a signed-out visitor.
+
+All wireframe statistics, identities, game regions, and submissions are illustrative. State lasts only until refresh or a scenario reset. No external game, authentication service, analytics service, or AI generation is called. External-link-only works show unknown gameplay starts as `—`. Outgoing feedback on another author's work does not enter the current creator's inbox.
+
+Wireframe validation: inline JavaScript syntax checked; browser walkthroughs covered login cancellation/resumption, back navigation during login, required publish fields, retained form inputs after back/forward, publication into the work list and card draft, card preview/publication, gallery-to-work return, and 390px creator/data layouts without document overflow. A separate state review checked author identity, incoming/outgoing feedback, retry from the feedback shortcut, and fixed overview chart semantics. These are prototype flow checks, not backend or usability validation.
+
 ## Run
 
 `npm run dev` serves `dist/` at http://127.0.0.1:8766. No install or build is needed. `npm run check` checks JavaScript syntax. `npm test` runs the state/storage tests.
