@@ -4,15 +4,15 @@ A frontend prototype for discovering games, playing and leaving feedback, publis
 
 ## Structure review wireframe
 
-Open `dist/wireframe.html` directly, or visit `/wireframe.html` on the served site. This standalone HTML file is the current planning artifact; the earlier prototype at `/` is retained for comparison.
+Run the local server and visit `/wireframe.html`; the embedded 3D gallery requires an HTTP(S) origin. This standalone HTML file is the current planning artifact; the earlier prototype at `/` is retained for comparison.
 
 The default page is a clickable architecture board. Its three product destinations are work discovery, public creator cards, and the creator center. The center has an overview with a visible personal card, works, analytics, feedback, and a card builder. Cards follow **select works → choose template → generate → optionally publish**. The reviewer toolbar can switch between an established creator, a new creator, and a signed-out visitor.
 
 ### Iteration: content, templates, and cost
 
 - Discovery puts covers, titles, authors, search, and three content filters together. Search/filter state survives opening a work and returning. The creator's works use the same visual identity, with per-work statistics and links to data/feedback.
-- Card creation reuses existing author and work records. Selected works can be reordered. Four layouts adapt the original demo directions: 白墙画展, 卡中展厅, 一镜展廊, 作品星球. These are HTML wireframe adaptations, not ports of the original Three.js cinematic sequences. The planet layout explicitly uses its flat view above six works.
-- Generation creates a snapshot of the selected works, their versions, and the template. Changing the draft does not change the published snapshot. Repeating the same generation reuses its result. Fold/flat viewing state survives work navigation.
+- Card creation reuses existing author and work records. Selected works can be reordered. Four layouts adapt the original demo directions: 白墙画展, 卡中展厅, 一镜展廊, 作品星球. 卡中展厅 now embeds the original Three.js paper geometry and shader treatment with manual folding and current selected work data. The other three remain HTML wireframe adaptations. The planet layout explicitly uses its flat view above six works.
+- Generation creates a snapshot of the selected works, their versions, and the template. Changing the draft does not change the published snapshot. Repeating the same generation reuses its result. Fold/flat viewing state and gallery face survive work navigation; gallery routes also restore page scroll. Covers are included in snapshot identity.
 - `/wireframe.html#/costs` is an internal planning calculator, outside the product flow. The generation receipt records actual local configuration size, assembly time, cache reuse, and zero model calls. Assembly time excludes painting and is not a cloud latency measurement. The calculator sends no requests and is not connected to billing.
 
 Research references: [Pinterest discovery](https://help.pinterest.com/en/article/discover-ideas-on-pinterest), [Creator Hub](https://help.pinterest.com/en/business/article/use-the-creator-hub), and [individual Pin stats](https://help.pinterest.com/en/business/article/pin-stats) support a discovery → creator overview → individual-content analysis hierarchy. [Xiaohongshu's official course](https://school.xiaohongshu.com/lesson/normal/af0fe7e97bb0433fac9da5d1df52b07f?fromPage=LessonList&viewSource=LESSON) was available through indexed content about recent data and individual notes; the current authenticated creator dashboard was not visually inspected. Funtrack's specific layout is a design decision, not a claim to reproduce either product.
@@ -38,7 +38,7 @@ Wireframe validation: inline JavaScript syntax checked; browser walkthroughs cov
 - Works, compressed covers, draft inputs, feedback and creator profile are stored under `funtrack.prototype.v1` in this browser's localStorage. They are not shared across browsers or devices.
 - New works are HTTP(S) links. Clicking opens the original site; it does not deploy or instrument its code. External clicks are not labeled as completed plays.
 - Cards are deterministic HTML/CSS templates using confirmed profile/works data. No AI request, billing, or game-source analysis.
-- The site shell has no runtime dependencies, remote font requests, third-party analytics or tracking.
+- The site shell has no remote font requests, third-party analytics or tracking. The embedded gallery vendors Three.js r128 locally under its MIT license.
 
 ## Structure
 
@@ -71,3 +71,15 @@ Five automated state tests cover unsafe links, identity gating, publication/draf
 - Skip-to-content retained the active route.
 
 This is frontend flow verification, not production authentication, analytics accuracy, cross-device syncing, a performance benchmark, or a usability study.
+
+## Card-in-gallery integration
+
+`dist/gallery/` adapts the original 卡中展厅 demo. It receives a same-origin, selected-work snapshot from the card builder. Each work carries its ID, name, description, cover reference and version. The original unrelated sample works, people, invented statistics, card ring and promotional timeline are removed. Salt Run uses the supplied demo image; Orbit and 纸上花园 reuse the existing prototype SVG covers. Missing media stays a placeholder.
+
+The initial view is a stable closed card. The visitor controls unfold/fold and front/back. Direct gallery clicks and equivalent HTML work buttons lead to the corresponding work route. Returning restores gallery state. Reduced-motion requests skip transitions; non-WebGL browsers retain ordinary work navigation. This same-origin frame is a trusted renderer, not a security boundary for uploaded game code.
+
+Generation still performs no model calls. Shared renderer files and existing covers are referenced, not duplicated per card. The generation receipt measures data assembly only; WebGL rendering happens on the visitor's device. Arbitrary hosted games, source understanding, authentication and server-side analytics are not implemented by this integration.
+
+Integration validation: browser checks covered three-work and single-work generation, front/back, manual unfold, a direct raycast click on Orbit, HTML work links, work/feedback/browser-back return, and local publication. Viewports 390px and 360px showed no document overflow; SVG cover upload to WebGL was corrected through CanvasTexture. The actual Three.js model also passed geometry/disposal checks across 1–9 works, plus a 12-work pagination/state restoration check. Browser checks are not real-device performance measurements.
+
+`dist/play/` is a separately prepared local-game harness for the next real-event iteration. It mounts the existing three playable demos only after a user starts a session. Its events are client reports; no remote event store is connected yet. The current wireframe game stage remains explicitly illustrative. See `docs/real-data-plan.md` for the planned durable data boundary.
