@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
-import { ApiError, fail, authenticate, verifyWrite, requiredText, eventId, safeURL, coverType, htmlSource, sessionEvents, GAME_CSP, gameDocument, likedState, cardDetails, cardSnapshot, cardTemplate, commentInput, validateCommentParent, commentPageLimit, encodeCommentCursor, decodeCommentCursor } from './rules.mjs';
+import { resolveGithubHTML } from './github-import.mjs';
+import { ApiError, fail, authenticate, verifyWrite, requiredText, eventId, safeURL, coverType, htmlSource, sessionEvents, GAME_CSP, gameDocument, likedState, cardDetails, cardSnapshot, cardTemplate, commentInput, validateCommentParent, commentPageLimit, encodeCommentCursor, decodeCommentCursor, discoverQuery, encodeDiscoverCursor, decodeDiscoverCursor } from './rules.mjs';
 
 type Row = Record<string, any>;
 type User = { id: string; name: string; email: string };
@@ -43,6 +44,30 @@ async function withWorkStats(works:Row[],user:User) {
   return works.map(work=>({...work,likesCount:Number(byId.get(work.id)?.n||0),likedByMe:Boolean(byId.get(work.id)?.liked),commentsCount:Number(commentsById.get(work.id)||0)}));
 }
 function likeJSON(workId:string,row:Row) {return {workId,liked:Boolean(row.liked),likesCount:Number(row.n||0)};}
+async function discover(url:URL,user:User) {
+  const query=discoverQuery(url.searchParams),cursor=decodeDiscoverCursor(url.searchParams.get('cursor'),query),asOf=cursor?.asOf||iso();
+  const conditions=['w.created_at<=?'],values:any[]=[asOf];
+  if(query.source!=='all'){conditions.push('w.source=?');values.push(query.source);}
+  if(query.author){conditions.push('w.author_id=?');values.push(query.author);}
+  // instr treats '%' and '_' literally instead of expanding them as SQL LIKE wildcards.
+  if(query.q){conditions.push("instr(lower(w.name||char(10)||w.description||char(10)||w.author_name),lower(?))>0");values.push(query.q);}
+  const where=conditions.join(' AND ');
+  const rank=query.sort==='likes'?`(SELECT COUNT(*) FROM ft_work_likes l WHERE l.work_id=w.id AND l.created_at<=?)`:query.sort==='comments'?`(SELECT COUNT(*) FROM ft_comments c WHERE c.work_id=w.id AND c.created_at<=?)`:'0';
+  const rankValues=query.sort==='newest'?[]:[asOf];
+  const selection=`WITH ranked AS (SELECT w.*,v.version,v.game_key,v.cover_key,v.cover_mime,${rank} AS feed_rank FROM ft_works w JOIN ft_work_versions v ON v.id=w.current_version_id WHERE ${where}) SELECT * FROM ranked`;
+  const after=cursor?' WHERE (feed_rank<? OR (feed_rank=? AND (created_at<? OR (created_at=? AND id<?))))':'';
+  const afterValues=cursor?[cursor.last.rank,cursor.last.rank,cursor.last.createdAt,cursor.last.createdAt,cursor.last.id]:[];
+  const results=await db().batch<Row>([
+    sql(selection+after+' ORDER BY feed_rank DESC,created_at DESC,id DESC LIMIT ?',...rankValues,...values,...afterValues,query.limit+1),
+    sql('SELECT COUNT(*) n FROM ft_works w WHERE '+where,...values),
+  ]);
+  const page=results[0].results.slice(0,query.limit),last=page[page.length-1];
+  const nextCursor=results[0].results.length>query.limit?encodeDiscoverCursor({v:1,filters:{q:query.q,source:query.source,sort:query.sort,author:query.author},asOf,last:{rank:Number(last.feed_rank),createdAt:last.created_at,id:last.id}}):null;
+  // Presentation counts and the viewer's liked state stay live. Ranking uses
+  // asOf to prevent new works/comments/likes from changing this traversal.
+  // Unlike removes historical rows, so likes ordering is not a strict snapshot.
+  return json({works:await withWorkStats(page.map(workJSON),user),nextCursor,total:Number(results[1].results[0]?.n||0),sort:query.sort,asOf});
+}
 async function workLike(request:Request,user:User,workId:string) {
   await getWork(workId);
   const countQuery=sql('SELECT COUNT(*) n,MAX(CASE WHEN actor_id=? THEN 1 ELSE 0 END) liked FROM ft_work_likes WHERE work_id=?',user.id,workId);
@@ -294,6 +319,7 @@ export async function handleAPI(request:Request) {
     if(request.method==='POST')verifyWrite(request);
     if(request.method==='GET') {
       if(parts[0]==='me'&&parts.length===1)return json({user:await userProfile(user)});
+      if(parts[0]==='discover'&&parts.length===1)return await discover(url,user);
       if(parts[0]==='works'&&parts.length===1)return json({works:await withWorkStats((await rows(WORK_QUERY+(url.searchParams.get('mine')==='1'?' WHERE w.author_id=?':'')+' ORDER BY w.created_at DESC LIMIT 200',...url.searchParams.get('mine')==='1'?[user.id]:[])).map(workJSON),user)});
       if(parts[0]==='works'&&parts.length===2)return json({work:(await withWorkStats([workJSON(await getWork(parts[1]))],user))[0]});
       if(parts[0]==='works'&&parts.length===3&&parts[2]==='like')return await workLike(request,user,parts[1]);
@@ -308,6 +334,7 @@ export async function handleAPI(request:Request) {
       if(parts[0]==='media'&&parts.length===2)return mediaResponse(request,parts[1]);
     }
     if(request.method==='POST') {
+      if(parts[0]==='imports'&&parts.length===2&&parts[1]==='github')return json(await resolveGithubHTML((await bodyJSON(request)).url));
       if(parts[0]==='works'&&parts.length===1)return await publish(request,user);
       if(parts[0]==='works'&&parts.length===3&&parts[2]==='like')return await workLike(request,user,parts[1]);
       if(parts[0]==='works'&&parts.length===3&&parts[2]==='comments')return await addComment(request,user,parts[1]);

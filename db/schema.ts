@@ -10,10 +10,11 @@ export const works = sqliteTable('ft_works', {
   name: text('name').notNull(), description: text('description').notNull(), source: text('source').notNull(),
   currentVersionId: text('current_version_id').notNull(), url: text('url'), createdAt: text('created_at').notNull(),
   idempotencyKey: text('idempotency_key').notNull(), requestHash: text('request_hash').notNull(),
-}, t => [uniqueIndex('ft_works_owner_key').on(t.authorId, t.idempotencyKey), index('ft_works_owner_created').on(t.authorId,t.createdAt)]);
+}, t => [uniqueIndex('ft_works_owner_key').on(t.authorId, t.idempotencyKey), index('ft_works_owner_created').on(t.authorId,t.createdAt,t.id),
+  index('ft_works_created_id').on(t.createdAt,t.id),index('ft_works_source_created').on(t.source,t.createdAt,t.id)]);
 export const workLikes = sqliteTable('ft_work_likes', {
   workId: text('work_id').notNull().references(()=>works.id), actorId: text('actor_id').notNull(), createdAt: text('created_at').notNull(),
-}, t => [primaryKey({columns:[t.workId,t.actorId]})]);
+}, t => [primaryKey({columns:[t.workId,t.actorId]}),index('ft_work_likes_work_created').on(t.workId,t.createdAt)]);
 export const versions = sqliteTable('ft_work_versions', {
   id: text('id').primaryKey(), workId: text('work_id').notNull().references(()=>works.id), version: text('version').notNull(),
   gameKey: text('game_key'), coverKey: text('cover_key'), coverMime: text('cover_mime'), createdAt: text('created_at').notNull(),
@@ -48,7 +49,7 @@ export const comments = sqliteTable('ft_comments', {
   body: text('body').notNull(), parentId: text('parent_id').references(():AnySQLiteColumn=>comments.id), createdAt: text('created_at').notNull(),
   idempotencyKey: text('idempotency_key').notNull(), requestHash: text('request_hash').notNull(),
 }, t=>[uniqueIndex('ft_comments_author_key').on(t.authorId,t.idempotencyKey),index('ft_comments_work_seq').on(t.workId,t.seq),
-  index('ft_comments_parent_seq').on(t.parentId,t.seq),index('ft_comments_author_created').on(t.authorId,t.createdAt)]);
+  index('ft_comments_parent_seq').on(t.parentId,t.seq),index('ft_comments_author_created').on(t.authorId,t.createdAt),index('ft_comments_work_created').on(t.workId,t.createdAt)]);
 export const commentLikes = sqliteTable('ft_comment_likes', {
   commentId: text('comment_id').notNull().references(()=>comments.id), actorId: text('actor_id').notNull(), createdAt: text('created_at').notNull(),
 }, t=>[primaryKey({columns:[t.commentId,t.actorId]})]);

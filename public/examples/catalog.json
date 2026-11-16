@@ -1,0 +1,92 @@
+[
+  {
+    "id": "salt-run",
+    "name": "Salt Run · 演示",
+    "desc": "跳跃躲过障碍，坚持十八秒。",
+    "html": "/examples/salt-run.html",
+    "cover": "/examples/salt-run.jpg",
+    "controls": "空格、↑ 或点击跳跃。",
+    "estimatedDuration": "约 18 秒",
+    "demo": true
+  },
+  {
+    "id": "orbit",
+    "name": "Orbit · 演示",
+    "desc": "移动光球，依次接触六颗星点。",
+    "html": "/examples/orbit.html",
+    "cover": "/examples/orbit.png",
+    "controls": "鼠标、触控或方向键移动。",
+    "estimatedDuration": "约 30 秒",
+    "demo": true
+  },
+  {
+    "id": "tiles",
+    "name": "点亮九宫格 · 演示",
+    "desc": "翻转相邻方格，让九格同时亮起。",
+    "html": "/examples/tiles.html",
+    "cover": "/examples/tiles.png",
+    "controls": "点击方格，或方向键选择后空格翻转。",
+    "estimatedDuration": "约 30 秒",
+    "demo": true
+  },
+  {
+    "id": "memory-tide",
+    "name": "潮汐记忆 · 演示",
+    "desc": "翻开十二张卡片，配对六种海边图案。",
+    "html": "/examples/memory-tide.html",
+    "cover": "/examples/memory-tide.png",
+    "controls": "点按翻牌；方向键选择，空格或回车翻牌。",
+    "estimatedDuration": "约 1–2 分钟",
+    "demo": true
+  },
+  {
+    "id": "pixel-orchard",
+    "name": "像素果园 · 演示",
+    "desc": "引导小蛇收集八颗果实，避开墙壁和自己的尾巴。",
+    "html": "/examples/pixel-orchard.html",
+    "cover": "/examples/pixel-orchard.png",
+    "controls": "方向键或下方方向按钮；也可点向蛇头四周转弯。",
+    "estimatedDuration": "约 1 分钟",
+    "demo": true
+  },
+  {
+    "id": "prism-breaker",
+    "name": "折光弹球 · 演示",
+    "desc": "在两分钟内移动挡板反弹小球，用三次机会清除二十四块砖。",
+    "html": "/examples/prism-breaker.html",
+    "cover": "/examples/prism-breaker.png",
+    "controls": "拖动移动挡板，点击发球；左右键移动，空格发球。",
+    "estimatedDuration": "约 2 分钟",
+    "demo": true
+  },
+  {
+    "id": "pulse-lanes",
+    "name": "拍点 · 演示",
+    "desc": "在音符抵达红线时点按对应轨道，完成二十四次视觉节拍。",
+    "html": "/examples/pulse-lanes.html",
+    "cover": "/examples/pulse-lanes.png",
+    "controls": "点按四条轨道或下方按钮；键盘 D / F / J / K。无需声音。",
+    "estimatedDuration": "约 15 秒",
+    "demo": true
+  },
+  {
+    "id": "mini-sudoku",
+    "name": "四方数独 · 演示",
+    "desc": "在四行四列中填入数字，让每行、每列及每宫各有一个 1–4。",
+    "html": "/examples/mini-sudoku.html",
+    "cover": "/examples/mini-sudoku.png",
+    "controls": "点选格子后点数字；方向键选择，1–4 输入，退格清除。",
+    "estimatedDuration": "约 1–2 分钟",
+    "demo": true
+  },
+  {
+    "id": "arc-hoops",
+    "name": "弧线投篮 · 演示",
+    "desc": "调整抛物线的角度与力度，在五次机会中尽可能多投进篮筐。",
+    "html": "/examples/arc-hoops.html",
+    "cover": "/examples/arc-hoops.png",
+    "controls": "向篮筐方向拖拽并松手；左右键调角度，上下键调力度，空格投篮。",
+    "estimatedDuration": "约 30–60 秒",
+    "demo": true
+  }
+]

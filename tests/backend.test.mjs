@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
-import { ApiError, authenticate, verifyWrite, safeURL, coverType, htmlSource, cleanResult, sessionEvents, gameDocument, GAME_CSP, likedState, cardDetails, cardSnapshot, cardTemplate, commentInput, validateCommentParent, commentPageLimit, encodeCommentCursor, decodeCommentCursor } from '../lib/funtrack/rules.mjs';
+import { ApiError, authenticate, verifyWrite, safeURL, coverType, htmlSource, cleanResult, sessionEvents, gameDocument, GAME_CSP, likedState, cardDetails, cardSnapshot, cardTemplate, commentInput, validateCommentParent, commentPageLimit, encodeCommentCursor, decodeCommentCursor, discoverQuery, encodeDiscoverCursor, decodeDiscoverCursor } from '../lib/funtrack/rules.mjs';
 
 const rejects=(fn,status)=>assert.throws(fn,error=>error instanceof ApiError&&error.status===status);
 test('identity comes only from supplied platform headers, with a safe public display name',()=>{
@@ -58,6 +58,18 @@ test('comment cursors are scoped and limits keep roots, replies and inbox bounde
   for(const invalid of ['not-json','%broken',encodeCommentCursor(-1,scope),encodeCommentCursor(Number.MAX_SAFE_INTEGER+1,scope)])rejects(()=>decodeCommentCursor(invalid,scope),400);
   assert.equal(commentPageLimit(null),20);assert.equal(commentPageLimit('50'),50);assert.equal(commentPageLimit('100',50,100),100);
   for(const value of ['0','51','3.5','nope'])rejects(()=>commentPageLimit(value),422);
+});
+test('discover validates filters and limits and binds cursors to the complete filter',()=>{
+  const query=discoverQuery(new URLSearchParams('q=小游戏&source=html&sort=comments&author=creator&limit=48'));
+  assert.equal(query.q,'小游戏');assert.equal(query.limit,48);
+  assert.deepEqual(discoverQuery(new URLSearchParams()),{q:'',source:'all',sort:'newest',author:null,limit:12});
+  for(const params of ['limit=49','limit=0','source=zip','sort=random','q='+('a'.repeat(101))])rejects(()=>discoverQuery(new URLSearchParams(params)),422);
+  const cursor=encodeDiscoverCursor({v:1,filters:{q:query.q,source:query.source,sort:query.sort,author:query.author},asOf:'2026-01-02T00:00:00.000Z',last:{rank:4,createdAt:'2026-01-01T00:00:00.000Z',id:'work-cursor-id'}});
+  assert.equal(decodeDiscoverCursor(cursor,query).last.rank,4);
+  assert.equal(decodeDiscoverCursor(cursor,{...query,limit:12}).last.id,'work-cursor-id');
+  for(const patch of [{q:'different'},{source:'url'},{sort:'likes'},{author:'other'}])rejects(()=>decodeDiscoverCursor(cursor,{...query,...patch}),400);
+  rejects(()=>decodeDiscoverCursor(cursor,query,Date.parse('2025-01-01')),400);
+  rejects(()=>decodeDiscoverCursor('not-a-cursor',query),400);
 });
 test('cover magic and HTML type, encoding and size are checked',()=>{
   assert.equal(coverType(new Uint8Array([137,80,78,71,13,10,26,10]),'image/png'),'image/png');
