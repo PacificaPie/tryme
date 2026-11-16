@@ -6,7 +6,7 @@ var W=3,H=4.6,FX=1.3,Y0=-.55,Y1=1.85,TAU=Math.PI*2;
 var SERIF='"Songti SC","Noto Serif SC",Georgia,serif',DISP='Arial,sans-serif',MONO='ui-monospace,Menlo,monospace',ITAL='Georgia,serif';
 var INK='#15161A',BONE='#ECE9E2',PAPER='#F6F4ED';
 var WORKS=[],HANG=[],SLOTS=[],PEOPLE=[],TOTAL=0,OFFSET=0;
-var BENCH={x:-.02,y:.05,L:.9,D:.26,h:.15},FIGS=[{x:.88,y:.85,k:1,red:true},{x:.7,y:-.02,k:.94,red:false}];
+var BENCH={x:-.02,y:.05,L:.9,D:.26,h:.15},FIGS=[{x:.88,y:-.40,k:1,red:true},{x:-.88,y:-.40,k:.94,red:false}];
 function mk(w,h){var c=document.createElement('canvas');c.width=Math.round(w);c.height=Math.round(h);return c;}
 function rnd(seed){var s=(seed>>>0)||1;return function(){s=(Math.imul(s,1664525)+1013904223)>>>0;return s/4294967296;};}
 function pad4(n){return ('000'+n).slice(-4);}
@@ -93,7 +93,7 @@ function wall(which,len,h,P){
     fitText(g,WORKS[i].kind+'  /  '+WORKS[i].version,x,y+.05*P,q.w*P,.024*P,MONO,'400');
   });
   if(which==='B'){
-    g.fillStyle=INK;g.textAlign='center';fitText(g,PEOPLE[0].n,X(0),Y(h-.16),Math.min(1.75,len-.24)*P,.13*P,SERIF,'700');
+    g.fillStyle=INK;g.textAlign='center';fitText(g,PEOPLE[0].n,X(0),Y(h-(WORKS.length===1?.09:.16)),Math.min(1.75,len-.24)*P,(WORKS.length===1?.08:.13)*P,SERIF,'700');
   }
   return c;
 }
@@ -151,7 +151,7 @@ SP.configurePrints=function(author,works,total,offset){
   if(count===2)SLOTS=[{x:0,y:1.16,w:2.45,h:.95},{x:0,y:-.04,w:2.45,h:.95}];
   if(count===3)SLOTS=[{x:0,y:1.075,w:2.45,h:1.25},{x:-.65,y:-.10,w:1.15,h:.60},{x:.65,y:-.10,w:1.15,h:.60}];
   var wallNames=count<=2?WORKS.map(function(){return'B';}):WORKS.map(function(w,i){return['B','L','R'][i%3];});
-  HANG=WORKS.map(function(w,i){var wall=wallNames[i],ids=wallNames.map(function(v,j){return v===wall?j:-1;}).filter(function(v){return v>=0;}),position=ids.indexOf(i),span=wall==='B'?2.25:2.08,width=Math.min(count<=3?1.48:1.12,span/ids.length-.14);return{wall:wall,s:(position+.5)*span/ids.length-span/2,v:.65,w:width};});
+  HANG=WORKS.map(function(w,i){var wall=wallNames[i],ids=wallNames.map(function(v,j){return v===wall?j:-1;}).filter(function(v){return v>=0;}),position=ids.indexOf(i),span=wall==='B'?2.25:2.08,width=Math.min(count===1?1.70:count<=3?1.48:1.12,span/ids.length-.14);return{wall:wall,s:(position+.5)*span/ids.length-span/2,v:.65,w:width};});
   SP.prints={W:W,H:H,FX:FX,Y0:Y0,Y1:Y1,WORKS:WORKS,HANG:HANG,SLOTS:SLOTS,PEOPLE:PEOPLE,front:front,back:back,wall:wall,floorPrint:floorPrint,backOut:backOut,BENCH:BENCH,FIGS:FIGS,placeholder:placeholder,caps:function(){return WORKS.map(function(w){return w.t;});}};
   return SP.prints;
 };

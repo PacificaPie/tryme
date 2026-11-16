@@ -7,7 +7,7 @@ var SP=window.SP=window.SP||{};
 SP.createPopup=function(core,paper,onChange){
   var T=core.T,U=SP.u,PR=SP.prints,W=PR.W,H=PR.H,FX=PR.FX,Y0=PR.Y0,Y1=PR.Y1,PI=Math.PI;
   var TC=0.045,RAD=0.13,t=0.016,zF=0.004,zL2=0.026,zL3=0.046,hS=1.297,hB=zL3+hS-zL2,D=Y1-Y0;
-  var root=new T.Group();core.scene.add(root);
+  var root=new T.Group();root.userData.tourRoom={minX:-FX,maxX:FX,minY:Y0,maxY:Y1};core.scene.add(root);
 
   var disposed=false,images=[],targets=[];
   /* Selected project covers are images, never simulated running games. */

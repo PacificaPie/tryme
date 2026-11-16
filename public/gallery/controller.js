@@ -2,19 +2,21 @@
    No autoplay, fake metrics, external dependencies, or embedded game execution. */
 (function(){
 'use strict';
-var PAGE_SIZE=9,SP=window.SP||{},PI=Math.PI;
+var PAGE_SIZE=window.FuntrackGallery.pageSize,SP=window.SP||{},PI=Math.PI;
 var $=function(id){return document.getElementById(id);};
 var canvas=$('gallery-canvas'),stage=$('stage'),status=$('gallery-status');
 var toggle=$('toggle'),flip=$('flip'),enter=$('enter'),left=$('left'),right=$('right');
 var core=null,paper=null,popup=null,raf=0,lastTime=0,disposed=false,failed=false;
 var data=null,dataKey='',page=0,progress=0,faceProgress=0,targetOpen=false,targetFace='front',yaw=0,inside=false,fly=0;
 var pointer=null,resizeObserver=null,heightObserver=null,lastHeight=0;
+var focusWorkId=null,roomEye=null,roomLook=null,roomFov=66,roomFrom=null,roomMove=1,exitPose=null;
 var motion=window.matchMedia('(prefers-reduced-motion: reduce)');
 var listeners=[];
 function listen(target,type,fn,options){target.addEventListener(type,fn,options);listeners.push(function(){target.removeEventListener(type,fn,options);});}
 function send(message){if(parent!==window)parent.postMessage(message,location.origin);}
 function reportHeight(){var height=Math.ceil($('shell').getBoundingClientRect().height);if(height>0&&height!==lastHeight){lastHeight=height;send({type:'funtrack:gallery:resize',height:height});}}
-function sendState(){send({type:'funtrack:gallery:state',open:targetOpen,face:targetFace,page:page,yaw:yaw,inside:inside});}
+function sendState(){send({type:'funtrack:gallery:state',open:targetOpen,face:targetFace,page:page,yaw:yaw,inside:inside,focusWorkId:focusWorkId,pageSize:PAGE_SIZE});}
+function setText(node,value){if(node.textContent!==value)node.textContent=value;}
 function text(value,fallback,max){return typeof value==='string'?value.trim().slice(0,max||1000):fallback;}
 function cleanPayload(payload){
   if(!payload||!payload.author||!Array.isArray(payload.works))return null;
@@ -27,10 +29,38 @@ function cleanPayload(payload){
     try{if(typeof w.cover==='string'&&w.cover.trim()){var url=new URL(w.cover,location.href);if(url.origin===location.origin&&(url.protocol==='https:'||url.protocol==='http:'))cover=url.href;}}catch(e){}
     works.push({id:w.id,name:text(w.name,'未命名作品',140)||'未命名作品',desc:text(w.desc,'',1000),cover:cover,kind:text(w.kind,'作品',80),version:text(w.version,'',40)});
   });
-  return {author:author,works:works,open:!!payload.open,inside:!!payload.inside&&!!payload.open,face:payload.face==='back'?'back':'front',page:Number.isFinite(payload.page)?Math.max(0,Math.min(Math.max(0,Math.ceil(works.length/PAGE_SIZE)-1),Math.floor(payload.page))):0,yaw:Number.isFinite(payload.yaw)?Math.max(-1.3,Math.min(1.3,payload.yaw)):0};
+  var focus=works.some(function(w){return w.id===payload.focusWorkId;})?payload.focusWorkId:null;
+  return {focusWorkId:focus,author:author,works:works,open:!!payload.open,inside:!!payload.inside&&!!payload.open,face:payload.face==='back'?'back':'front',page:Number.isFinite(payload.page)?Math.max(0,Math.min(Math.max(0,Math.ceil(works.length/PAGE_SIZE)-1),Math.floor(payload.page))):0,yaw:Number.isFinite(payload.yaw)?Math.max(-1.3,Math.min(1.3,payload.yaw)):0};
 }
 function pageWorks(){return data?data.works.slice(page*PAGE_SIZE,(page+1)*PAGE_SIZE):[];}
-function openWork(id){if(data&&data.works.some(function(w){return w.id===id;}))send({type:'funtrack:gallery:open-work',workId:id,play:true});}
+function openWork(id){
+  if(!data||!data.works.some(function(w){return w.id===id;}))return;
+  if(inside){focusWorkId=id;sendState();}
+  send({type:'funtrack:gallery:open-work',workId:id,play:true});
+}
+function tourIds(){return data?SP.tourOrder(data.works,PAGE_SIZE):[];}
+function selectedWork(){return data&&data.works.find(function(w){return w.id===focusWorkId;});}
+function updateWorkNav(){
+  var w=selectedWork(),order=tourIds(),index=order.indexOf(focusWorkId);
+  $('work-nav').hidden=!inside||!w||failed;
+  var previousFocus=document.activeElement;left.disabled=index<=0;right.disabled=index<0||index>=order.length-1;
+  if(inside&&((previousFocus===left&&left.disabled)||(previousFocus===right&&right.disabled)))canvas.focus({preventScroll:true});
+  left.hidden=right.hidden=order.length<2;
+  setText($('current-title'),w?w.name:'');$('current-title').title=w?w.name:'';
+  setText($('current-index'),w?(index+1)+' / '+order.length:'');
+  setText($('play-current'),w&&w.kind==='外链作品'?'打开作品 ↗':'试玩 ↗');
+}
+function focusWork(id,animate){
+  var index=data?data.works.findIndex(function(w){return w.id===id;}):-1;if(index<0)return;
+  roomFrom=roomEye?{eye:roomEye.clone(),look:roomLook.clone(),fov:roomFov}:null;
+  roomMove=animate&&roomFrom&&!motion.matches?0:1;focusWorkId=id;
+  var nextPage=Math.floor(index/PAGE_SIZE);if(nextPage!==page){page=nextPage;rebuild();}
+  clearHover();updateWorkNav();sendState();requestRender();
+}
+function stepWork(delta){
+  if(!inside||failed)return;var order=tourIds(),index=order.indexOf(focusWorkId),next=index+delta;
+  if(next>=0&&next<order.length)focusWork(order[next],true);
+}
 function renderList(){
   var works=pageWorks(),list=$('works');list.replaceChildren();
   $('gallery-title').textContent=data.author.name;
@@ -48,20 +78,22 @@ function renderList(){
   });
   var pages=Math.ceil(data.works.length/PAGE_SIZE);$('paging').hidden=pages<=1;$('prev').disabled=page===0;$('next').disabled=page>=pages-1;
   $('page-label').textContent=(page+1)+' / '+pages;$('page-note').hidden=pages<=1;
-  $('page-note').textContent='每组展出最多 9 件；当前第 '+(page*PAGE_SIZE+1)+'–'+Math.min((page+1)*PAGE_SIZE,data.works.length)+' 件。切换分组可查看全部已选作品。';
+  $('page-note').textContent='每组展出最多 '+PAGE_SIZE+' 件；当前第 '+(page*PAGE_SIZE+1)+'–'+Math.min((page+1)*PAGE_SIZE,data.works.length)+' 件。切换分组可查看全部已选作品。';
 }
 function hasWorks(){return !!(data&&data.works.length);}
-function animating(){return Math.abs(progress-(targetOpen?1:0))>.0001||Math.abs(faceProgress-(targetFace==='back'?1:0))>.0001||Math.abs(fly-(inside?1:0))>.0001;}
+function animating(){return Math.abs(progress-(targetOpen?1:0))>.0001||Math.abs(faceProgress-(targetFace==='back'?1:0))>.0001||Math.abs(fly-(inside?1:0))>.0001||(inside&&roomMove<1);}
 function updateUI(){
   var available=hasWorks()&&!failed&&!!popup;
   toggle.disabled=!available;toggle.hidden=!available||inside||fly>.001;toggle.textContent=targetOpen?'收起名片':'展开展厅 ↗';toggle.setAttribute('aria-pressed',String(targetOpen));
   flip.disabled=!available||targetOpen||progress>.0001;flip.hidden=flip.disabled;flip.setAttribute('aria-label',targetFace==='front'?'翻到背面':'翻到正面');flip.title=flip.getAttribute('aria-label');
   enter.disabled=!available||progress<.999;enter.hidden=!available||!targetOpen||progress<.999||inside||fly>.001;
-  $('room-nav').hidden=!available||!inside;left.disabled=right.disabled=!inside;
+  $('room-nav').hidden=!available||!inside;updateWorkNav();
   stage.dataset.face=targetFace;if(!heightObserver)reportHeight();
   if(!hasWorks()){stage.dataset.state=data?'empty':'waiting';status.textContent=data?'尚未选择作品':'等待作品';return;}
   if(failed){stage.dataset.state='fallback';status.textContent='作品列表模式';return;}
   var moving=animating();stage.dataset.state=moving?(inside?'entering':fly>.001?'leaving':targetOpen?'opening':progress>.0001?'closing':'flipping'):inside?'inside':targetOpen?'open':'closed';
+  if(inside&&fly>.999&&roomMove<1)stage.dataset.state='browsing';
+  if(inside&&fly>.999){var focused=selectedWork();setText(status,focused?'正在浏览 '+focused.name:'已进入展厅');return;}
   status.textContent=moving?(inside?'正在走进展厅…':fly>.001?'正在返回名片…':targetOpen?'正在展开展厅…':progress>.0001?'正在收起展厅…':'正在翻面…'):inside?'已进入展厅':targetOpen?'展厅已展开':'展厅已收起 · '+(targetFace==='front'?'正面':'背面');
 }
 function showFallback(message){
@@ -101,8 +133,12 @@ function initialize(payload){
   targetOpen=next.open&&next.works.length>0;targetFace=targetOpen?'front':next.face;
   progress=targetOpen?1:0;faceProgress=targetFace==='back'?1:0;
   inside=next.inside&&targetOpen;fly=inside?1:0;
-  var mustRebuild=key!==dataKey||page!==next.page;
-  data=next;dataKey=key;page=next.page;yaw=next.yaw;
+  var oldPage=page,mustRebuild=key!==dataKey;
+  data=next;dataKey=key;page=next.page;yaw=next.yaw;focusWorkId=next.focusWorkId;
+  if(focusWorkId)page=Math.floor(data.works.findIndex(function(w){return w.id===focusWorkId;})/PAGE_SIZE);
+  if(inside&&!focusWorkId)focusWorkId=pageWorks()[0].id;
+  roomEye=roomLook=roomFrom=exitPose=null;roomMove=1;
+  mustRebuild=mustRebuild||oldPage!==page;
   if(mustRebuild)rebuild();else{updateUI();requestRender();}
   sendState();
 }
@@ -111,7 +147,15 @@ function setOpen(open){
   if(motion.matches){progress=targetOpen?1:0;faceProgress=targetFace==='back'?1:0;fly=inside?1:0;}
   lastTime=0;updateUI();sendState();requestRender();
 }
-function enterRoom(value){if(!popup||failed||!targetOpen)return;inside=!!value;yaw=0;if(motion.matches)fly=inside?1:0;lastTime=0;clearHover();updateUI();canvas.focus({preventScroll:true});sendState();requestRender();}
+function enterRoom(value){
+  if(!popup||failed||!targetOpen)return;inside=!!value;yaw=0;
+  if(inside&&!selectedWork())focusWorkId=pageWorks()[0].id;
+  if(!inside&&roomEye)exitPose={eye:roomEye.clone(),look:roomLook.clone(),fov:roomFov};
+  if(inside){exitPose=null;roomFrom=fly>.001&&roomEye?{eye:roomEye.clone(),look:roomLook.clone(),fov:roomFov}:null;roomMove=roomFrom&&!motion.matches?0:1;}
+  else{roomMove=1;roomFrom=null;}
+  if(motion.matches)fly=inside?1:0;
+  lastTime=0;clearHover();updateUI();canvas.focus({preventScroll:true});sendState();requestRender();
+}
 function flipCard(){
   if(!popup||targetOpen||progress>.0001||failed)return;
   targetFace=targetFace==='front'?'back':'front';if(motion.matches)faceProgress=targetFace==='back'?1:0;
@@ -119,7 +163,8 @@ function flipCard(){
 }
 function changePage(next){
   if(!data||next<0||next>=Math.ceil(data.works.length/PAGE_SIZE))return;
-  page=next;rebuild();sendState();
+  if(inside){focusWork(data.works[next*PAGE_SIZE].id,true);return;}
+  focusWorkId=null;page=next;rebuild();sendState();
 }
 function moveTowards(value,goal,step){return value<goal?Math.min(goal,value+step):Math.max(goal,value-step);}
 function draw(){
@@ -140,10 +185,23 @@ function draw(){
     var v=new T.Vector3(x,y,z).sub(target),depth=v.dot(direction);
     d=Math.max(d,depth+Math.abs(v.dot(rightV))/(th*asp*margin),depth+Math.abs(v.dot(upV))/(th*margin));
   });});});
-  var outer=target.clone().addScaledVector(direction,d),eye=new T.Vector3(0,.68,.30),look=new T.Vector3(Math.sin(yaw)*2.15,.64,.30-Math.cos(yaw)*2.15);
-  core.camera.fov=U.lerp(32,66,tour);core.camera.near=.04;core.camera.updateProjectionMatrix();
-  core.camera.position.copy(outer.lerp(eye,tour));core.camera.lookAt(target.lerp(look,tour));
-  core.camera.updateMatrixWorld(true);
+  var outer=target.clone().addScaledVector(direction,d),mesh=popup.targets.find(function(m){return m.userData.workId===focusWorkId;})||popup.targets[0];
+  var pose=(!inside&&fly>.0001&&exitPose)||(mesh&&p>.999?SP.tourPose(T,mesh,asp):null)||{eye:new T.Vector3(0,.68,.30),look:new T.Vector3(0,.64,-1.5),fov:66};
+  if(!roomEye){roomEye=pose.eye.clone();roomLook=pose.look.clone();roomFov=pose.fov;}
+  var travel=U.eio(roomMove);
+  roomEye.copy(roomFrom?roomFrom.eye:pose.eye).lerp(pose.eye,travel);
+  if(roomFrom&&travel<1){
+    var fromDir=roomFrom.look.clone().sub(roomFrom.eye).normalize(),toDir=pose.look.clone().sub(pose.eye).normalize();
+    var fromYaw=Math.atan2(fromDir.x,-fromDir.z),toYaw=Math.atan2(toDir.x,-toDir.z),turn=Math.atan2(Math.sin(toYaw-fromYaw),Math.cos(toYaw-fromYaw));
+    // Opposite walls pass through the back-wall view, never through a zero look vector.
+    if(Math.abs(Math.abs(turn)-PI)<.001)turn=fromYaw>0?-PI:PI;
+    var heading=fromYaw+turn*travel,vertical=U.lerp(fromDir.y,toDir.y,travel);
+    roomLook.copy(roomEye).add(new T.Vector3(Math.sin(heading),vertical,-Math.cos(heading)).normalize());
+  }else roomLook.copy(pose.look);
+  roomFov=U.lerp(roomFrom?roomFrom.fov:pose.fov,pose.fov,travel);
+  core.camera.fov=U.lerp(32,roomFov,tour);core.camera.near=.04;core.camera.updateProjectionMatrix();
+  core.camera.position.copy(outer.lerp(roomEye,tour));core.camera.lookAt(target.lerp(roomLook,tour));
+  core.camera.updateMatrixWorld(true);if(fly<.0001)exitPose=null;
   positionHotspot(toggle,new T.Vector3(0,-2.04,.07));
   positionHotspot(flip,new T.Vector3(targetFace==='back'?-1.18:1.18,2.02,targetFace==='back'?-.07:.07));
   positionHotspot(enter,new T.Vector3(0,-.48,.06));
@@ -156,8 +214,9 @@ function draw(){
 function frame(now){
   raf=0;if(disposed||document.hidden||!core||!popup)return;
   var dt=lastTime?Math.min(.05,(now-lastTime)/1000):1/60;lastTime=now;
-  if(motion.matches){progress=targetOpen?1:0;faceProgress=targetFace==='back'?1:0;fly=inside?1:0;}
+  if(motion.matches){progress=targetOpen?1:0;faceProgress=targetFace==='back'?1:0;fly=inside?1:0;roomMove=1;}
   else{
+    roomMove=moveTowards(roomMove,1,dt/.7);
     if(fly<.0001&&(!targetOpen||faceProgress<.0001))progress=moveTowards(progress,targetOpen?1:0,dt/1.3);
     if(progress<.0001)faceProgress=moveTowards(faceProgress,targetFace==='back'?1:0,dt/.65);
     if(!inside||progress>.999)fly=moveTowards(fly,inside?1:0,dt/.85);
@@ -177,11 +236,11 @@ function hitAt(event){
   var ray=new core.T.Raycaster();ray.setFromCamera(point,core.camera);
   return ray.intersectObjects(popup.root.children,true)[0]||null;
 }
-function clearHover(){canvas.style.cursor=inside?'grab':'default';$('hover-label').hidden=true;}
+function clearHover(){canvas.style.cursor='default';$('hover-label').hidden=true;}
 function hover(event){
   var hit=hitAt(event);if(!hit){clearHover();return;}
   var id=hit.object.userData.workId,w=id&&data.works.find(function(w){return w.id===id;});
-  if(w&&targetOpen){canvas.style.cursor='pointer';$('hover-label').textContent=w.name+' · 试玩 ↗';$('hover-label').hidden=false;}
+  if(w&&targetOpen){canvas.style.cursor='pointer';$('hover-label').textContent=w.name+(w.kind==='外链作品'?' · 打开作品 ↗':' · 试玩 ↗');$('hover-label').hidden=false;}
   else if(!targetOpen){canvas.style.cursor='pointer';$('hover-label').hidden=true;}else clearHover();
 }
 function pick(event){
@@ -195,21 +254,23 @@ listen(window,'message',function(event){
 });
 listen(toggle,'click',function(){setOpen(!targetOpen);});listen(flip,'click',flipCard);
 listen(enter,'click',function(){enterRoom(true);});listen($('leave'),'click',function(){enterRoom(false);});
-listen(left,'click',function(){rotate(-.18);});listen(right,'click',function(){rotate(.18);});
+listen(left,'click',function(){stepWork(-1);});listen(right,'click',function(){stepWork(1);});
+listen($('play-current'),'click',function(){if(focusWorkId)openWork(focusWorkId);});
 listen($('prev'),'click',function(){changePage(page-1);});listen($('next'),'click',function(){changePage(page+1);});
 listen(canvas,'pointerdown',function(event){if(event.button!==0)return;pointer={id:event.pointerId,x:event.clientX,y:event.clientY,lastX:event.clientX,moved:false};canvas.setPointerCapture(event.pointerId);});
 listen(canvas,'pointermove',function(event){
   if(!pointer){hover(event);return;}if(pointer.id!==event.pointerId)return;
   if(Math.hypot(event.clientX-pointer.x,event.clientY-pointer.y)>7)pointer.moved=true;
-  if(pointer.moved&&targetOpen&&Math.abs(event.clientX-pointer.x)>Math.abs(event.clientY-pointer.y))rotate((event.clientX-pointer.lastX)*.006);pointer.lastX=event.clientX;
+  if(pointer.moved&&targetOpen&&!inside&&Math.abs(event.clientX-pointer.x)>Math.abs(event.clientY-pointer.y))rotate((event.clientX-pointer.lastX)*.006);pointer.lastX=event.clientX;
 });
 listen(canvas,'pointerup',function(event){
-  if(!pointer||pointer.id!==event.pointerId)return;var wasMoved=pointer.moved;pointer=null;if(canvas.hasPointerCapture(event.pointerId))canvas.releasePointerCapture(event.pointerId);if(!wasMoved)pick(event);
+  if(!pointer||pointer.id!==event.pointerId)return;var wasMoved=pointer.moved,dx=event.clientX-pointer.x,dy=event.clientY-pointer.y;pointer=null;if(canvas.hasPointerCapture(event.pointerId))canvas.releasePointerCapture(event.pointerId);
+  if(inside&&wasMoved&&Math.abs(dx)>45&&Math.abs(dx)>Math.abs(dy)*1.4)stepWork(dx<0?1:-1);else if(!wasMoved)pick(event);
 });
 listen(canvas,'pointercancel',function(){pointer=null;});listen(canvas,'pointerleave',clearHover);
-listen(canvas,'keydown',function(event){
-  if(event.key==='ArrowLeft'||event.key==='ArrowRight'){event.preventDefault();rotate(event.key==='ArrowLeft'?-.18:.18);}
-  else if(event.key==='Enter'||event.key===' '){event.preventDefault();setOpen(!targetOpen);}
+listen(stage,'keydown',function(event){
+  if(event.key==='ArrowLeft'||event.key==='ArrowRight'){event.preventDefault();if(inside)stepWork(event.key==='ArrowLeft'?-1:1);else rotate(event.key==='ArrowLeft'?-.18:.18);}
+  else if(event.target===canvas&&(event.key==='Enter'||event.key===' ')){event.preventDefault();if(inside&&focusWorkId)openWork(focusWorkId);else setOpen(!targetOpen);}
   else if(event.key.toLowerCase()==='f'&&!targetOpen){event.preventDefault();flipCard();}
   else if(event.key.toLowerCase()==='g'&&targetOpen){event.preventDefault();enterRoom(true);}
   else if(event.key==='Escape'&&targetOpen){event.preventDefault();if(inside)enterRoom(false);else setOpen(false);}
@@ -218,7 +279,7 @@ listen(canvas,'webglcontextlost',function(event){event.preventDefault();showFall
 listen(document,'visibilitychange',function(){if(document.hidden){cancelAnimationFrame(raf);raf=0;lastTime=0;}else requestRender();});
 function onResize(){if(core){core.resize();requestRender();}if(!heightObserver)reportHeight();}
 if(window.ResizeObserver){resizeObserver=new ResizeObserver(onResize);resizeObserver.observe(stage);heightObserver=new ResizeObserver(reportHeight);heightObserver.observe($('shell'));}else listen(window,'resize',onResize);
-function onMotion(){if(motion.matches){progress=targetOpen?1:0;faceProgress=targetFace==='back'?1:0;fly=inside?1:0;updateUI();requestRender();}}
+function onMotion(){if(motion.matches){progress=targetOpen?1:0;faceProgress=targetFace==='back'?1:0;fly=inside?1:0;roomMove=1;updateUI();requestRender();}}
 if(motion.addEventListener)listen(motion,'change',onMotion);
 function destroy(){if(disposed)return;disposed=true;cancelAnimationFrame(raf);raf=0;if(resizeObserver)resizeObserver.disconnect();if(heightObserver)heightObserver.disconnect();listeners.forEach(function(off){off();});listeners=[];releaseScene();}
 listen(window,'pagehide',function(event){if(!event.persisted)destroy();else{cancelAnimationFrame(raf);raf=0;}});

@@ -6,11 +6,15 @@
 <main id="shell" class="shell" aria-label="卡中展厅互动预览">
  <h1 id="gallery-title" class="sr-only">卡中展厅</h1><p id="gallery-status" class="sr-only" role="status" aria-live="polite">等待作品</p>
  <section id="stage" class="stage" data-state="waiting" data-face="front" aria-label="三维名片预览">
-  <canvas id="gallery-canvas" tabindex="0" aria-label="交互名片。点击卡面展开，点击画框试玩；拖动环顾。Enter 展开，F 翻面，G 进入展厅，Escape 返回。" hidden></canvas>
+  <canvas id="gallery-canvas" tabindex="0" aria-label="交互名片。点击卡面展开，点击画框试玩。展厅内左右滑动或方向键切换作品，Enter 试玩，Escape 返回。" hidden></canvas>
   <button id="toggle" class="hotspot primary" hidden disabled aria-pressed="false">展开展厅 ↗</button>
   <button id="flip" class="hotspot corner" hidden disabled aria-label="翻到背面" title="翻到背面">↶</button>
   <button id="enter" class="hotspot paper" hidden disabled>走进展厅 ↗</button>
-  <nav id="room-nav" class="room-nav" aria-label="展厅导航" hidden><button id="leave">← 返回名片</button><span class="arrows"><button id="left" aria-label="向左看">←</button><button id="right" aria-label="向右看">→</button></span></nav>
+  <nav id="room-nav" class="room-nav" aria-label="展厅导航" hidden><button id="leave">← 返回名片</button></nav>
+  <nav id="work-nav" class="work-nav" aria-label="浏览展厅作品" hidden>
+   <div class="work-switch"><button id="left" aria-label="上一件作品">←</button><div class="current-work" aria-live="polite" aria-atomic="true"><strong id="current-title"></strong><span id="current-index"></span></div><button id="right" aria-label="下一件作品">→</button></div>
+   <button id="play-current" class="play-current">试玩 ↗</button>
+  </nav>
   <div id="hover-label" class="hover-label" hidden></div>
   <div id="fallback" class="fallback"><strong id="fallback-title">正在准备名片</strong><p id="fallback-message"></p></div>
  </section>
@@ -18,8 +22,8 @@
   <p id="creator-copy" class="creator-copy"></p>
   <div class="work-heading"><p id="work-count"></p><div id="paging" class="paging" hidden><button id="prev" aria-label="上一组作品">←</button><span id="page-label"></span><button id="next" aria-label="下一组作品">→</button></div></div>
   <p id="empty"></p><ul id="works" class="works"></ul><p id="page-note" hidden></p>
-  <p class="keys">Enter 展开 · F 翻面 · G 进入 · ← → 环顾 · Esc 返回</p>
+  <p class="keys">Enter 展开 · F 翻面 · G 进入 · ← → 切换作品 · Enter 试玩 · Esc 返回</p>
  </details>
 </main>
-<script src="vendor/three.min.js"></script><script src="shaders.js"></script><script src="core.js"></script><script src="paper.js"></script><script src="prints.js"></script><script src="popup.js"></script><script src="controller.js"></script>
+<script src="config.js"></script><script src="vendor/three.min.js"></script><script src="shaders.js"></script><script src="core.js"></script><script src="paper.js"></script><script src="prints.js"></script><script src="popup.js"></script><script src="tour.js"></script><script src="controller.js"></script>
 </body></html>

@@ -190,13 +190,21 @@ function cardMarkup(card,from,cardId=''){
   return `<div class="card-preview"><article class="white-card"><header><h2>${esc(card.name)}</h2>${profile.headline?`<p class="card-headline">${esc(profile.headline)}</p>`:''}${card.bio?`<p class="bio">${esc(card.bio)}</p>`:''}${profile.website?`<a class="profile-website" href="${esc(profile.website)}" target="_blank" rel="noopener noreferrer">${esc(new URL(profile.website).hostname)} ↗</a>`:''}</header><div class="work-grid">${card.works.map(w=>workTile(w,{from,creator:false,cardId})).join('')}</div>${profile.signature?`<footer class="card-signature">${esc(profile.signature)}</footer>`:''}</article></div>`;
 }
 
+function normalizeGalleryView(card,view={}){
+  view=view&&typeof view==='object'?view:{};
+  const pageSize=window.FuntrackGallery.pageSize,pages=Math.max(1,Math.ceil(card.works.length/pageSize)),focusIndex=typeof view.focusWorkId==='string'?card.works.findIndex(work=>work.id===view.focusWorkId):-1,inside=view.inside===true;
+  const sourcePageSize=Number.isInteger(view.pageSize)&&view.pageSize>0?view.pageSize:9,sourcePages=Math.max(1,Math.ceil(card.works.length/sourcePageSize));
+  const sourcePage=Number.isInteger(view.page)?Math.max(0,Math.min(sourcePages-1,view.page)):0,mappedPage=Math.floor(sourcePage*sourcePageSize/pageSize);
+  return {open:view.open===true,face:view.face==='back'?'back':'front',inside,focusWorkId:focusIndex>=0?card.works[focusIndex].id:null,page:focusIndex>=0?Math.floor(focusIndex/pageSize):Math.min(pages-1,mappedPage),pageSize,yaw:Number.isFinite(view.yaw)?Math.max(inside?-1.3:-.65,Math.min(inside?1.3:.85,view.yaw)):0};
+}
+
 function mountCard(card,key){
   if(card.template!=='fold'){currentGallery=null;return;}
   const frame=$('#gallery-frame');if(!frame)return;
-  const gallery={frame,card,key,initialized:false,restoreScroll:scrolls.get(key)||0,restoreTimer:null,view:galleryViews.get(key)||{open:false,face:'front',inside:false,page:0,yaw:0}};currentGallery=gallery;
+  const gallery={frame,card,key,initialized:false,restoreScroll:scrolls.get(key)||0,restoreTimer:null,view:normalizeGalleryView(card,galleryViews.get(key))};currentGallery=gallery;
   frame.addEventListener('load',()=>initializeGallery(gallery));
 }
-function initializeGallery(gallery){if(!gallery||gallery!==currentGallery||gallery.initialized||!gallery.frame.contentWindow)return;gallery.initialized=true;gallery.frame.contentWindow.postMessage({type:'funtrack:gallery:init',payload:{author:{id:gallery.card.authorId,name:gallery.card.name,bio:gallery.card.bio,...cardProfile(gallery.card)},works:gallery.card.works.map(w=>({id:w.id,name:w.name,desc:w.desc,cover:safeCover(w.coverUrl),kind:w.source==='url'?'外链作品':'网页游戏',version:w.version})),...gallery.view}},location.origin);}
+function initializeGallery(gallery){if(!gallery||gallery!==currentGallery||gallery.initialized||!gallery.frame.contentWindow)return;gallery.initialized=true;gallery.view=normalizeGalleryView(gallery.card,gallery.view);gallery.frame.contentWindow.postMessage({type:'funtrack:gallery:init',payload:{author:{id:gallery.card.authorId,name:gallery.card.name,bio:gallery.card.bio,...cardProfile(gallery.card)},works:gallery.card.works.map(w=>({id:w.id,name:w.name,desc:w.desc,cover:safeCover(w.coverUrl),kind:w.source==='url'?'外链作品':'网页游戏',version:w.version})),...gallery.view}},location.origin);}
 async function saveCard(){
   if(cardPending||!preview)return;cardPending=true;cardError='';const button=$('#save-card');button.disabled=true;button.textContent='正在保存…';const saving=preview;
   try{const {card}=await api('/api/cards',{method:'POST',headers:{'Idempotency-Key':saving.saveKey},body:{workIds:saving.workIds,template:saving.template,name:saving.name,bio:saving.bio,...cardProfile(saving)}});cardPending=false;me={...me,name:card.name,bio:card.bio,...cardProfile(card)};identity();if(route().path==='/cards/me/preview')go('/card/'+encodeURIComponent(card.id)+'?saved=1');else notify('名片已保存。');}
@@ -305,7 +313,7 @@ function receiveGallery(event){
   const gallery=currentGallery,message=event.data;if(!gallery||event.origin!==location.origin||event.source!==gallery.frame.contentWindow||!message||typeof message!=='object')return;
   if(message.type==='funtrack:gallery:ready')initializeGallery(gallery);
   else if(message.type==='funtrack:gallery:state'){
-    const pages=Math.max(1,Math.ceil(gallery.card.works.length/9));gallery.view={open:message.open===true,face:message.face==='back'?'back':'front',inside:message.inside===true,page:Number.isInteger(message.page)?Math.max(0,Math.min(pages-1,message.page)):0,yaw:Number.isFinite(message.yaw)?Math.max(message.inside===true?-1.3:-.65,Math.min(message.inside===true?1.3:.85,message.yaw)):0};galleryViews.set(gallery.key,gallery.view);write(storage.views,Object.fromEntries(galleryViews));
+    gallery.view=normalizeGalleryView(gallery.card,message);galleryViews.set(gallery.key,gallery.view);write(storage.views,Object.fromEntries(galleryViews));
   }else if(message.type==='funtrack:gallery:resize'&&Number.isFinite(message.height)){gallery.frame.style.height=Math.max(400,Math.min(1600,Math.ceil(message.height)))+'px';if(gallery.restoreScroll!==null){requestAnimationFrame(()=>{if(gallery===currentGallery&&gallery.restoreScroll!==null)window.scrollTo(0,gallery.restoreScroll);});clearTimeout(gallery.restoreTimer);gallery.restoreTimer=setTimeout(()=>gallery.restoreScroll=null,700);}}
   else if(message.type==='funtrack:gallery:open-work'){
     const work=gallery.card.works.find(w=>w.id===message.workId);if(!work)return;scrolls.set(gallery.key,window.scrollY);const id=gallery.card.id==='preview'?'':gallery.card.id;go(workHref(work,gallery.key,id).slice(1)+(message.play===true&&work.source==='html'?'&play=1':''));
