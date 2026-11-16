@@ -110,7 +110,7 @@ async function renderDiscover(r,number){
   const authorId=r.path.startsWith('/author/')?decodeURIComponent(r.path.split('/')[2]):'';
   let authorCard=null;if(authorId){try{authorCard=(await api('/api/cards')).cards.find(c=>c.authorId===authorId)||null;}catch{}}
   if(!applyHTML('<div class="page discovery-page"></div>',number))return;
-  await mountDiscovery($('.discovery-page'),{api,esc,workTile,workImage,workHref,date,syncSocial,userId:me.id,authorId,authorCard,initial:{q:r.params.get('q'),source:r.params.get('source'),sort:r.params.get('sort')},onQuery:query=>{
+  await mountDiscovery($('.discovery-page'),{api,esc,workTile,syncSocial,userId:me.id,authorId,authorCard,initial:{q:r.params.get('q'),source:r.params.get('source'),sort:r.params.get('sort')},onQuery:query=>{
     const params=new URLSearchParams();if(query.q)params.set('q',query.q);if(query.source!=='all')params.set('source',query.source);if(query.sort!=='newest')params.set('sort',query.sort);
     const next=r.path+(params.size?'?'+params:'');history.replaceState(null,'','#'+next);currentRoute=next;
   },restoreScroll:()=>window.scrollTo(0,scrolls.get(route().raw)||0)});

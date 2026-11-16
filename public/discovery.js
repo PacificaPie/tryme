@@ -3,7 +3,7 @@ const visits = new Map();
 export function clearDiscovery(){ visits.clear(); }
 export function updateDiscoveryWork(id,patch){for(const visit of visits.values())visit.works=visit.works.map(work=>work.id===id?{...work,...patch}:work);}
 export async function mountDiscovery(root, options) {
-  const { api, esc, workTile, workImage, workHref, date, syncSocial, userId, authorId = '', authorCard = null, initial, onQuery, restoreScroll } = options;
+  const { api, esc, workTile, syncSocial, userId, authorId = '', authorCard = null, initial, onQuery, restoreScroll } = options;
   let query={q:initial.q||'',source:['html','url'].includes(initial.source)?initial.source:'all',sort:['likes','comments'].includes(initial.sort)?initial.sort:'newest'};
   let works=[],cursor=null,total=0,pending=false,loaded=false,error='',request=0,timer,composing=false;
   const alive=()=>root.isConnected;
@@ -18,9 +18,7 @@ export async function mountDiscovery(root, options) {
     results.setAttribute('aria-busy',String(pending));status.textContent=error;
     if(!loaded){results.innerHTML=error?'<div class="empty-state"><h2>暂时没能加载作品</h2><button class="button" data-retry>重试</button></div>':`<div class="store-grid skeleton-grid" aria-hidden="true">${Array.from({length:6},()=>'<div class="skeleton-work"><div></div><span></span><small></small></div>').join('')}</div>`;more.hidden=true;return;}
     if(!works.length){results.innerHTML=`<div class="empty-state"><h2>${query.q||query.source!=='all'?'没有找到作品':'还没有作品'}</h2>${query.q||query.source!=='all'?'<button class="button" data-clear>清除筛选</button>':authorId?'':'<a class="button primary" href="#/publish">发布作品</a>'}</div>`;more.hidden=true;return;}
-    const featured=!authorId&&!query.q&&query.source==='all'&&query.sort==='newest'&&works.length>=3?works[0]:null;
-    const rest=featured?works.slice(1):works;
-    results.innerHTML=(featured?`<section class="featured-work"><a class="featured-media" href="${esc(workHref(featured))}" aria-label="查看 ${esc(featured.name)}">${workImage(featured)}</a><div class="featured-info"><div class="featured-topline"><span>最新发布</span><time>${date(featured.createdAt)}</time></div><h2><a href="${esc(workHref(featured))}">${esc(featured.name)}</a></h2><a class="featured-author" href="#/author/${encodeURIComponent(featured.authorId)}">${esc(featured.authorName)}</a><p>${esc(featured.desc)}</p><a class="button feature-action" href="${esc(workHref(featured))}">查看作品 <span aria-hidden="true">↗</span></a></div></section>`:'')+`<div class="catalog-heading"><h2>${authorId?'作品':query.q?'搜索结果':featured?'继续发现':'全部作品'}</h2><span>${total.toLocaleString('zh-CN')}</span></div><div class="store-grid">${rest.map(w=>workTile(w,{social:true})).join('')}</div>`;
+    results.innerHTML=`<div class="catalog-heading">${authorId?'<h2>作品</h2>':''}<span>${total.toLocaleString('zh-CN')} 件作品</span></div><div class="store-grid">${works.map(w=>workTile(w,{social:true})).join('')}</div>`;
     more.hidden=!cursor;more.disabled=pending;more.textContent=pending?'正在加载…':error?'重试加载':'加载更多';
   }
   async function load(append=false){
