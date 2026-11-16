@@ -9,3 +9,4 @@
 .room{display:block;visibility:hidden;pointer-events:none}.is-open .room{display:block;visibility:visible;pointer-events:auto}.is-open .card-face{display:grid}
 @media(max-width:760px){.account-button>.account-avatar{display:grid;font-size:12px}.account-button>.icon:last-child{display:none}.sidebar-bottom .menu-items{top:calc(100% + 12px);bottom:auto;left:auto;right:0}.my-work-row{flex-wrap:nowrap}.my-work-row .row-actions{width:auto;padding:0;margin:0}.sidebar-bottom .menu-items .icon{display:block}.account-button{width:34px;height:34px}}
 .muted,.author-name,.work-byline,.surface-subtitle,.play-instructions,.card-note,.card-bio,.feedback-meta,.work-row-content p,.room-work span,.room-label{color:#686d63}.nav-link{color:#6e7168}
+.game-stage:has(.game-host){min-height:0;aspect-ratio:auto}.game-host{height:auto;aspect-ratio:45/28}

@@ -36,6 +36,7 @@ Replace the demo identity and storage adapter first. Preserve separate work/vers
 Five automated state tests cover unsafe links, identity gating, publication/draft transitions, replayed draft identity, storage failure/reload recovery and HTML escaping. Browser checks covered:
 
 - Nine-grid game completed with keyboard input; feedback form appeared.
+- Runner accepted jump input and reached a collision result; Orbit mounted and accepted keyboard interaction.
 - Guest feedback: cancel login preserved text and focus; login continued submission once.
 - Back navigation during the login dialog closed it without executing the stale submission.
 - Empty publish validation, typing a draft, returning, browser forward and refresh preserved fields.
