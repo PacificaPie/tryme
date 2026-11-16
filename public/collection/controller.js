@@ -1,3 +1,5 @@
+import {t,getLocale,applyGalleryLocale} from '../gallery/i18n.js';
+applyGalleryLocale('collection',new URLSearchParams(location.search).get('lang'),{first:true});
 /* Same-origin real-data adapter for the supplied 点亮收藏 renderer. */
 (function(){
 'use strict';
@@ -14,9 +16,9 @@ function coverURL(value){if(typeof value!=='string'||!value.trim())return '';try
 function websiteURL(value){try{var url=new URL(value);return ['http:','https:'].indexOf(url.protocol)>=0&&!url.username&&!url.password?url.href:'';}catch{return '';}}
 function clean(payload){
   if(!payload||!payload.author||!Array.isArray(payload.works))return null;
-  var seen=new Set(),works=[];payload.works.forEach(function(w){if(!w||typeof w.id!=='string'||!w.id||seen.has(w.id))return;seen.add(w.id);works.push({id:w.id,name:string(w.name,'未命名作品',140)||'未命名作品',desc:string(w.desc,'',1000),cover:coverURL(w.cover),kind:string(w.kind,'作品',80),version:string(w.version,'',40)});});
+  var seen=new Set(),works=[];payload.works.forEach(function(w){if(!w||typeof w.id!=='string'||!w.id||seen.has(w.id))return;seen.add(w.id);works.push({id:w.id,name:string(w.name,t('未命名作品'),140)||t('未命名作品'),desc:string(w.desc,'',1000),cover:coverURL(w.cover),kind:string(w.kind,'作品',80),version:string(w.version,'',40)});});
   if(works.length>30)return null;
-  var author=payload.author;return{author:{id:string(author.id,'creator',128),name:string(author.name,'创作者',140)||'创作者',bio:string(author.bio,'',500),headline:string(author.headline,'',120),signature:string(author.signature,'',80),website:websiteURL(author.website)},works:works};
+  var author=payload.author;return{author:{id:string(author.id,'creator',128),name:string(author.name,t('创作者'),140)||t('创作者'),bio:string(author.bio,'',500),headline:string(author.headline,'',120),signature:string(author.signature,'',80),website:websiteURL(author.website)},works:works};
 }
 function currentWorks(){return data?data.works.slice(page*PAGE_SIZE,(page+1)*PAGE_SIZE):[];}
 function indexOfFocus(){return currentWorks().findIndex(function(w){return w.id===focusWorkId;});}
@@ -32,16 +34,16 @@ function profile(){
 }
 function updateList(){
   var works=currentWorks(),list=$('works');list.replaceChildren();
-  works.forEach(function(work){var li=document.createElement('li'),button=document.createElement('button');button.type='button';button.className='work';button.setAttribute('aria-label','打开作品：'+work.name);
+  works.forEach(function(work){var li=document.createElement('li'),button=document.createElement('button');button.type='button';button.className='work';button.setAttribute('aria-label',t('打开作品：{name}',{name:work.name}));
     if(work.cover){var image=document.createElement('img');image.src=work.cover;image.alt='';image.loading='lazy';image.addEventListener('error',function(){image.hidden=true;},{once:true});button.appendChild(image);}
-    var text=document.createElement('span'),title=document.createElement('strong'),desc=document.createElement('small');title.textContent=work.name;desc.textContent=work.desc||[work.kind,work.version].filter(Boolean).join(' · ');text.append(title,desc);button.appendChild(text);button.addEventListener('click',function(){openWork(work.id);});li.appendChild(button);list.appendChild(li);
+    var text=document.createElement('span'),title=document.createElement('strong'),desc=document.createElement('small');title.textContent=work.name;desc.textContent=work.desc||[t(work.kind),work.version].filter(Boolean).join(' · ');text.append(title,desc);button.appendChild(text);button.addEventListener('click',function(){openWork(work.id);});li.appendChild(button);list.appendChild(li);
   });
   var count=Math.max(1,Math.ceil(data.works.length/PAGE_SIZE));$('pager').hidden=count<=1;$('prev').disabled=page===0;$('next').disabled=page>=count-1;$('page-label').textContent=(page+1)+' / '+count;
-  $('status').textContent=data.works.length?'第 '+(page+1)+' 组，共 '+count+' 组作品':'尚未选择作品';if(!heightObserver)reportHeight();
+  $('status').textContent=data.works.length?t('第 {page} 组，共 {count} 组作品',{page:page+1,count:count}):t('尚未选择作品');if(!heightObserver)reportHeight();
 }
 function openWork(id){if(!data||!data.works.some(function(w){return w.id===id;}))return;focusWorkId=id;state();send({type:'funtrack:gallery:open-work',workId:id,play:true});}
 function fallback(message){
-  failed=true;cancelAnimationFrame(raf);raf=0;canvas.hidden=true;$('fallback').hidden=false;$('fallback-title').textContent='作品列表';$('fallback-message').textContent=message||'当前设备暂时无法显示作品桌面，可以从下方打开作品。';$('details').open=true;stage.dataset.state='fallback';reportHeight();
+  failed=true;cancelAnimationFrame(raf);raf=0;canvas.hidden=true;$('fallback').hidden=false;$('fallback-title').textContent=t('作品列表');$('fallback-message').textContent=message||t('当前设备暂时无法显示作品桌面，可以从下方打开作品。');$('details').open=true;stage.dataset.state='fallback';reportHeight();
 }
 function releaseDesk(){if(desk){desk.dispose();desk=null;}SP.disposeCollectionMedia();}
 function ensureCore(){if(failed)return false;if(core)return true;try{if(!window.THREE)throw Error();canvas.hidden=false;core=SP.createCore(canvas);core.shared.uEdge.value=1.9;core.resize();return true;}catch{if(core){core.dispose();core=null;}fallback();return false;}}
@@ -55,12 +57,12 @@ function fitCamera(){
 function relayout(){if(!core||!desk)return;core.resize();layout=SP.makeCollectionLayout(canvas.clientWidth,canvas.clientHeight,currentWorks());desk.setLayout(layout);desk.resize();fitCamera();requestRender();}
 function rebuild(){
   releaseDesk();profile();updateList();hoverIndex=-1;hover=currentWorks().map(function(){return 0;});light.x=lightTarget.x=0;light.z=lightTarget.z=-.5;$('hover-title').hidden=true;
-  if(!data.works.length){canvas.hidden=true;$('fallback').hidden=false;$('fallback-title').textContent='尚未选择作品';$('fallback-message').textContent='先选入作品，再生成收藏桌面。';stage.dataset.state='empty';reportHeight();return;}
+  if(!data.works.length){canvas.hidden=true;$('fallback').hidden=false;$('fallback-title').textContent=t('尚未选择作品');$('fallback-message').textContent=t('先选入作品，再生成收藏桌面。');stage.dataset.state='empty';reportHeight();return;}
   if(!ensureCore()){fallback();return;}
   try{SP.loadCollectionMedia(currentWorks(),function(){if(desk){desk.refresh();requestRender();}});desk=SP.createDesk(core);canvas.hidden=false;$('fallback').hidden=true;stage.dataset.state='ready';relayout();core.resetTrail();requestRender();}
   catch{releaseDesk();fallback();}
 }
-function initialize(payload){var next=clean(payload);if(!next){fallback('这张名片的作品资料不完整，请返回后重试。');return;}var nextKey=JSON.stringify(next),oldPage=page;data=next;syncState(payload);if(nextKey!==key||page!==oldPage||!desk){key=nextKey;rebuild();}else{updateList();requestRender();}state();}
+function initialize(payload){applyGalleryLocale('collection',payload?.locale);var next=clean(payload);if(!next){fallback(t('这张名片的作品资料不完整，请返回后重试。'));return;}var nextKey=JSON.stringify({locale:getLocale(),data:next}),oldPage=page;data=next;syncState(payload);if(nextKey!==key||page!==oldPage||!desk){key=nextKey;rebuild();}else{updateList();requestRender();}state();}
 function changePage(next){if(!data||next<0||next>=Math.ceil(data.works.length/PAGE_SIZE))return;page=next;focusWorkId=data.works[page*PAGE_SIZE]?.id||null;rebuild();state();}
 function selectIndex(index){if(!data?.works.length)return;index=Math.max(0,Math.min(data.works.length-1,index));var nextPage=Math.floor(index/PAGE_SIZE);focusWorkId=data.works[index].id;if(nextPage!==page){page=nextPage;rebuild();}requestRender();state();$('status').textContent=data.works[index].name;}
 function requestRender(){if(!disposed&&!document.hidden&&core&&desk&&!raf)raf=requestAnimationFrame(frame);}

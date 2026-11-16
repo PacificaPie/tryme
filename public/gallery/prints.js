@@ -2,6 +2,7 @@
 (function(){
 'use strict';
 var SP=window.SP=window.SP||{};
+function tr(message,values){var translate=window.FuntrackGallery&&window.FuntrackGallery.t;return translate?translate(message,values):message.replace(/\{count\}/g,String(values&&values.count||0));}
 var W=3,H=4.6,FX=1.3,Y0=-.55,Y1=1.85,TAU=Math.PI*2;
 var SERIF='"Songti SC","Noto Serif SC",Georgia,serif',DISP='Arial,sans-serif',MONO='ui-monospace,Menlo,monospace',ITAL='Georgia,serif';
 var INK='#15161A',BONE='#ECE9E2',PAPER='#F6F4ED';
@@ -72,13 +73,13 @@ function back(p,P,hero){
   g.fillStyle=palette.fg;fitText(g,p.n,.23*P,.65*P,2.54*P,.27*P,SERIF,'700');
   g.fillStyle=palette.muted;g.font='400 '+(.092*P)+'px '+DISP;lines(g,p.headline||p.h,.23*P,.86*P,2.54*P,.12*P,2);
   // The representative work is real selected material, not an invented QR or credential.
-  var image=hero||placeholder(WORKS[0]||{t:'作品'}),ix=.23*P,iy=1.18*P,iw=2.54*P,ih=1.55*P;
+  var image=hero||placeholder(WORKS[0]||{t:tr('作品')}),ix=.23*P,iy=1.18*P,iw=2.54*P,ih=1.55*P;
   g.save();g.beginPath();g.rect(ix,iy,iw,ih);g.clip();g.fillStyle=palette.bg;g.fillRect(ix,iy,iw,ih);var scale=Math.min(iw/image.width,ih/image.height);g.drawImage(image,ix+(iw-image.width*scale)/2,iy+(ih-image.height*scale)/2,image.width*scale,image.height*scale);g.restore();
   g.strokeStyle=palette.fg;g.globalAlpha=.26;g.lineWidth=.008*P;g.strokeRect(ix,iy,iw,ih);g.globalAlpha=1;
   g.fillStyle=palette.muted;g.font='400 '+(.062*P)+'px '+MONO;fitText(g,WORKS[0]?WORKS[0].t:'',ix,2.90*P,iw,.062*P,MONO,'400');
   g.fillStyle=palette.fg;g.font='400 '+(.145*P)+'px '+SERIF;lines(g,p.signature||p.bio||'',.23*P,3.25*P,2.54*P,.205*P,3);
   g.strokeStyle=palette.fg;g.globalAlpha=.28;g.lineWidth=.005*P;g.beginPath();g.moveTo(.23*P,3.90*P);g.lineTo(2.77*P,3.90*P);g.stroke();g.globalAlpha=1;
-  g.fillStyle=palette.muted;var url=p.website?p.website.replace(/^https?:\/\//,'').replace(/\/$/,''):'';fitText(g,url||TOTAL+' 件作品',.23*P,4.08*P,2.54*P,.085*P,MONO,'400');
+  g.fillStyle=palette.muted;var url=p.website?p.website.replace(/^https?:\/\//,'').replace(/\/$/,''):'';fitText(g,url||tr('{count} 件作品',{count:TOTAL}),.23*P,4.08*P,2.54*P,.085*P,MONO,'400');
   return c;
 }
 

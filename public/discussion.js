@@ -1,3 +1,5 @@
+import {t,getLocale} from './i18n.js';
+import './creator-module.messages.js';
 const drafts=new Map(),discussions=new Map();
 const keyFor=(user,work)=>`funtrack.discussion:${user.id}:${work.id}`;
 function draftFor(key){
@@ -11,7 +13,7 @@ function discussionFor(key){
   if(!discussions.has(key))discussions.set(key,{roots:[],rootCache:new Map(),total:0,cursor:null,loaded:false,loading:false,pending:false,status:'',error:'',likes:new Set(),retryLikes:new Map(),social:new Map(),replies:new Set(),localRoots:new Map(),view:null});
   return discussions.get(key);
 }
-const when=value=>{const d=new Date(typeof value==='number'&&value<1e12?value*1000:value);return Number.isNaN(d.valueOf())?'':d.toLocaleDateString('zh-CN',{month:'numeric',day:'numeric'});};
+const when=value=>{const d=new Date(typeof value==='number'&&value<1e12?value*1000:value);return Number.isNaN(d.valueOf())?'':d.toLocaleDateString(getLocale(),{month:'short',day:'numeric'});};
 const heart='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 4.9a5.3 5.3 0 0 0-7.5 0L12 6l-1.1-1.1a5.3 5.3 0 0 0-7.5 7.5L12 21l8.5-8.6a5.3 5.3 0 0 0 0-7.5Z"/></svg>';
 const scrollBehavior=()=>window.matchMedia?.('(prefers-reduced-motion: reduce)').matches?'auto':'smooth';
 const repliesFor=root=>[...(root.replies||[]),...(root.localReplies||[])];
@@ -26,18 +28,18 @@ function appendReplies(root,replies){
 
 export function mountDiscussion(element,{work,user,api,esc,onCount=()=>{},notify=()=>{},focusId=''}){
   const key=keyFor(user,work),draft=draftFor(key),state=discussionFor(key);
-  element.innerHTML=`<div class="discussion-head"><h2>讨论 <span id="discussion-count"></span></h2></div><form class="comment-composer"><span class="comment-avatar" aria-hidden="true">${esc([...(user.name||'我')][0])}</span><div class="composer-main"><div class="reply-target" hidden><span></span><button type="button" aria-label="取消回复">×</button></div><label class="skip-label" for="comment-input">写评论</label><textarea id="comment-input" rows="1" maxlength="1000" placeholder="说点什么…" required>${esc(draft.text)}</textarea><div class="composer-footer"><span class="composer-visibility">公开评论</span><button type="submit" class="button primary small">发布</button></div></div></form><p class="comment-status" role="status" aria-live="polite"></p><div class="comment-list"></div><button type="button" class="comments-more" hidden>查看更多评论</button>`;
+  element.innerHTML=`<div class="discussion-head"><h2>${t('讨论')} <span id="discussion-count"></span></h2></div><form class="comment-composer"><span class="comment-avatar" aria-hidden="true">${esc([...(user.name||t('我'))][0])}</span><div class="composer-main"><div class="reply-target" hidden><span></span><button type="button" aria-label="${t('取消回复')}">×</button></div><label class="skip-label" for="comment-input">${t('写评论')}</label><textarea id="comment-input" rows="1" maxlength="1000" placeholder="${t('说点什么…')}" required>${esc(draft.text)}</textarea><div class="composer-footer"><span class="composer-visibility">${t('公开评论')}</span><button type="submit" class="button primary small">${t('发布')}</button></div></div></form><p class="comment-status" role="status" aria-live="polite"></p><div class="comment-list"></div><button type="button" class="comments-more" hidden>${t('查看更多评论')}</button>`;
   const form=element.querySelector('form'),input=element.querySelector('textarea'),submit=form.querySelector('[type=submit]'),list=element.querySelector('.comment-list'),more=element.querySelector('.comments-more'),status=element.querySelector('.comment-status'),target=element.querySelector('.reply-target'),cancel=target.querySelector('button');
   const view={alive:()=>state.view===view&&element.isConnected,refresh:()=>{render();composer();revealFocus();},notify};state.view=view;
   const alive=view.alive;
   const refresh=()=>{if(state.view?.alive())state.view.refresh();};
-  const notice=message=>{if(state.view?.alive())state.view.notify(message);};
+  const notice=message=>{if(state.view?.alive())state.view.notify(t(message));};
   const all=()=>state.roots.flatMap(root=>[root,...repliesFor(root)]);
   function composer(){
     if(!alive())return;
     if(input.value!==draft.text)input.value=draft.text;
-    input.disabled=cancel.disabled=state.pending;submit.disabled=state.pending||!state.loaded||!input.value.trim();submit.textContent=state.pending?'发布中…':'发布';
-    target.hidden=!draft.parentId;target.querySelector('span').textContent=draft.parentId?'回复 '+draft.parentName:'';
+    input.disabled=cancel.disabled=state.pending;submit.disabled=state.pending||!state.loaded||!input.value.trim();submit.textContent=t(state.pending?'发布中…':'发布');
+    target.hidden=!draft.parentId;target.querySelector('span').textContent=draft.parentId?t('回复 {name}',{name:draft.parentName}):'';
     input.style.height='auto';input.style.height=Math.min(180,input.scrollHeight)+'px';form.classList.toggle('expanded',!!input.value||document.activeElement===input);
   }
   function syncSocial(c,requestedAt){
@@ -46,15 +48,15 @@ export function mountDiscussion(element,{work,user,api,esc,onCount=()=>{},notify
   }
   function item(c,reply=false){
     const pending=state.likes.has(c.id),retry=state.retryLikes.has(c.id),social=state.social.get(c.id),liked=social?social.liked:c.likedByMe,count=social?social.count:c.likesCount;
-    return `<article class="comment ${reply?'comment-reply':''}" id="comment-${esc(c.id)}" data-comment="${esc(c.id)}"><a class="comment-avatar" href="#/author/${encodeURIComponent(c.authorId)}" aria-label="${esc(c.authorName)}">${esc([...(c.authorName||'访客')][0])}</a><div class="comment-main"><div class="comment-byline"><a href="#/author/${encodeURIComponent(c.authorId)}">${esc(c.authorName)}</a>${c.isCreator?'<span class="author-badge">作者</span>':''}</div><p class="comment-body">${esc(c.body)}</p><div class="comment-meta"><time>${when(c.createdAt)}</time>${!reply?`<button type="button" data-reply="${esc(c.id)}" ${state.pending?'disabled':''}>回复</button>`:''}</div></div><button type="button" class="comment-like ${liked?'liked':''}" data-comment-like="${esc(c.id)}" aria-label="${retry?'重试点赞':liked?'取消点赞评论':'点赞评论'} ${esc(c.authorName)}" aria-pressed="${!!liked}" ${pending?'disabled':''}>${heart}<span>${retry?'重试':count||''}</span></button></article>`;
+    return `<article class="comment ${reply?'comment-reply':''}" id="comment-${esc(c.id)}" data-comment="${esc(c.id)}"><a class="comment-avatar" href="#/author/${encodeURIComponent(c.authorId)}" aria-label="${esc(c.authorName)}">${esc([...(c.authorName||t('访客'))][0])}</a><div class="comment-main"><div class="comment-byline"><a href="#/author/${encodeURIComponent(c.authorId)}">${esc(c.authorName)}</a>${c.isCreator?`<span class="author-badge">${t('作者')}</span>`:''}</div><p class="comment-body">${esc(c.body)}</p><div class="comment-meta"><time>${when(c.createdAt)}</time>${!reply?`<button type="button" data-reply="${esc(c.id)}" ${state.pending?'disabled':''}>${t('回复')}</button>`:''}</div></div><button type="button" class="comment-like ${liked?'liked':''}" data-comment-like="${esc(c.id)}" aria-label="${esc(t(retry?'重试点赞 {name} 的评论':liked?'取消点赞 {name} 的评论':'点赞 {name} 的评论',{name:c.authorName}))}" aria-pressed="${!!liked}" ${pending?'disabled':''}>${heart}<span>${retry?t('重试'):count||''}</span></button></article>`;
   }
   function render(){
     if(!alive())return;
-    element.querySelector('#discussion-count').textContent=state.loaded?state.total:'';status.textContent=state.status;
+    element.querySelector('#discussion-count').textContent=state.loaded?state.total:'';status.textContent=t(state.status);
     if(state.loaded)onCount(state.total);
-    if(!state.loaded){list.innerHTML=state.error?'<button type="button" class="comments-retry">重新加载评论</button>':'<div class="comment-loading" role="status">加载讨论…</div>';more.hidden=true;return;}
-    list.innerHTML=state.roots.length?state.roots.map(root=>`<div class="comment-thread">${item(root)}${repliesFor(root).length?`<div class="comment-replies">${repliesFor(root).map(reply=>item(reply,true)).join('')}</div>`:''}${root.repliesNextCursor?`<button type="button" class="replies-more" data-more-replies="${esc(root.id)}" ${state.replies.has(root.id)?'disabled':''}>${state.replies.has(root.id)?'加载中…':'展开更多回复'}${root.replyCount?' · '+root.replyCount:''}</button>`:''}</div>`).join(''):'<p class="discussion-empty">还没有评论，来聊聊这件作品。</p>';
-    more.hidden=!state.cursor;more.disabled=state.loading;more.textContent=state.loading?'加载中…':'查看更多评论';
+    if(!state.loaded){list.innerHTML=state.error?`<button type="button" class="comments-retry">${t('重新加载评论')}</button>`:`<div class="comment-loading" role="status">${t('加载讨论…')}</div>`;more.hidden=true;return;}
+    list.innerHTML=state.roots.length?state.roots.map(root=>`<div class="comment-thread">${item(root)}${repliesFor(root).length?`<div class="comment-replies">${repliesFor(root).map(reply=>item(reply,true)).join('')}</div>`:''}${root.repliesNextCursor?`<button type="button" class="replies-more" data-more-replies="${esc(root.id)}" ${state.replies.has(root.id)?'disabled':''}>${t(state.replies.has(root.id)?'加载中…':'展开更多回复')}${root.replyCount?' · '+root.replyCount:''}</button>`:''}</div>`).join(''):`<p class="discussion-empty">${t('还没有评论，来聊聊这件作品。')}</p>`;
+    more.hidden=!state.cursor;more.disabled=state.loading;more.textContent=t(state.loading?'加载中…':'查看更多评论');
   }
   function revealFocus(){
     if(!alive()||!focusId||!state.loaded)return;

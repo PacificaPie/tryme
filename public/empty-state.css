@@ -1,0 +1,20 @@
+.illustrated-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:390px;padding:48px 24px;background:transparent;text-align:center;border:0;border-radius:12px}
+.empty-art{display:block;width:176px;height:126px;margin:0 0 26px;overflow:visible}
+.illustrated-empty h2{margin:0;font-size:20px;line-height:1.4;font-weight:550;letter-spacing:-.03em;color:#343e47}
+.illustrated-empty p{font-size:13px;line-height:1.8;color:#7a8791;max-width:360px;margin:12px 0 0}
+.illustrated-empty .empty-action{margin-top:24px}
+.illustrated-empty .empty-action .button{min-width:116px}
+.route-loading{animation:none;min-height:65vh;padding-top:40px}
+.route-skeleton{opacity:0;animation:skeleton-appear 180ms ease 120ms forwards}
+.route-skeleton i{display:block;background:#f0f3f5;border-radius:7px;position:relative;overflow:hidden}
+.route-skeleton .skeleton-title{width:130px;height:26px}
+.route-skeleton .skeleton-rule{height:1px;background:#eff1f3;margin:28px 0}
+.skeleton-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px}
+.route-skeleton .skeleton-picture{aspect-ratio:1.5;border-radius:12px}
+.route-skeleton .skeleton-line{width:65%;height:13px;margin-top:17px}
+.route-skeleton .skeleton-line.short{width:35%;height:10px;margin-top:11px}
+.route-skeleton .skeleton-picture::after{content:'';position:absolute;inset:0;background:linear-gradient(100deg,transparent,#ffffff78,transparent);transform:translateX(-100%);animation:skeleton-sheen 1800ms ease-in-out infinite}
+@keyframes skeleton-appear{to{opacity:1}}
+@keyframes skeleton-sheen{to{transform:translateX(100%)}}
+@media(max-width:720px){.illustrated-empty{min-height:390px;padding:36px 18px}.empty-art{width:156px;height:112px;margin-bottom:23px}.illustrated-empty h2{font-size:19px}.skeleton-cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.skeleton-cards>div:last-child{display:none}.route-skeleton .skeleton-picture{aspect-ratio:.95}}
+@media(prefers-reduced-motion:reduce){.route-skeleton{opacity:1;animation:none}.route-skeleton .skeleton-picture::after{animation:none;display:none}}

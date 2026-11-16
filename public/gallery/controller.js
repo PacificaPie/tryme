@@ -1,3 +1,5 @@
+import {t,getLocale,applyGalleryLocale} from './i18n.js';
+applyGalleryLocale('gallery',new URLSearchParams(location.search).get('lang'),{first:true});
 /* Host-driven adapter for the supplied 卡中展厅 Three.js paper model.
    No autoplay, fake metrics, external dependencies, or embedded game execution. */
 (function(){
@@ -21,13 +23,13 @@ function text(value,fallback,max){return typeof value==='string'?value.trim().sl
 function cleanPayload(payload){
   if(!payload||!payload.author||!Array.isArray(payload.works))return null;
   var a=payload.author,website='';try{var u=new URL(a.website);if(/^https?:$/.test(u.protocol)&&!u.username&&!u.password)website=u.href;}catch(e){}
-  var author={id:text(a.id,'creator',128)||'creator',name:text(a.name,'创作者',140)||'创作者',bio:text(a.bio,'',600),signature:text(a.signature,'',80),headline:text(a.headline,'',120),website:website,backStyle:['ink','ivory','cobalt'].includes(a.backStyle)?a.backStyle:'ink'};
+  var author={id:text(a.id,'creator',128)||'creator',name:text(a.name,t('创作者'),140)||t('创作者'),bio:text(a.bio,'',600),signature:text(a.signature,'',80),headline:text(a.headline,'',120),website:website,backStyle:['ink','ivory','cobalt'].includes(a.backStyle)?a.backStyle:'ink'};
   var seen=new Set(),works=[];
   payload.works.forEach(function(w){
     if(!w||typeof w.id!=='string'||!w.id||seen.has(w.id))return;
     seen.add(w.id);var cover='';
     try{if(typeof w.cover==='string'&&w.cover.trim()){var url=new URL(w.cover,location.href);if(url.origin===location.origin&&(url.protocol==='https:'||url.protocol==='http:'))cover=url.href;}}catch(e){}
-    works.push({id:w.id,name:text(w.name,'未命名作品',140)||'未命名作品',desc:text(w.desc,'',1000),cover:cover,kind:text(w.kind,'作品',80),version:text(w.version,'',40)});
+    works.push({id:w.id,name:text(w.name,t('未命名作品'),140)||t('未命名作品'),desc:text(w.desc,'',1000),cover:cover,kind:text(w.kind,'作品',80),version:text(w.version,'',40)});
   });
   var focus=works.some(function(w){return w.id===payload.focusWorkId;})?payload.focusWorkId:null;
   return {focusWorkId:focus,author:author,works:works,open:!!payload.open,inside:!!payload.inside&&!!payload.open,face:payload.face==='back'?'back':'front',page:Number.isFinite(payload.page)?Math.max(0,Math.min(Math.max(0,Math.ceil(works.length/PAGE_SIZE)-1),Math.floor(payload.page))):0,yaw:Number.isFinite(payload.yaw)?Math.max(-1.3,Math.min(1.3,payload.yaw)):0};
@@ -48,7 +50,7 @@ function updateWorkNav(){
   left.hidden=right.hidden=order.length<2;
   setText($('current-title'),w?w.name:'');$('current-title').title=w?w.name:'';
   setText($('current-index'),w?(index+1)+' / '+order.length:'');
-  setText($('play-current'),w&&w.kind==='外链作品'?'打开作品 ↗':'试玩 ↗');
+  setText($('play-current'),t(w&&w.kind==='外链作品'?'打开作品 ↗':'试玩 ↗'));
 }
 function focusWork(id,animate){
   var index=data?data.works.findIndex(function(w){return w.id===id;}):-1;if(index<0)return;
@@ -66,40 +68,40 @@ function renderList(){
   $('gallery-title').textContent=data.author.name;
   var a=data.author,copy=$('creator-copy');copy.textContent=[a.name,a.headline,a.bio,a.signature].filter(Boolean).join('\n');
   if(a.website){var link=document.createElement('a');link.href=a.website;link.target='_blank';link.rel='noopener noreferrer';link.textContent=a.website.replace(/^https?:\/\//,'');copy.append(document.createElement('br'),link);}
-  $('summary-label').textContent=data.works.length+' 件作品 · 关于 '+a.name;
-  $('work-count').textContent='已选 '+data.works.length+' 件作品';
-  $('empty').hidden=data.works.length>0;$('empty').textContent='还没有选入作品。请返回上一步选择作品。';
+  $('summary-label').textContent=t('{count} 件作品 · 关于 {name}',{count:data.works.length,name:a.name});
+  $('work-count').textContent=t('已选 {count} 件作品',{count:data.works.length});
+  $('empty').hidden=data.works.length>0;$('empty').textContent=t('还没有选入作品。请返回上一步选择作品。');
   works.forEach(function(w){
-    var li=document.createElement('li'),button=document.createElement('button');button.className='work';button.type='button';button.setAttribute('aria-label','查看作品：'+w.name);
+    var li=document.createElement('li'),button=document.createElement('button');button.className='work';button.type='button';button.setAttribute('aria-label',t('查看作品：{name}',{name:w.name}));
     if(w.cover){var img=document.createElement('img');img.src=w.cover;img.alt='';img.loading='lazy';img.addEventListener('error',function(){img.hidden=true;},{once:true});button.appendChild(img);}
-    var copy=document.createElement('span');copy.className='copy';var strong=document.createElement('strong');strong.textContent=w.name;var small=document.createElement('small');small.textContent=w.desc||[w.kind,w.version].filter(Boolean).join(' · ');copy.append(strong,small);button.appendChild(copy);
+    var copy=document.createElement('span');copy.className='copy';var strong=document.createElement('strong');strong.textContent=w.name;var small=document.createElement('small');small.textContent=w.desc||[t(w.kind),w.version].filter(Boolean).join(' · ');copy.append(strong,small);button.appendChild(copy);
     var arrow=document.createElement('span');arrow.className='arrow';arrow.textContent='↗';arrow.setAttribute('aria-hidden','true');button.appendChild(arrow);
     button.addEventListener('click',function(){openWork(w.id);});li.appendChild(button);list.appendChild(li);
   });
   var pages=Math.ceil(data.works.length/PAGE_SIZE);$('paging').hidden=pages<=1;$('prev').disabled=page===0;$('next').disabled=page>=pages-1;
   $('page-label').textContent=(page+1)+' / '+pages;$('page-note').hidden=pages<=1;
-  $('page-note').textContent='每组展出最多 '+PAGE_SIZE+' 件；当前第 '+(page*PAGE_SIZE+1)+'–'+Math.min((page+1)*PAGE_SIZE,data.works.length)+' 件。切换分组可查看全部已选作品。';
+  $('page-note').textContent=t('每组展出最多 {size} 件；当前第 {from}–{to} 件。切换分组可查看全部已选作品。',{size:PAGE_SIZE,from:page*PAGE_SIZE+1,to:Math.min((page+1)*PAGE_SIZE,data.works.length)});
 }
 function hasWorks(){return !!(data&&data.works.length);}
 function animating(){return Math.abs(progress-(targetOpen?1:0))>.0001||Math.abs(faceProgress-(targetFace==='back'?1:0))>.0001||Math.abs(fly-(inside?1:0))>.0001||(inside&&roomMove<1);}
 function updateUI(){
   var available=hasWorks()&&!failed&&!!popup;
-  toggle.disabled=!available;toggle.hidden=!available||inside||fly>.001;toggle.textContent=targetOpen?'收起名片':'展开展厅 ↗';toggle.setAttribute('aria-pressed',String(targetOpen));
-  flip.disabled=!available||targetOpen||progress>.0001;flip.hidden=flip.disabled;flip.setAttribute('aria-label',targetFace==='front'?'翻到背面':'翻到正面');flip.title=flip.getAttribute('aria-label');
+  toggle.disabled=!available;toggle.hidden=!available||inside||fly>.001;toggle.textContent=t(targetOpen?'收起名片':'展开展厅 ↗');toggle.setAttribute('aria-pressed',String(targetOpen));
+  flip.disabled=!available||targetOpen||progress>.0001;flip.hidden=flip.disabled;flip.setAttribute('aria-label',t(targetFace==='front'?'翻到背面':'翻到正面'));flip.title=flip.getAttribute('aria-label');
   enter.disabled=!available||progress<.999;enter.hidden=!available||!targetOpen||progress<.999||inside||fly>.001;
   $('room-nav').hidden=!available||!inside;updateWorkNav();
   stage.dataset.face=targetFace;if(!heightObserver)reportHeight();
-  if(!hasWorks()){stage.dataset.state=data?'empty':'waiting';status.textContent=data?'尚未选择作品':'等待作品';return;}
-  if(failed){stage.dataset.state='fallback';status.textContent='作品列表模式';return;}
+  if(!hasWorks()){stage.dataset.state=data?'empty':'waiting';status.textContent=data?t('尚未选择作品'):t('等待作品');return;}
+  if(failed){stage.dataset.state='fallback';status.textContent=t('作品列表模式');return;}
   var moving=animating();stage.dataset.state=moving?(inside?'entering':fly>.001?'leaving':targetOpen?'opening':progress>.0001?'closing':'flipping'):inside?'inside':targetOpen?'open':'closed';
   if(inside&&fly>.999&&roomMove<1)stage.dataset.state='browsing';
-  if(inside&&fly>.999){var focused=selectedWork();setText(status,focused?'正在浏览 '+focused.name:'已进入展厅');return;}
-  status.textContent=moving?(inside?'正在走进展厅…':fly>.001?'正在返回名片…':targetOpen?'正在展开展厅…':progress>.0001?'正在收起展厅…':'正在翻面…'):inside?'已进入展厅':targetOpen?'展厅已展开':'展厅已收起 · '+(targetFace==='front'?'正面':'背面');
+  if(inside&&fly>.999){var focused=selectedWork();setText(status,focused?t('正在浏览 {name}',{name:focused.name}):t('已进入展厅'));return;}
+  status.textContent=t(moving?(inside?'正在走进展厅…':fly>.001?'正在返回名片…':targetOpen?'正在展开展厅…':progress>.0001?'正在收起展厅…':'正在翻面…'):inside?'已进入展厅':targetOpen?'展厅已展开':targetFace==='front'?'展厅已收起 · 正面':'展厅已收起 · 背面');
 }
 function showFallback(message){
   failed=true;cancelAnimationFrame(raf);raf=0;canvas.hidden=true;$('fallback').hidden=false;
   $('details').open=true;
-  $('fallback-title').textContent='作品仍在这里';$('fallback-message').textContent=message||'当前浏览器暂时无法显示 3D 展厅。可以通过下方作品按钮继续查看。';updateUI();
+  $('fallback-title').textContent=t('作品仍在这里');$('fallback-message').textContent=message||t('当前浏览器暂时无法显示 3D 展厅。可以通过下方作品按钮继续查看。');updateUI();
 }
 function releaseScene(){
   if(popup){popup.dispose();popup=null;}
@@ -118,7 +120,7 @@ function rebuild(){
   if(popup){popup.dispose();popup=null;}
   renderList();
   if(!hasWorks()){
-    canvas.hidden=true;$('fallback').hidden=false;$('fallback-title').textContent='尚未选择作品';$('fallback-message').textContent='返回上一步选入作品后，再生成卡中展厅。';updateUI();return;
+    canvas.hidden=true;$('fallback').hidden=false;$('fallback-title').textContent=t('尚未选择作品');$('fallback-message').textContent=t('返回上一步选入作品后，再生成卡中展厅。');updateUI();return;
   }
   if(!ensureCore()){showFallback();return;}
   try{
@@ -128,8 +130,9 @@ function rebuild(){
   }catch(e){releaseScene();showFallback();}
 }
 function initialize(payload){
+  applyGalleryLocale('gallery',payload?.locale);
   var next=cleanPayload(payload);if(!next)return;
-  var key=JSON.stringify({author:next.author,works:next.works});
+  var key=JSON.stringify({locale:getLocale(),author:next.author,works:next.works});
   targetOpen=next.open&&next.works.length>0;targetFace=targetOpen?'front':next.face;
   progress=targetOpen?1:0;faceProgress=targetFace==='back'?1:0;
   inside=next.inside&&targetOpen;fly=inside?1:0;
@@ -240,7 +243,7 @@ function clearHover(){canvas.style.cursor='default';$('hover-label').hidden=true
 function hover(event){
   var hit=hitAt(event);if(!hit){clearHover();return;}
   var id=hit.object.userData.workId,w=id&&data.works.find(function(w){return w.id===id;});
-  if(w&&targetOpen){canvas.style.cursor='pointer';$('hover-label').textContent=w.name+(w.kind==='外链作品'?' · 打开作品 ↗':' · 试玩 ↗');$('hover-label').hidden=false;}
+  if(w&&targetOpen){canvas.style.cursor='pointer';$('hover-label').textContent=w.name+' · '+t(w.kind==='外链作品'?'打开作品 ↗':'试玩 ↗');$('hover-label').hidden=false;}
   else if(!targetOpen){canvas.style.cursor='pointer';$('hover-label').hidden=true;}else clearHover();
 }
 function pick(event){
@@ -275,7 +278,7 @@ listen(stage,'keydown',function(event){
   else if(event.key.toLowerCase()==='g'&&targetOpen){event.preventDefault();enterRoom(true);}
   else if(event.key==='Escape'&&targetOpen){event.preventDefault();if(inside)enterRoom(false);else setOpen(false);}
 });
-listen(canvas,'webglcontextlost',function(event){event.preventDefault();showFallback('3D 显示已暂停。可以通过下方作品按钮继续查看，重新打开名片可重试 3D。');});
+listen(canvas,'webglcontextlost',function(event){event.preventDefault();showFallback(t('3D 显示已暂停。可以通过下方作品按钮继续查看，重新打开名片可重试 3D。'));});
 listen(document,'visibilitychange',function(){if(document.hidden){cancelAnimationFrame(raf);raf=0;lastTime=0;}else requestRender();});
 function onResize(){if(core){core.resize();requestRender();}if(!heightObserver)reportHeight();}
 if(window.ResizeObserver){resizeObserver=new ResizeObserver(onResize);resizeObserver.observe(stage);heightObserver=new ResizeObserver(reportHeight);heightObserver.observe($('shell'));}else listen(window,'resize',onResize);

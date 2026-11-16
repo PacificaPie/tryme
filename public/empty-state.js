@@ -1,0 +1,14 @@
+const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const drawings = {
+  works: '<rect x="38" y="24" width="126" height="88" rx="10" fill="#f0f3f2"/><rect x="26" y="14" width="126" height="88" rx="10" fill="#fff" stroke="#cbd4d7"/><path d="m43 82 27-29 22 22 17-17 27 27" fill="#e9eff0" stroke="#c5d0d3" stroke-linejoin="round"/><circle cx="121" cy="38" r="8" fill="#e8dfd0"/><circle cx="151" cy="106" r="19" fill="#eaf0ec" stroke="#c4d2c9"/><path d="M151 98v16m-8-8h16" stroke="#698574" stroke-width="1.8"/>',
+  cards: '<rect x="43" y="26" width="113" height="83" rx="10" fill="#eef1f3" stroke="#dce1e4" transform="rotate(8 100 68)"/><rect x="26" y="20" width="122" height="83" rx="10" fill="#fff" stroke="#cbd4d7" transform="rotate(-5 87 62)"/><rect x="42" y="38" width="28" height="35" rx="4" fill="#e5ece9"/><rect x="77" y="35" width="25" height="35" rx="4" fill="#e8dfd0"/><rect x="109" y="32" width="23" height="35" rx="4" fill="#e9eef2"/><path d="m44 85 47-4" stroke="#c4ced2" stroke-width="3" stroke-linecap="round"/>',
+  search: '<rect x="30" y="21" width="110" height="85" rx="11" fill="#f2f4f5"/><path d="M45 42h45M45 57h27M45 72h36" stroke="#d0d9dd" stroke-width="3" stroke-linecap="round"/><circle cx="121" cy="69" r="29" fill="#fff" stroke="#b9c7cc" stroke-width="2"/><path d="m142 91 22 23" stroke="#889fa9" stroke-width="6" stroke-linecap="round"/><path d="m111 69 20 0" stroke="#d2dcdf" stroke-width="2" stroke-linecap="round"/>',
+  activity: '<path d="M61 35h91a9 9 0 0 1 9 9v47a9 9 0 0 1-9 9h-12v17l-22-17H61a9 9 0 0 1-9-9V44a9 9 0 0 1 9-9Z" fill="#edf2ef" stroke="#d1dbd5"/><path d="M30 16h91a9 9 0 0 1 9 9v49a9 9 0 0 1-9 9H61L39 99V83h-9a9 9 0 0 1-9-9V25a9 9 0 0 1 9-9Z" fill="#fff" stroke="#cbd4d7"/><circle cx="53" cy="50" r="4" fill="#bdccd0"/><circle cx="76" cy="50" r="4" fill="#bdccd0"/><circle cx="99" cy="50" r="4" fill="#bdccd0"/>',
+};
+export function emptyState({ kind = 'works', title, description = '', action = '' }) {
+  const illustration = drawings[kind] || drawings.works;
+  return `<section class="empty-state illustrated-empty" data-empty-kind="${Object.hasOwn(drawings,kind)?kind:'works'}"><svg class="empty-art" viewBox="0 0 190 136" aria-hidden="true" focusable="false">${illustration}</svg><h2>${escape(title)}</h2>${description?`<p>${escape(description)}</p>`:''}${action?`<div class="empty-action">${action}</div>`:''}</section>`;
+}
+export function pageSkeleton(label) {
+  return `<div class="page route-loading" role="status" aria-label="${escape(label)}"><span class="skip-label">${escape(label)}</span><div class="route-skeleton" aria-hidden="true"><i class="skeleton-title"></i><div class="skeleton-rule"></div><div class="skeleton-cards">${Array.from({length:3},()=>'<div><i class="skeleton-picture"></i><i class="skeleton-line"></i><i class="skeleton-line short"></i></div>').join('')}</div></div>`;
+}

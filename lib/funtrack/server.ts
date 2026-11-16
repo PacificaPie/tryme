@@ -4,6 +4,7 @@ import { resolveGithubHTML } from './github-import.mjs';
 import { publicationArtifact } from './publication-artifact.mjs';
 import { createVersionService } from './version-service.mjs';
 import { cardWorkRefs } from './version-rules.mjs';
+import { analyticsResponse } from './analytics';
 import { ApiError, fail, authenticate, verifyWrite, requiredText, eventId, safeURL, coverType, htmlSource, sessionEvents, GAME_CSP, gameDocument, likedState, cardDetails, cardSnapshot, cardTemplate, commentInput, validateCommentParent, commentPageLimit, encodeCommentCursor, decodeCommentCursor, discoverQuery, encodeDiscoverCursor, decodeDiscoverCursor } from './rules.mjs';
 
 type Row = Record<string, any>;
@@ -307,25 +308,7 @@ async function createCard(request:Request,user:User) {
 }
 
 async function analytics(url:URL,user:User) {
-  const days=Number(url.searchParams.get('days')||7);if(!Number.isInteger(days)||days<1||days>30)throw new ApiError(422,'INVALID_DAYS','统计天数须为 1–30');
-  const workId=url.searchParams.get('work');if(workId)await ownWork(workId,user);
-  const works=await rows(WORK_QUERY+' WHERE w.author_id=?'+(workId?' AND w.id=?':'')+' ORDER BY w.created_at DESC',...workId?[user.id,workId]:[user.id]);
-  const start=new Date();start.setUTCHours(0,0,0,0);start.setUTCDate(start.getUTCDate()-days+1);const from=start.toISOString(),to=iso();
-  const condition='w.author_id=? AND e.received_at>=? AND e.received_at<=?'+(workId?' AND w.id=?':'');const args=workId?[user.id,from,to,workId]:[user.id,from,to];
-  const grouped=await rows(`SELECT e.work_id,e.event_type,COUNT(*) n FROM ft_events e JOIN ft_works w ON w.id=e.work_id WHERE ${condition} GROUP BY e.work_id,e.event_type`,...args);
-  const feedbacks=await rows(`SELECT f.work_id,COUNT(*) n FROM ft_feedback f JOIN ft_works w ON w.id=f.work_id WHERE w.author_id=? AND f.created_at>=? AND f.created_at<=?${workId?' AND w.id=?':''} GROUP BY f.work_id`,...args);
-  const comments=await rows(`SELECT c.work_id,COUNT(*) n FROM ft_comments c JOIN ft_works w ON w.id=c.work_id WHERE w.author_id=? AND c.created_at>=? AND c.created_at<=?${workId?' AND w.id=?':''} GROUP BY c.work_id`,...args);
-  const count=(id:string,type:string)=>Number(grouped.find(r=>r.work_id===id&&r.event_type===type)?.n||0);
-  const byWork=works.map(w=>({workId:w.id,name:w.name,currentVersionId:w.current_version_id,source:w.source,views:count(w.id,'work_view'),starts:w.source==='html'?count(w.id,'play_start'):null,ends:w.source==='html'?count(w.id,'session_end'):null,feedback:Number(feedbacks.find(f=>f.work_id===w.id)?.n||0),comments:Number(comments.find(c=>c.work_id===w.id)?.n||0),outboundClicks:count(w.id,'outbound_click')}));
-  const daily=await rows(`SELECT substr(e.received_at,1,10) date,e.event_type,COUNT(*) n FROM ft_events e JOIN ft_works w ON w.id=e.work_id WHERE ${condition} AND e.event_type IN ('work_view','play_start') GROUP BY date,e.event_type`,...args);
-  const byDay=Array.from({length:days},(_,i)=>{const date=new Date(start.getTime()+i*86400000).toISOString().slice(0,10);return {date,views:Number(daily.find(r=>r.date===date&&r.event_type==='work_view')?.n||0),starts:Number(daily.find(r=>r.date===date&&r.event_type==='play_start')?.n||0)};});
-  const cardViews=workId?0:Number((await first(`SELECT COUNT(*) n FROM ft_events e JOIN ft_cards c ON c.id=e.card_id WHERE c.author_id=? AND e.event_type='card_view' AND e.received_at>=? AND e.received_at<=?`,user.id,from,to))?.n||0);
-  const summary={views:0,starts:0,ends:0,feedback:0,comments:0,cardViews,outboundClicks:0};for(const w of byWork){summary.views+=w.views;summary.starts+=w.starts||0;summary.ends+=w.ends||0;summary.feedback+=w.feedback;summary.comments+=w.comments;summary.outboundClicks+=w.outboundClicks;}
-  const eventReceipts=(await rows(`SELECT e.* FROM ft_events e JOIN ft_works w ON w.id=e.work_id WHERE ${condition} ORDER BY e.received_at DESC LIMIT 30`,...args)).map(receipt);
-  const feedbackReceipts=(await rows(`SELECT f.id,f.work_id,f.version_id,f.created_at FROM ft_feedback f JOIN ft_works w ON w.id=f.work_id WHERE w.author_id=? AND f.created_at>=? AND f.created_at<=?${workId?' AND w.id=?':''} ORDER BY f.created_at DESC LIMIT 30`,...args)).map(f=>({id:f.id,type:'feedback',workId:f.work_id,versionId:f.version_id,receivedAt:f.created_at}));
-  const cardReceipts=workId?[]:(await rows(`SELECT e.* FROM ft_events e JOIN ft_cards c ON c.id=e.card_id WHERE c.author_id=? AND e.received_at>=? AND e.received_at<=? ORDER BY e.received_at DESC LIMIT 30`,user.id,from,to)).map(receipt);
-  const receipts=[...eventReceipts,...feedbackReceipts,...cardReceipts].sort((a,b)=>b.receivedAt.localeCompare(a.receivedAt)).slice(0,30);
-  return json({scope:'work_period',from,to,summary,byWork,byDay,receipts});
+  return analyticsResponse(url,user,db());
 }
 
 export async function handleAPI(request:Request) {
