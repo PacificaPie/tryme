@@ -145,7 +145,7 @@ function placeholder(work){
 SP.configurePrints=function(author,works,total,offset){
   TOTAL=total;OFFSET=offset;WORKS=works.map(function(w){return{id:w.id,t:w.name,desc:w.desc||'',cover:w.cover||'',kind:w.kind||'WEB',version:w.version||''};});
   var hash=0;for(var i=0;i<author.id.length;i++)hash=(hash*31+author.id.charCodeAt(i))>>>0;
-  PEOPLE=[{n:author.name,g:author.name.slice(-1)||'作',h:author.bio||'',no:hash%9999,w:total,bio:author.bio||''}];
+  PEOPLE=[{n:author.name,g:(Array.from(author.name.trim())[0]||'作').toUpperCase(),h:author.bio||'',no:hash%9999,w:total,bio:author.bio||''}];
   var count=WORKS.length,cols=count===1?1:count<=4?2:3,rows=Math.ceil(count/cols),cw=2.45/cols,rh=2.22/rows;
   SLOTS=WORKS.map(function(w,i){var width=Math.min(1.56,cw-.1),height=Math.min(width*.625,rh-.20);return{x:((i%cols)-(cols-1)/2)*cw,y:1.70-Math.floor(i/cols)*rh-height/2,w:width,h:height};});
   if(count===3)SLOTS=[{x:0,y:1.075,w:2.45,h:1.25},{x:-.65,y:-.10,w:1.15,h:.60},{x:.65,y:-.10,w:1.15,h:.60}];

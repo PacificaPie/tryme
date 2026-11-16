@@ -1,6 +1,6 @@
 # 真实数据实现与剩余验收
 
-更新于 2026-11-16。当前仓库已经实现上传、隔离运行、事件入库、反馈、名片快照与创作者查询。本地 API 及浏览器基本闭环已验证；生产环境仍需独立验收。运行命令见 [README](../README.md)，字段细节见 [API 契约](api-contract.md)。
+更新于 2026-11-16。当前仓库已经实现上传、隔离运行、事件入库、反馈、名片快照与创作者查询。本地 API、浏览器及 owner-only 生产闭环已验证，具体证据和未测范围见文末。运行命令见 [README](../README.md)，字段细节见 [API 契约](api-contract.md)。
 
 ## 已实现的数据路径
 
@@ -10,7 +10,7 @@
 4. D1 保存事件与反馈，创作者界面重新查询服务端记录。R2 保存 HTML 与封面；浏览器里的草稿不是服务端发布记录。
 5. 名片保存时复制作者展示信息、选中的作品内容、顺序、版本及封面引用。保存另一张名片会产生新 ID，旧名片保持原快照。由旧名片进入作品时只读取该快照，加载失败不静默换成最新作品。
 
-`.openai/hosting.json` 已声明 D1 `DB` 和 R2 `BUCKET`；表定义为 `ft_profiles`、`ft_works`、`ft_work_versions`、`ft_cards`、`ft_play_sessions`、`ft_events`、`ft_feedback`。本地 Miniflare 持久化目录为 `.wrangler/state`。声明绑定和本地迁移不是生产资源已配置的证明。
+`.openai/hosting.json` 已声明 D1 `DB` 和 R2 `BUCKET`；表定义为 `ft_profiles`、`ft_works`、`ft_work_versions`、`ft_cards`、`ft_play_sessions`、`ft_events`、`ft_feedback`。本地 Miniflare 持久化目录为 `.wrangler/state`，与生产存储分开。生产资源已通过实际上传、D1 原生读表及 R2 文件读取验收。
 
 ## 上传、授权与接口
 
@@ -45,6 +45,12 @@
 
 **示例自动检查已验证：** `node examples/verify.mjs` 检查三份单文件游戏的依赖、体积、终局、键盘/点击操作、手动结束、隐藏暂停和清理。它使用确定性执行环境，不替代真实浏览器输入或服务端收据验收。
 
-**当前本地浏览器已验证：** 实际上传 `examples/tiles.html` 和 `tiles.png`，刷新后仍可读取；进入游戏并三步完成 1000 分，反馈成功；重玩未输入即退出后，数据页开始试玩、反馈、访问各为 1。选作生成 fold 名片、保存并展开 3D，作品图片内容正确。本轮最新构建、11 项自动测试及 10 项 API 集成检查再次通过。浏览器使用本地测试身份；跨浏览器、真机表现及完整名片往返仍需补充验收，早期 wireframe 检查不自动适用于当前应用。
+**当前本地浏览器已验证：** 实际上传 `examples/tiles.html` 和 `tiles.png`，刷新后仍可读取；进入游戏并三步完成 1000 分，反馈成功；重玩未输入即退出后，数据页开始试玩、反馈、访问各为 1。选作生成 fold 名片、保存并展开 3D，作品图片内容正确。本轮最新构建、11 项自动测试及 10 项 API 集成检查再次通过。本地浏览器使用测试身份，早期 wireframe 检查不自动适用于当前应用。
 
-**生产待验证：** 构建部署、D1/R2 绑定及迁移、Sites 真实登录、上传文件跨请求可读、刷新与独立浏览器会话查询、部署后的 sandbox 和私有 audience。沿用既有项目和授权访问范围，不把部署授权解释为开放匿名访问。本轮尚不能声称完成生产持久化验证、公开玩家分发验证或性能/可用性研究。
+**生产已验证：** 提交 `3932837db3c6ba6a186497d44f52702cde1bbcae` 的部署 `appgdep_6afb69617f048191a3a6bb5019aa7961` 状态为 `succeeded`。使用 Sites 真实身份 Pacifica Zhang，通过实际文件选择器上传 Salt Run、Orbit、九宫格三件作品；D1 原生读表确认作品记录，R2 HTML 与封面均可正常读取。
+
+线上九宫格以键盘三步完成 1000 分。原生 D1 工具查询 `ft_events` 确认 `work_view`、`play_start`、`game_complete`（score 为 1000，label 为三步全部点亮的终局文字）及 `session_end`，`ft_feedback` 包含实际提交的反馈。数据页刷新后显示访问 2（九宫格和 Orbit）、开始 1、反馈 1。
+
+生成并保存 fold 名片 `6bf58d6f-daa9-4502-933c-121044a18899`，D1 快照包含三件作品及对应的正确 versionId。关闭、展开、旋转、从名片进入 Orbit、返回后保持展开均通过；360px 浏览器视口无水平溢出。截图为 `.preview/production-card-closed.png`、`.preview/production-card-open.png`、`.preview/production-data.png`。
+
+**具体边界：** 生产仍保持 owner-only。独立账号、多用户公开访问、跨浏览器及真机表现未测试；单一账号的实际闭环不构成公开玩家分发、负载性能或可用性研究。上述生产验收不改变客户端上报、外链未知和关页尽力送达的统计边界。

@@ -20,7 +20,7 @@ npm run dev -- --hostname 127.0.0.1 --port 8766
 
 打开 `http://127.0.0.1:8766/site.html#/`。本地便携开发模式的登录入口 `/signin-with-chatgpt?return_to=/site.html` 使用测试身份；它不验证生产 ChatGPT 登录。生产身份由 Sites 注入，当前功能均要求登录，分享链接的访问范围仍受站点 audience 限制。
 
-本地 D1/R2 状态保存在 `.wrangler/state`；它不代表云端数据。`.openai/hosting.json` 声明 `DB`、`BUCKET` 绑定，生产资源与持久化仍需部署后验收。
+本地 D1/R2 状态保存在 `.wrangler/state`；它与云端数据分开。`.openai/hosting.json` 声明 `DB`、`BUCKET` 绑定；生产上传、文件读取及 D1 持久化已通过下述验收。
 
 ## 当前功能与限制
 
@@ -48,9 +48,11 @@ npm run dev -- --hostname 127.0.0.1 --port 8766
 | 本地 API | Miniflare 的真实本地 D1/R2 集成检查通过 10 项：上传与重试、失败不发布、隔离响应、事件去重、会话及数据所有权、反馈、不可变名片、统计、外链未知。运行报告在 `.preview/local-api-integration.json`。 |
 | 示例游戏 | 自动检查覆盖自包含文件、大小、键盘/点击终局、单次完成、手动结束、隐藏暂停及资源清理；不是浏览器实测。 |
 | 当前应用本地浏览器 | 已实际上传 tiles HTML + PNG，刷新后仍可读取；三步完成 1000 分并发送反馈；重玩未输入即退出后，数据页开始/反馈/访问各为 1；fold 名片生成、保存、展开 3D 及图片内容正常。 |
-| 生产 | Sites 登录、D1/R2 绑定与迁移、跨浏览器持久化、部署后隔离及 audience 均待实际验收；本地通过不等于已上线验证。 |
+| 生产 | Sites 真实身份 Pacifica Zhang 登录；实际上传 Salt Run、Orbit、九宫格，D1 记录与 R2 HTML/封面可读。线上九宫格键盘三步完成 1000 分、反馈入库；fold 名片保存、展开、旋转、进入 Orbit 并返回保持展开通过，360px 无水平溢出。 |
 
-本轮最新构建、11 项自动测试及 10 项 API 集成检查通过。当前浏览器证据来自本地测试身份；跨浏览器、真机表现及生产身份尚未验证。旧 wireframe 的检查不自动继承为当前版本证据。
+生产验收对应提交 `3932837db3c6ba6a186497d44f52702cde1bbcae`，部署 `appgdep_6afb69617f048191a3a6bb5019aa7961` 状态为 `succeeded`。原生 D1 查询确认 `work_view`、`play_start`、1000 分 `game_complete`、`session_end` 及实际反馈；数据页刷新后访问为 2（九宫格、Orbit）、开始为 1、反馈为 1。名片 `6bf58d6f-daa9-4502-933c-121044a18899` 的 D1 快照含三件作品的正确版本 ID。
+
+本轮构建、11 项自动测试及 10 项 API 集成检查通过。生产保持 owner-only，独立账号、多用户公开访问、跨浏览器和真机表现未测试；360px 检查是浏览器视口检查。旧 wireframe 的证据不自动继承为当前版本证据。生产截图保存在 `.preview/production-card-closed.png`、`.preview/production-card-open.png`、`.preview/production-data.png`；详细边界见 [验收记录](docs/real-data-plan.md)。
 
 常规检查：
 
