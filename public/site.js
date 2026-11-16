@@ -14,7 +14,7 @@ let me=null, authChecked=false, routeNumber=0, currentRoute='', noticeTimer, cur
 const scrolls=new Map();
 const galleryViews=new Map(Object.entries(read(storage.views,{})));
 const feedbackDrafts=read(storage.feedback,{});
-let publishDraft={name:'',desc:'',source:'html',url:'',key:uid(),...read(storage.publish,{})},publishFile=null,coverFile=null,coverPreview='',publishPending=false,publishError='',githubPending=false,githubJob=0;
+let publishDraft={name:'',desc:'',source:'html',url:'',key:uid(),...read(storage.publish,{})},publishFile=null,coverFile=null,coverPreview='',publishPending=false,publishError='',githubPending=false,githubJob=0,buildPollTimer,buildPollRevision=0,buildCancelPending=false,buildPollError='';
 let cardDraft={ids:[],template:'wall',name:'',bio:'',signature:'',headline:'',website:'',backStyle:'ink',...read(storage.card,{})},preview=read(storage.preview,null),cardPending=false,cardError='',cardKey=uid();
 let sessionQueues=new Set(),actionQueue=new Map();
 const socialState=new Map(),likePending=new Set(),likeRetry=new Map();
@@ -71,7 +71,7 @@ async function readMine(){
 async function activateDrafts(user){
   if(draftOwner===user.id)return;
   const legacyOwner=read('funtrack.real.owner',null),canMigrate=(!legacyOwner||legacyOwner===user.id)&&!read('funtrack.real.migrated:'+user.id,false);
-  draftOwner=user.id;githubJob++;githubPending=false;clearDiscovery();socialState.clear();likePending.clear();likeRetry.clear();fileScope=user.id+':';Object.keys(storage).forEach(key=>storage[key]=storageBase[key]+':'+user.id);
+  draftOwner=user.id;stopBuildPolling();githubJob++;githubPending=false;clearDiscovery();socialState.clear();likePending.clear();likeRetry.clear();fileScope=user.id+':';Object.keys(storage).forEach(key=>storage[key]=storageBase[key]+':'+user.id);
   const stored=(key,fallback)=>read(storage[key],canMigrate?read(storageBase[key],fallback):fallback);
   publishDraft={name:'',desc:'',source:'html',url:'',key:uid(),...stored('publish',{})};
   cardDraft={ids:[],template:'wall',name:user.name,bio:user.bio||'',signature:user.signature||'',headline:user.headline||'',website:user.website||'',backStyle:user.backStyle||'ink',...stored('card',{})};
@@ -85,7 +85,7 @@ async function loadMe(){try{me=(await api('/api/me')).user;}catch(e){if(e.status
 
 function applyHTML(html,number){if(number!==routeNumber)return false;main.innerHTML=html;const key=route().raw;requestAnimationFrame(()=>{if(number===routeNumber)window.scrollTo(0,scrolls.get(key)||0);});return true;}
 async function renderRoute(){
-  const r=route(),number=++routeNumber;
+  const r=route(),number=++routeNumber;stopBuildPolling();
   if(currentRoute&&currentRoute!==r.raw)scrolls.set(currentRoute,window.scrollY);
   endSession('exit');currentGallery=null;currentRoute=r.raw;
   $$('.site-header nav a').forEach(a=>a.classList.toggle('active',a.dataset.nav===(r.path.startsWith('/cards')||r.path.startsWith('/card/')||r.path.startsWith('/author')?'cards':r.path.startsWith('/studio')||r.path==='/publish'?'studio':'feed')));
@@ -129,7 +129,7 @@ async function renderWork(r,number){
   const from=r.params.get('from')||'/feed',href=work.source==='url'?safeExternal(work.url):'';
   if(typeof work.likedByMe!=='boolean'){try{const live=(await api('/api/works/'+encodeURIComponent(id))).work;syncSocial(live);}catch{}}else syncSocial(work);
   const action=work.source==='url'?`<a class="button primary play-launch" href="${esc(href)}" target="_blank" rel="noopener noreferrer" data-outbound="${esc(id)}" data-version="${esc(work.versionId)}">打开作品 ↗</a>`:`<button class="button primary play-launch" data-action="start-game" data-work="${esc(id)}">${playIcon()}开始试玩</button>`;
-  if(!applyHTML(`<div class="page work-page"><a class="back" href="#${esc(from)}">← 返回</a><div class="work-detail"><div id="play-area" class="work-media"><div class="detail-cover">${workImage(work)}</div></div><aside class="work-summary"><h1>${esc(work.name)}</h1><a class="detail-author" href="#/author/${encodeURIComponent(work.authorId)}"><span class="avatar">${esc([...(work.authorName||'创作者')][0])}</span>${esc(work.authorName)}</a><p class="work-description">${esc(work.desc)}</p><dl class="work-facts"><div><dt>形式</dt><dd>${work.source==='url'?'外部网站':'网页游戏'}</dd></div><div><dt>版本</dt><dd>${esc(work.version)}</dd></div>${work.createdAt?`<div><dt>发布</dt><dd>${date(work.createdAt)}</dd></div>`:''}</dl><div class="work-launch">${action}</div><div class="detail-social">${socialControls(work)}<button class="discussion-jump" data-action="discussion" aria-label="查看讨论">${commentIcon()}<span>讨论</span></button></div></aside></div><div class="work-lower"><section id="discussion" class="discussion" aria-label="作品讨论"></section><aside id="related-works" class="related-works"></aside></div></div>`,number))return;
+  if(!applyHTML(`<div class="page work-page"><a class="back" href="#${esc(from)}">← 返回</a><div class="work-detail"><div id="play-area" class="work-media" data-built-project="${Boolean(work.build)}"><div class="detail-cover">${workImage(work)}</div></div><aside class="work-summary"><h1>${esc(work.name)}</h1><a class="detail-author" href="#/author/${encodeURIComponent(work.authorId)}"><span class="avatar">${esc([...(work.authorName||'创作者')][0])}</span>${esc(work.authorName)}</a><p class="work-description">${esc(work.desc)}</p><dl class="work-facts"><div><dt>形式</dt><dd>${work.source==='url'?'外部网站':'网页游戏'}</dd></div><div><dt>版本</dt><dd>${esc(work.version)}</dd></div>${work.createdAt?`<div><dt>发布</dt><dd>${date(work.createdAt)}</dd></div>`:''}</dl>${work.build?`<p class="work-origin">来源 <a href="${esc(safeExternal(work.build.sourceUrl||'https://github.com/'+work.build.repository+'/tree/'+work.build.commitSha))}" target="_blank" rel="noopener noreferrer">${esc(work.build.repository)}</a><span>${esc((work.build.commitSha||'').slice(0,7))}</span></p>`:''}<div class="work-launch">${action}</div><div class="detail-social">${socialControls(work)}<button class="discussion-jump" data-action="discussion" aria-label="查看讨论">${commentIcon()}<span>讨论</span></button></div></aside></div><div class="work-lower"><section id="discussion" class="discussion" aria-label="作品讨论"></section><aside id="related-works" class="related-works"></aside></div></div>`,number))return;
   postAction('work_view',{workId:id,versionId:work.versionId});
   $$('[data-action="start-game"]').forEach(b=>b.addEventListener('click',()=>startGame(work)));
   $('[data-action="discussion"]').addEventListener('click',()=>{$('#discussion').scrollIntoView({block:'start',behavior:'smooth'});$('#comment-input')?.focus({preventScroll:true});});
@@ -166,19 +166,52 @@ async function renderFeedback(r,number){
 function openDraftDB(){return new Promise((resolve,reject)=>{if(!window.indexedDB){reject(new Error('unavailable'));return;}const req=indexedDB.open('funtrack-real-drafts',1);req.onupgradeneeded=()=>req.result.createObjectStore('files');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
 async function fileStore(action,key,value,unscoped=false){key=(unscoped?'':fileScope)+key;let db;try{db=await openDraftDB();return await new Promise((resolve,reject)=>{const tx=db.transaction('files',action==='get'?'readonly':'readwrite'),store=tx.objectStore('files');const req=action==='get'?store.get(key):action==='delete'?store.delete(key):store.put(value,key);req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}catch{return null;}finally{db?.close();}}
 function refreshCoverPreview(){if(coverPreview)URL.revokeObjectURL(coverPreview);coverPreview=coverFile?URL.createObjectURL(coverFile):'';}
-function githubReady(){return Boolean(publishFile&&publishDraft.githubImport?.url&&publishDraft.githubImport?.commitSha&&publishDraft.githubImport.url===publishDraft.githubURL?.trim());}
+const buildSteps=['queued','fetching','installing','building','packaging'];
+const buildLabels={queued:'等待构建',fetching:'导入源码',installing:'安装依赖',building:'构建项目',packaging:'整理运行包',ready:'构建完成',failed:'构建失败',cancelled:'已取消'};
+function matchingBuild(){const build=publishDraft.githubBuild;return build?.id&&build.inputURL===publishDraft.githubURL?.trim()?build:null;}
+function activeBuild(build=matchingBuild()){return Boolean(build&&buildSteps.includes(build.status));}
+function githubFileLink(value){try{const u=new URL(value);return u.hostname==='raw.githubusercontent.com'||u.hostname==='github.com'&&/\/blob\/.+\.html?$/i.test(u.pathname);}catch{return false;}}
+function githubReady(){return matchingBuild()?.status==='ready'||Boolean(publishFile&&publishDraft.githubImport?.url&&publishDraft.githubImport?.commitSha&&publishDraft.githubImport.url===publishDraft.githubURL?.trim());}
+function stopBuildPolling(){clearTimeout(buildPollTimer);buildPollRevision++;}
 function refreshPublishState(){
   const form=$('#publish-form');if(!form)return;
-  const d=publishDraft,ready=githubReady();
+  const d=publishDraft,build=matchingBuild(),building=activeBuild(build),ready=githubReady(),isFile=githubFileLink(d.githubURL);
   for(const source of ['html','url','github'])$('#'+source+'-field').hidden=d.source!==source;
   $$('input,textarea',form).forEach(input=>input.disabled=publishPending);
   $('#publish-url').disabled=publishPending||d.source!=='url';
-  $('#github-url').disabled=publishPending||d.source!=='github';
-  const readButton=$('#github-read');readButton.disabled=publishPending||githubPending||!d.githubURL?.trim();readButton.textContent=githubPending?'正在读取…':'读取文件';
-  $('#github-status').textContent=githubPending?'正在读取 GitHub 文件…':ready?`${publishFile.name} · 已读取 ${d.githubImport.commitSha.slice(0,7)}`:'';
+  $('#github-url').disabled=publishPending||d.source!=='github'||building;
+  const readButton=$('#github-read');readButton.disabled=publishPending||githubPending||building||!d.githubURL?.trim();readButton.textContent=githubPending?'正在导入…':building?'构建中…':isFile?'读取文件':build?.status==='failed'||build?.status==='cancelled'?'重新构建':'导入并构建';
+  readButton.classList.toggle('primary',d.source==='github'&&!ready);
+  $('#github-status').textContent=githubPending?'正在读取 GitHub…':build?`${buildLabels[build.status]||build.status}${build.status==='ready'?' · '+Math.ceil(build.artifactBytes/1024)+' KB':''}`:ready?`${publishFile.name} · 已读取 ${d.githubImport.commitSha.slice(0,7)}`:'';
+  $('#github-build-panel').hidden=!build;
+  if(build){
+    const progress=$('#build-progress');progress.hidden=!building;progress.value=Math.max(0,buildSteps.indexOf(build.status))+1;
+    const preview=$('#build-preview');preview.hidden=build.status!=='ready';preview.href='/api/builds/'+encodeURIComponent(build.id)+'/preview';
+    const cancel=$('#build-cancel');cancel.hidden=!building;cancel.disabled=buildCancelPending;cancel.textContent=buildCancelPending?'正在取消…':'取消构建';
+    $('#build-source').textContent=build.repository+' · '+(build.commitSha||'').slice(0,7);
+    const nextLogs=build.logs||'';if($('#build-logs').textContent!==nextLogs)$('#build-logs').textContent=nextLogs;
+    $('#build-poll-error').textContent=buildPollError;
+  }
   $('#game-file-name').textContent=publishFile?.name||'';
-  const submit=$('[type="submit"]',form);submit.disabled=publishPending||githubPending||(d.source==='github'&&!ready);submit.textContent=publishPending?'正在发布…':'发布作品';
-  $('#publish-error').textContent=publishError;
+  const submit=$('[type="submit"]',form);submit.disabled=publishPending||githubPending||(d.source==='github'&&!ready);submit.classList.toggle('primary',d.source!=='github'||ready);submit.textContent=publishPending?'正在发布…':'发布作品';
+  $('#publish-error').textContent=publishError||(build?.status==='failed'?build.error||'构建失败，请查看构建记录。':'');
+}
+async function pollGithubBuild(){
+  clearTimeout(buildPollTimer);const build=matchingBuild();if(route().path!=='/publish'||publishDraft.source!=='github'||!activeBuild(build))return;
+  const owner=draftOwner,id=build.id,inputURL=build.inputURL,revision=++buildPollRevision;
+  try{
+    const result=await api('/api/builds/'+encodeURIComponent(id));
+    if(revision!==buildPollRevision||owner!==draftOwner||matchingBuild()?.id!==id)return;
+    publishDraft.githubBuild={...result.build,inputURL};buildPollError='';savePublish();refreshPublishState();
+  }catch(error){if(revision!==buildPollRevision||owner!==draftOwner||matchingBuild()?.id!==id)return;buildPollError=error.message;refreshPublishState();}
+  if(revision===buildPollRevision&&activeBuild()&&route().path==='/publish')buildPollTimer=setTimeout(pollGithubBuild,buildPollError?5000:1500);
+}
+async function cancelGithubBuild(){
+  const build=matchingBuild();if(!activeBuild(build)||buildCancelPending)return;
+  const owner=draftOwner,id=build.id,inputURL=build.inputURL;buildCancelPending=true;refreshPublishState();
+  try{const result=await api('/api/builds/'+encodeURIComponent(id)+'/cancel',{method:'POST',body:{}});if(owner===draftOwner&&matchingBuild()?.id===id){stopBuildPolling();publishDraft.githubBuild={...result.build,inputURL};savePublish();}}
+  catch(error){if(owner===draftOwner)publishError=error.message;}
+  finally{buildCancelPending=false;refreshPublishState();}
 }
 function renderPublish(number){
   const d=publishDraft;
@@ -188,7 +221,7 @@ function renderPublish(number){
       <div class="field"><label for="publish-desc">一句介绍</label><textarea id="publish-desc" name="desc" maxlength="500" required>${esc(d.desc)}</textarea></div>
       <fieldset class="field source-picker"><legend>作品来源</legend><div class="segmented">${[['html','本地 HTML'],['github','GitHub'],['url','已有网站']].map(([value,label])=>`<label><input type="radio" name="source" value="${value}" ${d.source===value?'checked':''}>${label}</label>`).join('')}</div></fieldset>
       <div class="field" id="html-field"><label for="game-file">游戏文件</label><input id="game-file" type="file" accept=".html,.htm,text/html"><small>单个 HTML，最大 1 MB，图片、样式和脚本包含在文件里。</small><p id="game-file-name" class="file-selected"></p></div>
-      <div class="field" id="github-field"><label for="github-url">GitHub 链接</label><div class="github-input"><input id="github-url" name="githubURL" type="url" placeholder="https://github.com/…" value="${esc(d.githubURL||'')}"><button id="github-read" class="button" type="button">读取文件</button></div><small>公开仓库的 index.html，或单个 HTML 文件链接。暂不支持多文件和构建项目。</small><p id="github-status" class="file-selected" role="status"></p></div>
+      <div class="field" id="github-field"><label for="github-url">GitHub 链接</label><div class="github-input"><input id="github-url" name="githubURL" type="url" placeholder="https://github.com/作者/仓库" value="${esc(d.githubURL||'')}"><button id="github-read" class="button" type="button">导入并构建</button></div><small>公开 Vite 静态项目（根目录 npm 锁文件），或独立 HTML 文件链接。</small><p id="github-status" class="file-selected" role="status"></p><section id="github-build-panel" class="build-panel" hidden><progress id="build-progress" max="5" aria-label="构建进度"></progress><div class="build-actions"><a id="build-preview" class="button small" target="_blank" rel="noopener">预览试玩 ↗</a><button id="build-cancel" class="button quiet small" type="button">取消构建</button></div><details class="build-details"><summary>构建记录</summary><p id="build-source"></p><pre id="build-logs"></pre></details><p id="build-poll-error" class="error" role="status"></p></section></div>
       <div class="field" id="url-field"><label for="publish-url">作品链接</label><input id="publish-url" name="url" type="url" placeholder="https://" value="${esc(d.url)}"><small>已部署的网站（含 GitHub Pages），将在新窗口打开。</small></div>
       <div class="field"><label for="cover-file">封面</label><div class="cover-picker">${coverPreview?`<img id="cover-preview" src="${esc(coverPreview)}" alt="所选封面">`:'<img id="cover-preview" alt="所选封面" hidden>'}<input id="cover-file" type="file" accept="image/png,image/jpeg,image/webp"></div><small>PNG、JPG 或 WebP，最大 2 MB。</small></div>
       <p id="publish-error" class="error" role="alert"></p><div class="form-footer"><button class="button primary" type="submit">发布作品</button><a class="button quiet" href="#/studio/works">保存草稿并返回</a></div>
@@ -197,15 +230,15 @@ function renderPublish(number){
   const form=$('#publish-form');refreshPublishState();
   form.addEventListener('input',event=>{
     if(!['name','desc','url','source','githubURL'].includes(event.target.name))return;
-    if(['source','githubURL'].includes(event.target.name)){githubJob++;githubPending=false;}
-    publishDraft[event.target.name]=event.target.value;publishDraft.key=uid();publishError='';savePublish();refreshPublishState();
+    if(['source','githubURL'].includes(event.target.name)){githubJob++;githubPending=false;stopBuildPolling();buildPollError='';}
+    publishDraft[event.target.name]=event.target.value;publishDraft.key=uid();publishError='';savePublish();refreshPublishState();if(event.target.name==='source')pollGithubBuild();
   });
   $('#game-file').addEventListener('change',async event=>{
     const file=event.target.files[0];if(!file)return;
     if(!/\.html?$/i.test(file.name)||file.size>1024*1024){publishError='请选择不超过 1 MB 的 HTML 文件。';event.target.value='';refreshPublishState();return;}
     githubJob++;githubPending=false;publishFile=file;publishDraft.githubImport=null;publishDraft.key=uid();publishError='';savePublish();refreshPublishState();await fileStore('put','game',file);
   });
-  $('#github-read').addEventListener('click',importGithub);
+  $('#github-read').addEventListener('click',importGithub);$('#build-cancel').addEventListener('click',cancelGithubBuild);pollGithubBuild();
   $('#cover-file').addEventListener('change',async event=>{
     const file=event.target.files[0];if(!file)return;
     if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>2*1024*1024){publishError='请选择不超过 2 MB 的 PNG、JPG 或 WebP 图片。';event.target.value='';refreshPublishState();return;}
@@ -214,13 +247,24 @@ function renderPublish(number){
   form.addEventListener('submit',event=>{event.preventDefault();submitPublish(form);});
 }
 async function importGithub(){
-  if(githubPending||publishPending||publishDraft.source!=='github')return;
+  if(githubPending||publishPending||publishDraft.source!=='github'||activeBuild())return;
   const url=publishDraft.githubURL?.trim();if(!url)return;
-  const owner=draftOwner,job=++githubJob;githubPending=true;publishError='';refreshPublishState();
+  const owner=draftOwner,job=++githubJob,isFile=githubFileLink(url);githubPending=true;publishError='';buildPollError='';
+  if(!isFile){
+    if(publishDraft.githubRequest?.url!==url||['ready','failed','cancelled'].includes(matchingBuild()?.status))publishDraft.githubRequest={url,key:uid()};
+    publishDraft.githubImport=null;publishDraft.githubBuild=null;savePublish();
+  }
+  const requestKey=publishDraft.githubRequest?.key;refreshPublishState();
   try{
-    const data=await api('/api/imports/github',{method:'POST',body:{url}});
-    if(owner!==draftOwner||job!==githubJob||publishDraft.source!=='github'||publishDraft.githubURL?.trim()!==url)return;
-    publishFile=new File([data.html],data.filename,{type:'text/html'});publishDraft.githubImport={url,sourceUrl:data.sourceUrl,repository:data.repository,commitSha:data.commitSha,path:data.path};publishDraft.key=uid();savePublish();await fileStore('put','game',publishFile);
+    if(isFile){
+      const data=await api('/api/imports/github',{method:'POST',body:{url}});
+      if(owner!==draftOwner||job!==githubJob||publishDraft.source!=='github'||publishDraft.githubURL?.trim()!==url)return;
+      publishFile=new File([data.html],data.filename,{type:'text/html'});publishDraft.githubBuild=null;publishDraft.githubImport={url,sourceUrl:data.sourceUrl,repository:data.repository,commitSha:data.commitSha,path:data.path};publishDraft.key=uid();savePublish();await fileStore('put','game',publishFile);
+    }else{
+      const {build}=await api('/api/builds',{method:'POST',headers:{'Idempotency-Key':requestKey},body:{url}});
+      if(owner!==draftOwner||publishDraft.githubRequest?.key!==requestKey||publishDraft.githubURL?.trim()!==url)return;
+      publishDraft.githubBuild={...build,inputURL:url};if(job===githubJob&&publishDraft.source==='github'&&!publishPending)publishDraft.key=uid();savePublish();pollGithubBuild();
+    }
   }catch(error){if(owner===draftOwner&&job===githubJob&&publishDraft.githubURL?.trim()===url)publishError=error.message;}
   finally{if(job===githubJob){githubPending=false;refreshPublishState();}}
 }
@@ -228,14 +272,14 @@ async function submitPublish(form){
   if(publishPending||githubPending)return;
   const d=publishDraft;publishError='';
   if(d.source==='html'&&!publishFile){publishError='请先选择 HTML 游戏文件。';refreshPublishState();return;}
-  if(d.source==='github'&&!githubReady()){publishError='请先读取当前 GitHub 链接。';refreshPublishState();return;}
+  if(d.source==='github'&&!githubReady()){publishError='请先完成当前 GitHub 项目的导入。';refreshPublishState();return;}
   if(d.source==='url'&&!safeExternal(d.url)){publishError='请输入完整的 http:// 或 https:// 链接。';refreshPublishState();return;}
   if(d.source==='url'&&new URL(d.url).hostname==='github.com'){publishError='这是 GitHub 仓库页面，请选择 GitHub 导入，或填写部署后的 GitHub Pages 地址。';refreshPublishState();return;}
   const body=new FormData();body.set('name',d.name.trim());body.set('desc',d.desc.trim());body.set('source',d.source==='github'?'html':d.source);
-  if(d.source!=='url')body.set('file',publishFile.type==='text/html'?publishFile:new File([publishFile],publishFile.name,{type:'text/html'}));else body.set('url',d.url.trim());if(coverFile)body.set('cover',coverFile);
+  if(d.source==='github'&&matchingBuild()?.status==='ready')body.set('buildId',matchingBuild().id);else if(d.source!=='url')body.set('file',publishFile.type==='text/html'?publishFile:new File([publishFile],publishFile.name,{type:'text/html'}));else body.set('url',d.url.trim());if(coverFile)body.set('cover',coverFile);
   publishPending=true;refreshPublishState();
   try{
-    const {work}=await api('/api/works',{method:'POST',headers:{'Idempotency-Key':d.key},body});publishDraft={name:'',desc:'',source:'html',url:'',key:uid()};publishFile=null;coverFile=null;refreshCoverPreview();savePublish();await Promise.all([fileStore('delete','game'),fileStore('delete','cover')]);publishPending=false;clearDiscovery();if(route().path==='/publish')go('/published/'+encodeURIComponent(work.id));else notify('作品已发布。');
+    const {work}=await api('/api/works',{method:'POST',headers:{'Idempotency-Key':d.key},body});stopBuildPolling();publishDraft={name:'',desc:'',source:'html',url:'',key:uid()};publishFile=null;coverFile=null;refreshCoverPreview();savePublish();await Promise.all([fileStore('delete','game'),fileStore('delete','cover')]);publishPending=false;clearDiscovery();if(route().path==='/publish')go('/published/'+encodeURIComponent(work.id));else notify('作品已发布。');
   }catch(error){publishPending=false;publishError=error.message;refreshPublishState();if(route().path==='/publish'&&error.status===401)$('#publish-error').innerHTML=esc(error.message)+` <a class="text-link" target="_top" href="${esc(signinURL())}">重新登录</a>`;}
 }
 async function renderPublished(r,number){const {work}=await api('/api/works/'+encodeURIComponent(r.path.split('/')[2]));applyHTML(`<div class="page narrow">${head('作品已发布',work.name)}<div class="work-grid" style="max-width:560px;grid-template-columns:1fr">${workTile(work)}</div><div class="form-footer"><a class="button primary" href="${esc(workHref(work,'/studio/works'))}">打开试玩</a><a class="button" href="#/cards/me">放进名片</a><a class="button quiet" href="#/studio/works">我的作品</a></div></div>`,number);}

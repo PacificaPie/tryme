@@ -100,6 +100,6 @@ test('sandbox bridge reports first trusted input and bounded completion without 
   listeners.get('pointerdown')({isTrusted:true,x:4});listeners.get('keydown')({isTrusted:true,key:'secret'});
   assert.equal(messages.length,2);assert.equal(messages[1][0].type,'input');assert.deepEqual(Object.keys(messages[1][0]).sort(),['bridge','channel','type','version']);
   context.window.funtrack.complete({score:3,label:'ok'});context.window.funtrack.complete({score:7});assert.equal(messages.length,3);assert.equal(messages[2][0].result.score,3);
-  assert.match(GAME_CSP,/sandbox allow-scripts;/);assert(!GAME_CSP.includes('allow-same-origin'));assert.match(GAME_CSP,/connect-src 'none'/);
+  assert.match(GAME_CSP,/sandbox allow-scripts;/);assert(!GAME_CSP.includes('allow-same-origin'));assert.match(GAME_CSP,/connect-src 'none'/);assert.match(GAME_CSP,/font-src data: blob:/);assert.match(GAME_CSP,/media-src data: blob:/);
   assert(!doc.includes('oai-authenticated'));assert(!doc.includes('token'));
 });

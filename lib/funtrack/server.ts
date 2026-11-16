@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers';
+import { handleBuildAPI, handleBuildWorker, getBuildArtifact } from './build-service';
 import { resolveGithubHTML } from './github-import.mjs';
 import { ApiError, fail, authenticate, verifyWrite, requiredText, eventId, safeURL, coverType, htmlSource, sessionEvents, GAME_CSP, gameDocument, likedState, cardDetails, cardSnapshot, cardTemplate, commentInput, validateCommentParent, commentPageLimit, encodeCommentCursor, decodeCommentCursor, discoverQuery, encodeDiscoverCursor, decodeDiscoverCursor } from './rules.mjs';
 
@@ -25,8 +26,8 @@ async function bodyJSON(request:Request):Promise<Row> {
   if(!request.headers.get('content-type')?.toLowerCase().startsWith('application/json'))throw new ApiError(415,'JSON_REQUIRED','请使用 JSON 请求');
   try {const body=JSON.parse(new TextDecoder().decode(await limitedBody(request,65536)));if(!body||typeof body!=='object'||Array.isArray(body))throw new Error();return body;}catch(e){if(e instanceof ApiError)throw e;throw new ApiError(400,'INVALID_JSON','JSON 格式无效');}
 }
-const WORK_QUERY=`SELECT w.*,v.version,v.game_key,v.cover_key,v.cover_mime FROM ft_works w JOIN ft_work_versions v ON v.id=w.current_version_id`;
-function workJSON(w:Row) { return {id:w.id,authorId:w.author_id,authorName:w.author_name,name:w.name,desc:w.description,source:w.source,versionId:w.current_version_id,version:w.version,coverUrl:w.cover_key?`/media/${w.current_version_id}`:'',...(w.url?{url:w.url}:{}),createdAt:w.created_at}; }
+const WORK_QUERY=`SELECT w.*,v.version,v.game_key,v.cover_key,v.cover_mime,v.provenance_json FROM ft_works w JOIN ft_work_versions v ON v.id=w.current_version_id`;
+function workJSON(w:Row) { return {id:w.id,authorId:w.author_id,authorName:w.author_name,name:w.name,desc:w.description,source:w.source,versionId:w.current_version_id,version:w.version,coverUrl:w.cover_key?`/media/${w.current_version_id}`:'',...(w.url?{url:w.url}:{}),...(w.provenance_json?{build:JSON.parse(w.provenance_json)}:{}),createdAt:w.created_at}; }
 async function getWork(id:unknown) { if(typeof id!=='string'||id.length>128)throw new ApiError(404,'WORK_NOT_FOUND','作品不存在');const w=await first(WORK_QUERY+' WHERE w.id=?',id);if(!w)throw new ApiError(404,'WORK_NOT_FOUND','作品不存在');return w; }
 async function ownWork(id:unknown,user:User) {const w=await getWork(id);if(w.author_id!==user.id)throw new ApiError(403,'NOT_OWNER','只能访问自己的作品数据');return w;}
 async function userProfile(user:User) {const p=await first('SELECT name,bio,signature,headline,website,back_style FROM ft_profiles WHERE id=?',user.id);return {id:user.id,name:p?.name||user.name,bio:p?.bio||'',signature:p?.signature||'',headline:p?.headline||'',website:p?.website||'',backStyle:p?.back_style||'ink'};}
@@ -54,7 +55,7 @@ async function discover(url:URL,user:User) {
   const where=conditions.join(' AND ');
   const rank=query.sort==='likes'?`(SELECT COUNT(*) FROM ft_work_likes l WHERE l.work_id=w.id AND l.created_at<=?)`:query.sort==='comments'?`(SELECT COUNT(*) FROM ft_comments c WHERE c.work_id=w.id AND c.created_at<=?)`:'0';
   const rankValues=query.sort==='newest'?[]:[asOf];
-  const selection=`WITH ranked AS (SELECT w.*,v.version,v.game_key,v.cover_key,v.cover_mime,${rank} AS feed_rank FROM ft_works w JOIN ft_work_versions v ON v.id=w.current_version_id WHERE ${where}) SELECT * FROM ranked`;
+  const selection=`WITH ranked AS (SELECT w.*,v.version,v.game_key,v.cover_key,v.cover_mime,v.provenance_json,${rank} AS feed_rank FROM ft_works w JOIN ft_work_versions v ON v.id=w.current_version_id WHERE ${where}) SELECT * FROM ranked`;
   const after=cursor?' WHERE (feed_rank<? OR (feed_rank=? AND (created_at<? OR (created_at=? AND id<?))))':'';
   const afterValues=cursor?[cursor.last.rank,cursor.last.rank,cursor.last.createdAt,cursor.last.createdAt,cursor.last.id]:[];
   const results=await db().batch<Row>([
@@ -90,11 +91,17 @@ async function publish(request:Request,user:User) {
   const name=requiredText(form.get('name'),'作品名',80),description=requiredText(form.get('desc'),'作品简介',500);
   const source=form.get('source');if(source!=='html'&&source!=='url')throw new ApiError(422,'INVALID_SOURCE','选择 HTML 上传或外部链接');
   const url=source==='url'?safeURL(form.get('url')):null;
-  let gameBytes:Uint8Array|null=null,coverBytes:Uint8Array|null=null,coverMime:string|null=null;
-  if(source==='html') {const file=form.get('file');if(!file||typeof file==='string')throw new ApiError(422,'FILE_REQUIRED','请选择 HTML 文件');gameBytes=new Uint8Array(await file.arrayBuffer());htmlSource(gameBytes,file.type,file.name);}
+  let gameBytes:Uint8Array|null=null,coverBytes:Uint8Array|null=null,coverMime:string|null=null,provenanceJSON:string|null=null;
+  const rawBuildId=form.get('buildId'),buildId=typeof rawBuildId==='string'&&rawBuildId?eventId(rawBuildId):null;
+  if(rawBuildId&&typeof rawBuildId!=='string')fail(422,'INVALID_BUILD_ID','构建任务标识无效');
+  if(buildId&&source!=='html')fail(422,'INVALID_BUILD_SOURCE','构建产物须发布为站内作品');
+  if(source==='html') {
+    if(buildId){if(form.has('file'))fail(422,'AMBIGUOUS_BUILD_SOURCE','构建产物和本地文件不能同时发布');const artifact=await getBuildArtifact(buildId,user.id);gameBytes=artifact.bytes;provenanceJSON=JSON.stringify(artifact.provenance);}
+    else{const file=form.get('file');if(!file||typeof file==='string')throw new ApiError(422,'FILE_REQUIRED','请选择 HTML 文件');gameBytes=new Uint8Array(await file.arrayBuffer());htmlSource(gameBytes,file.type,file.name);}
+  }
   const cover=form.get('cover');if(cover&&typeof cover!=='string'&&cover.size){if(cover.size>2097152)throw new ApiError(413,'COVER_TOO_LARGE','封面须在 2 MiB 以内');coverBytes=new Uint8Array(await cover.arrayBuffer());coverMime=coverType(coverBytes,cover.type);}
   if(typeof cover==='string'&&cover)throw new ApiError(422,'INVALID_COVER','封面须为图片文件');
-  const requestHash=await hash(JSON.stringify({name,description,source,url,game:gameBytes?await hash(gameBytes):null,cover:coverBytes?await hash(coverBytes):null,coverMime}));
+  const requestHash=await hash(JSON.stringify({name,description,source,url,...(buildId?{buildId}:{}),game:gameBytes?await hash(gameBytes):null,cover:coverBytes?await hash(coverBytes):null,coverMime}));
   async function replay(){const found=await first(WORK_QUERY+' WHERE w.author_id=? AND w.idempotency_key=?',user.id,key);if(!found)return null;if(found.request_hash!==requestHash)throw new ApiError(409,'IDEMPOTENCY_CONFLICT','同一次提交的内容已变化，请创建新的提交标识');return json({work:workJSON(found)});}
   const prior=await replay();if(prior)return prior;
   const id=uuid(),versionId=uuid(),createdAt=iso();const gameKey=gameBytes?`games/${versionId}.html`:null,coverKey=coverBytes?`covers/${versionId}`:null;const written:string[]=[];
@@ -103,7 +110,7 @@ async function publish(request:Request,user:User) {
     if(coverKey&&coverBytes){await bucket().put(coverKey,coverBytes,{httpMetadata:{contentType:coverMime!}});written.push(coverKey);}
     await db().batch([
       sql('INSERT INTO ft_works (id,author_id,author_name,name,description,source,current_version_id,url,created_at,idempotency_key,request_hash) VALUES (?,?,?,?,?,?,?,?,?,?,?)',id,user.id,(await userProfile(user)).name,name,description,source,versionId,url,createdAt,key,requestHash),
-      sql('INSERT INTO ft_work_versions (id,work_id,version,game_key,cover_key,cover_mime,created_at) VALUES (?,?,?,?,?,?,?)',versionId,id,'v1',gameKey,coverKey,coverMime,createdAt),
+      sql('INSERT INTO ft_work_versions (id,work_id,version,game_key,cover_key,cover_mime,created_at,provenance_json) VALUES (?,?,?,?,?,?,?,?)',versionId,id,'v1',gameKey,coverKey,coverMime,createdAt,provenanceJSON),
     ]);
   } catch(e) {
     // A database commit can succeed even if its response is lost. Confirm the
@@ -315,8 +322,10 @@ async function analytics(url:URL,user:User) {
 
 export async function handleAPI(request:Request) {
   try {
+    const workerResponse=await handleBuildWorker(request);if(workerResponse)return workerResponse;
     const user=authenticate(request.headers),url=new URL(request.url),parts=url.pathname.replace(/^\/api\/?/,'').split('/').filter(Boolean);
     if(request.method==='POST')verifyWrite(request);
+    const buildResponse=await handleBuildAPI(request,user);if(buildResponse)return buildResponse;
     if(request.method==='GET') {
       if(parts[0]==='me'&&parts.length===1)return json({user:await userProfile(user)});
       if(parts[0]==='discover'&&parts.length===1)return await discover(url,user);

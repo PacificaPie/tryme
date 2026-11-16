@@ -1,0 +1,12 @@
+{
+  "name": "funtrack-static-build-toolkit",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "vite": "7.1.7",
+    "vite-plugin-singlefile": "2.3.4",
+    "rollup": "4.59.0",
+    "parse5": "8.0.0"
+  }
+}

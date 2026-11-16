@@ -17,7 +17,7 @@ export const workLikes = sqliteTable('ft_work_likes', {
 }, t => [primaryKey({columns:[t.workId,t.actorId]}),index('ft_work_likes_work_created').on(t.workId,t.createdAt)]);
 export const versions = sqliteTable('ft_work_versions', {
   id: text('id').primaryKey(), workId: text('work_id').notNull().references(()=>works.id), version: text('version').notNull(),
-  gameKey: text('game_key'), coverKey: text('cover_key'), coverMime: text('cover_mime'), createdAt: text('created_at').notNull(),
+  gameKey: text('game_key'), provenanceJson: text('provenance_json'), coverKey: text('cover_key'), coverMime: text('cover_mime'), createdAt: text('created_at').notNull(),
 }, t => [index('ft_versions_work').on(t.workId)]);
 export const cards = sqliteTable('ft_cards', {
   id: text('id').primaryKey(), authorId: text('author_id').notNull(), snapshotJson: text('snapshot_json').notNull(), createdAt: text('created_at').notNull(),
@@ -53,3 +53,16 @@ export const comments = sqliteTable('ft_comments', {
 export const commentLikes = sqliteTable('ft_comment_likes', {
   commentId: text('comment_id').notNull().references(()=>comments.id), actorId: text('actor_id').notNull(), createdAt: text('created_at').notNull(),
 }, t=>[primaryKey({columns:[t.commentId,t.actorId]})]);
+
+export const buildWorkers = sqliteTable('ft_build_workers', {
+  id: text('id').primaryKey(), lastSeenAt: text('last_seen_at').notNull(),
+}, t=>[index('ft_build_workers_seen').on(t.lastSeenAt)]);
+export const buildJobs = sqliteTable('ft_build_jobs', {
+  id: text('id').primaryKey(), ownerId: text('owner_id').notNull(), idempotencyKey: text('idempotency_key').notNull(), requestHash: text('request_hash').notNull(),
+  sourceUrl: text('source_url').notNull(), repository: text('repository').notNull(), commitSha: text('commit_sha').notNull(),
+  status: text('status').notNull(), logs: text('logs').notNull().default(''), error: text('error'), metadataJson: text('metadata_json'),
+  artifactKey: text('artifact_key'), artifactBytes: integer('artifact_bytes'), artifactHash: text('artifact_hash'),
+  workerId: text('worker_id'), leaseId: text('lease_id'), leaseExpiresAt: text('lease_expires_at'),
+  createdAt: text('created_at').notNull(), updatedAt: text('updated_at').notNull(),
+}, t=>[uniqueIndex('ft_build_jobs_owner_key').on(t.ownerId,t.idempotencyKey),index('ft_build_jobs_owner_created').on(t.ownerId,t.createdAt),
+  index('ft_build_jobs_queue').on(t.status,t.createdAt),index('ft_build_jobs_lease').on(t.workerId,t.status,t.leaseExpiresAt)]);
