@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
-import { ApiError, authenticate, verifyWrite, safeURL, coverType, htmlSource, cleanResult, sessionEvents, gameDocument, GAME_CSP, likedState, cardDetails, cardSnapshot } from '../lib/funtrack/rules.mjs';
+import { ApiError, authenticate, verifyWrite, safeURL, coverType, htmlSource, cleanResult, sessionEvents, gameDocument, GAME_CSP, likedState, cardDetails, cardSnapshot, cardTemplate, commentInput, validateCommentParent, commentPageLimit, encodeCommentCursor, decodeCommentCursor } from '../lib/funtrack/rules.mjs';
 
 const rejects=(fn,status)=>assert.throws(fn,error=>error instanceof ApiError&&error.status===status);
 test('identity comes only from supplied platform headers, with a safe public display name',()=>{
@@ -37,6 +37,27 @@ test('legacy card defaults are read-only and never adopt newer profile details',
   assert.equal(old.backStyle,undefined);assert.equal(old.signature,undefined);assert.equal(displayed.name,'Old creator');
   const supplied={...old,signature:'Original signature',headline:'Original headline',website:'https://example.com/',backStyle:'ivory'};
   assert.deepEqual(cardSnapshot(supplied),supplied);
+});
+test('new collection template preserves existing card template values',()=>{
+  for(const template of ['fold','wall','collection'])assert.equal(cardTemplate(template),template);
+  rejects(()=>cardTemplate('custom-html'),422);
+});
+test('comment content is bounded plain text and replies may target only a same-work root',()=>{
+  assert.deepEqual(commentInput({body:'  <b>作品不错</b>  ',authorId:'spoofed'}),{body:'<b>作品不错</b>',parentId:null});
+  assert.equal(commentInput({body:'x'.repeat(1000),parentId:'root-comment'}).body.length,1000);
+  for(const input of [{body:' '},{body:'x'.repeat(1001)},{body:9},{body:'ok',parentId:1}])rejects(()=>commentInput(input),422);
+  validateCommentParent({work_id:'work-a',parent_id:null},'work-a');
+  rejects(()=>validateCommentParent(null,'work-a'),404);
+  rejects(()=>validateCommentParent({work_id:'work-b',parent_id:null},'work-a'),422);
+  rejects(()=>validateCommentParent({work_id:'work-a',parent_id:'root-comment'},'work-a'),422);
+});
+test('comment cursors are scoped and limits keep roots, replies and inbox bounded',()=>{
+  const scope='comment:root-comment:replies',cursor=encodeCommentCursor(42,scope);
+  assert.equal(decodeCommentCursor(cursor,scope),42);assert.equal(decodeCommentCursor(null,scope),null);
+  rejects(()=>decodeCommentCursor(cursor,'comment:another-root:replies'),400);
+  for(const invalid of ['not-json','%broken',encodeCommentCursor(-1,scope),encodeCommentCursor(Number.MAX_SAFE_INTEGER+1,scope)])rejects(()=>decodeCommentCursor(invalid,scope),400);
+  assert.equal(commentPageLimit(null),20);assert.equal(commentPageLimit('50'),50);assert.equal(commentPageLimit('100',50,100),100);
+  for(const value of ['0','51','3.5','nope'])rejects(()=>commentPageLimit(value),422);
 });
 test('cover magic and HTML type, encoding and size are checked',()=>{
   assert.equal(coverType(new Uint8Array([137,80,78,71,13,10,26,10]),'image/png'),'image/png');

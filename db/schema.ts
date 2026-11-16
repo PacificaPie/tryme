@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, index, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, index, uniqueIndex, primaryKey, type AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 
 export const profiles = sqliteTable('ft_profiles', {
   id: text('id').primaryKey(), name: text('name').notNull(), bio: text('bio').notNull().default(''),
@@ -39,3 +39,16 @@ export const feedback = sqliteTable('ft_feedback', {
   versionId: text('version_id').notNull().references(()=>versions.id), authorId: text('author_id').notNull(), authorName: text('author_name').notNull(),
   text: text('text').notNull(), type: text('type').notNull(), createdAt: text('created_at').notNull(),
 }, t=>[uniqueIndex('ft_feedback_author_client').on(t.authorId,t.clientEventId),index('ft_feedback_work_created').on(t.workId,t.createdAt)]);
+
+// Public-to-the-site discussion is separate from legacy private feedback.
+// The monotonic sequence gives stable root/reply pagination even within one ms.
+export const comments = sqliteTable('ft_comments', {
+  seq: integer('seq').primaryKey({autoIncrement:true}), id: text('id').notNull().unique(),
+  workId: text('work_id').notNull().references(()=>works.id), authorId: text('author_id').notNull(), authorName: text('author_name').notNull(),
+  body: text('body').notNull(), parentId: text('parent_id').references(():AnySQLiteColumn=>comments.id), createdAt: text('created_at').notNull(),
+  idempotencyKey: text('idempotency_key').notNull(), requestHash: text('request_hash').notNull(),
+}, t=>[uniqueIndex('ft_comments_author_key').on(t.authorId,t.idempotencyKey),index('ft_comments_work_seq').on(t.workId,t.seq),
+  index('ft_comments_parent_seq').on(t.parentId,t.seq),index('ft_comments_author_created').on(t.authorId,t.createdAt)]);
+export const commentLikes = sqliteTable('ft_comment_likes', {
+  commentId: text('comment_id').notNull().references(()=>comments.id), actorId: text('actor_id').notNull(), createdAt: text('created_at').notNull(),
+}, t=>[primaryKey({columns:[t.commentId,t.actorId]})]);

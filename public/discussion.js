@@ -1,0 +1,148 @@
+const drafts=new Map(),discussions=new Map();
+const keyFor=(user,work)=>`funtrack.discussion:${user.id}:${work.id}`;
+function draftFor(key){
+  if(drafts.has(key))return drafts.get(key);
+  let value;try{value=JSON.parse(sessionStorage.getItem(key));}catch{}
+  const draft={text:typeof value?.text==='string'?value.text.slice(0,1000):'',parentId:typeof value?.parentId==='string'?value.parentId:null,parentName:typeof value?.parentName==='string'?value.parentName:'',key:typeof value?.key==='string'&&/^[A-Za-z0-9_-]{8,128}$/.test(value.key)?value.key:crypto.randomUUID()};
+  drafts.set(key,draft);return draft;
+}
+function persist(key,draft){try{sessionStorage.setItem(key,JSON.stringify(draft));}catch{}}
+function discussionFor(key){
+  if(!discussions.has(key))discussions.set(key,{roots:[],rootCache:new Map(),total:0,cursor:null,loaded:false,loading:false,pending:false,status:'',error:'',likes:new Set(),retryLikes:new Map(),social:new Map(),replies:new Set(),localRoots:new Map(),view:null});
+  return discussions.get(key);
+}
+const when=value=>{const d=new Date(typeof value==='number'&&value<1e12?value*1000:value);return Number.isNaN(d.valueOf())?'':d.toLocaleDateString('zh-CN',{month:'numeric',day:'numeric'});};
+const heart='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 4.9a5.3 5.3 0 0 0-7.5 0L12 6l-1.1-1.1a5.3 5.3 0 0 0-7.5 7.5L12 21l8.5-8.6a5.3 5.3 0 0 0 0-7.5Z"/></svg>';
+const scrollBehavior=()=>window.matchMedia?.('(prefers-reduced-motion: reduce)').matches?'auto':'smooth';
+const repliesFor=root=>[...(root.replies||[]),...(root.localReplies||[])];
+function appendReplies(root,replies){
+  root.replies ||= [];
+  const seen=new Set(root.replies.map(reply=>reply.id));
+  for(const reply of replies)if(!seen.has(reply.id)){root.replies.push(reply);seen.add(reply.id);}
+  // Newly acknowledged replies stay after the server's chronological prefix.
+  // A later page moves them into that prefix at their authoritative position.
+  root.localReplies=(root.localReplies||[]).filter(reply=>!seen.has(reply.id));
+}
+
+export function mountDiscussion(element,{work,user,api,esc,onCount=()=>{},notify=()=>{},focusId=''}){
+  const key=keyFor(user,work),draft=draftFor(key),state=discussionFor(key);
+  element.innerHTML=`<div class="discussion-head"><h2>讨论 <span id="discussion-count"></span></h2></div><form class="comment-composer"><span class="comment-avatar" aria-hidden="true">${esc([...(user.name||'我')][0])}</span><div class="composer-main"><div class="reply-target" hidden><span></span><button type="button" aria-label="取消回复">×</button></div><label class="skip-label" for="comment-input">写评论</label><textarea id="comment-input" rows="1" maxlength="1000" placeholder="说点什么…" required>${esc(draft.text)}</textarea><div class="composer-footer"><span class="composer-visibility">公开评论</span><button type="submit" class="button primary small">发布</button></div></div></form><p class="comment-status" role="status" aria-live="polite"></p><div class="comment-list"></div><button type="button" class="comments-more" hidden>查看更多评论</button>`;
+  const form=element.querySelector('form'),input=element.querySelector('textarea'),submit=form.querySelector('[type=submit]'),list=element.querySelector('.comment-list'),more=element.querySelector('.comments-more'),status=element.querySelector('.comment-status'),target=element.querySelector('.reply-target'),cancel=target.querySelector('button');
+  const view={alive:()=>state.view===view&&element.isConnected,refresh:()=>{render();composer();revealFocus();},notify};state.view=view;
+  const alive=view.alive;
+  const refresh=()=>{if(state.view?.alive())state.view.refresh();};
+  const notice=message=>{if(state.view?.alive())state.view.notify(message);};
+  const all=()=>state.roots.flatMap(root=>[root,...repliesFor(root)]);
+  function composer(){
+    if(!alive())return;
+    if(input.value!==draft.text)input.value=draft.text;
+    input.disabled=cancel.disabled=state.pending;submit.disabled=state.pending||!state.loaded||!input.value.trim();submit.textContent=state.pending?'发布中…':'发布';
+    target.hidden=!draft.parentId;target.querySelector('span').textContent=draft.parentId?'回复 '+draft.parentName:'';
+    input.style.height='auto';input.style.height=Math.min(180,input.scrollHeight)+'px';form.classList.toggle('expanded',!!input.value||document.activeElement===input);
+  }
+  function syncSocial(c,requestedAt){
+    if(state.likes.has(c.id)||(state.social.get(c.id)?.confirmedAt||0)>requestedAt)return;
+    state.social.set(c.id,{liked:c.likedByMe===true,count:Number(c.likesCount)||0,confirmedAt:requestedAt});
+  }
+  function item(c,reply=false){
+    const pending=state.likes.has(c.id),retry=state.retryLikes.has(c.id),social=state.social.get(c.id),liked=social?social.liked:c.likedByMe,count=social?social.count:c.likesCount;
+    return `<article class="comment ${reply?'comment-reply':''}" id="comment-${esc(c.id)}" data-comment="${esc(c.id)}"><a class="comment-avatar" href="#/author/${encodeURIComponent(c.authorId)}" aria-label="${esc(c.authorName)}">${esc([...(c.authorName||'访客')][0])}</a><div class="comment-main"><div class="comment-byline"><a href="#/author/${encodeURIComponent(c.authorId)}">${esc(c.authorName)}</a>${c.isCreator?'<span class="author-badge">作者</span>':''}</div><p class="comment-body">${esc(c.body)}</p><div class="comment-meta"><time>${when(c.createdAt)}</time>${!reply?`<button type="button" data-reply="${esc(c.id)}" ${state.pending?'disabled':''}>回复</button>`:''}</div></div><button type="button" class="comment-like ${liked?'liked':''}" data-comment-like="${esc(c.id)}" aria-label="${retry?'重试点赞':liked?'取消点赞评论':'点赞评论'} ${esc(c.authorName)}" aria-pressed="${!!liked}" ${pending?'disabled':''}>${heart}<span>${retry?'重试':count||''}</span></button></article>`;
+  }
+  function render(){
+    if(!alive())return;
+    element.querySelector('#discussion-count').textContent=state.loaded?state.total:'';status.textContent=state.status;
+    if(state.loaded)onCount(state.total);
+    if(!state.loaded){list.innerHTML=state.error?'<button type="button" class="comments-retry">重新加载评论</button>':'<div class="comment-loading" role="status">加载讨论…</div>';more.hidden=true;return;}
+    list.innerHTML=state.roots.length?state.roots.map(root=>`<div class="comment-thread">${item(root)}${repliesFor(root).length?`<div class="comment-replies">${repliesFor(root).map(reply=>item(reply,true)).join('')}</div>`:''}${root.repliesNextCursor?`<button type="button" class="replies-more" data-more-replies="${esc(root.id)}" ${state.replies.has(root.id)?'disabled':''}>${state.replies.has(root.id)?'加载中…':'展开更多回复'}${root.replyCount?' · '+root.replyCount:''}</button>`:''}</div>`).join(''):'<p class="discussion-empty">还没有评论，来聊聊这件作品。</p>';
+    more.hidden=!state.cursor;more.disabled=state.loading;more.textContent=state.loading?'加载中…':'查看更多评论';
+  }
+  function revealFocus(){
+    if(!alive()||!focusId||!state.loaded)return;
+    const found=element.querySelector('[id="comment-'+CSS.escape(focusId)+'"]');
+    if(found){found.classList.add('comment-highlight');found.scrollIntoView({block:'center',behavior:scrollBehavior()});focusId='';}
+  }
+  function mergeRoot(incoming,requestedAt){
+    syncSocial(incoming,requestedAt);(incoming.replies||[]).forEach(reply=>syncSocial(reply,requestedAt));
+    const existing=state.rootCache.get(incoming.id);
+    if(!existing){const root={...incoming,replies:[...(incoming.replies||[])],localReplies:[]};state.rootCache.set(root.id,root);return root;}
+    const replies=existing.replies,localReplies=existing.localReplies,replyCount=existing.replyCount,cursor=existing.repliesNextCursor;
+    Object.assign(existing,incoming,{replies,localReplies,replyCount:Math.max(replyCount||0,incoming.replyCount||0)});
+    appendReplies(existing,incoming.replies||[]);
+    if(state.replies.has(existing.id)||cursor)existing.repliesNextCursor=cursor;
+    return existing;
+  }
+  async function load(append=false){
+    if(state.loading||(append&&!state.cursor))return;
+    const requestedAt=performance.now(),cursor=state.cursor;
+    if(state.status===state.error)state.status='';state.loading=true;state.error='';refresh();
+    try{
+      const result=await api('/api/works/'+encodeURIComponent(work.id)+'/comments'+(append?'?cursor='+encodeURIComponent(cursor):''));
+      const incoming=result.comments.map(root=>mergeRoot(root,requestedAt)),ids=new Set(incoming.map(root=>root.id));
+      if(append){const existing=new Set(state.roots.map(root=>root.id));state.roots.push(...incoming.filter(root=>!existing.has(root.id)));}
+      else{
+        // A POST may finish after this GET started. Keep that new root ahead of
+        // the older response; otherwise use the server's newest-first order.
+        const pending=state.roots.filter(root=>!ids.has(root.id)&&(state.localRoots.get(root.id)||0)>requestedAt);
+        state.roots=[...pending,...incoming];
+      }
+      ids.forEach(id=>state.localRoots.delete(id));
+      state.total=Math.max(state.total,result.commentsCount);state.cursor=result.nextCursor;state.loaded=true;state.error='';
+    }catch(error){state.error=error.message;state.status=error.message;}
+    finally{state.loading=false;refresh();}
+  }
+  form.addEventListener('input',()=>{if(!alive()||state.pending)return;draft.text=input.value;draft.key=crypto.randomUUID();persist(key,draft);state.status='';composer();status.textContent='';});
+  input.addEventListener('focus',composer);input.addEventListener('blur',composer);
+  cancel.addEventListener('click',()=>{if(!alive()||state.pending)return;draft.parentId=null;draft.parentName='';draft.key=crypto.randomUUID();persist(key,draft);composer();input.focus();});
+  form.addEventListener('submit',async event=>{
+    event.preventDefault();if(!alive()||state.pending||!state.loaded||!input.value.trim())return;
+    const body=input.value.trim(),parentId=draft.parentId,submittedKey=draft.key;state.pending=true;state.status='';persist(key,draft);refresh();
+    try{
+      const result=await api('/api/works/'+encodeURIComponent(work.id)+'/comments',{method:'POST',headers:{'Idempotency-Key':submittedKey},body:{body,parentId}}),c=result.comment;
+      if(!c||typeof c.id!=='string'||c.workId!==work.id||c.authorId!==user.id||c.parentId!==parentId||c.body!==body||!Number.isInteger(result.commentsCount)||result.commentsCount<0)throw new Error('暂时没有收到评论保存结果，请重试。');
+      syncSocial(c,performance.now());
+      if(parentId){
+        const root=state.rootCache.get(parentId);
+        if(root&&!repliesFor(root).some(reply=>reply.id===c.id)){root.localReplies ||= [];root.localReplies.push(c);root.replyCount=(root.replyCount||0)+1;}
+      }else if(!state.roots.some(root=>root.id===c.id)){const root={...c,replies:[],localReplies:[],repliesNextCursor:null};state.roots.unshift(root);state.rootCache.set(c.id,root);state.localRoots.set(c.id,performance.now());}
+      state.total=Math.max(state.total,result.commentsCount);
+      if(draft.key===submittedKey){Object.assign(draft,{text:'',parentId:null,parentName:'',key:crypto.randomUUID()});persist(key,draft);}
+      state.status='评论已发布';
+    }catch(error){state.status=error.message;}
+    finally{state.pending=false;refresh();}
+  });
+  function acceptLike(id,result){
+    if(result.commentId!==id||typeof result.liked!=='boolean'||!Number.isInteger(result.likesCount)||result.likesCount<0)throw new Error('暂时没有收到点赞结果。');
+    state.social.set(id,{liked:result.liked,count:result.likesCount,confirmedAt:performance.now()});
+  }
+  list.addEventListener('click',async event=>{
+    if(!alive())return;
+    const reply=event.target.closest('[data-reply]'),like=event.target.closest('[data-comment-like]'),expand=event.target.closest('[data-more-replies]');
+    if(event.target.closest('.comments-retry')){load();return;}
+    if(reply){
+      if(state.pending)return;const c=state.roots.find(c=>c.id===reply.dataset.reply);if(!c)return;
+      draft.parentId=c.id;draft.parentName=c.authorName;draft.key=crypto.randomUUID();persist(key,draft);composer();input.focus();form.scrollIntoView({block:'center',behavior:scrollBehavior()});return;
+    }
+    if(expand){
+      const root=state.roots.find(c=>c.id===expand.dataset.moreReplies);if(!root||!root.repliesNextCursor||state.replies.has(root.id))return;
+      const requestedAt=performance.now(),cursor=root.repliesNextCursor;state.replies.add(root.id);refresh();
+      try{
+        const result=await api('/api/comments/'+encodeURIComponent(root.id)+'/replies?cursor='+encodeURIComponent(cursor));
+        result.replies.forEach(c=>syncSocial(c,requestedAt));appendReplies(root,result.replies);
+        root.replyCount=Math.max(root.replyCount||0,result.replyCount);root.repliesNextCursor=result.nextCursor;
+      }catch(error){notice(error.message);}
+      finally{state.replies.delete(root.id);refresh();}return;
+    }
+    if(like){
+      const c=all().find(c=>c.id===like.dataset.commentLike);if(!c||state.likes.has(c.id))return;
+      const desired=state.retryLikes.has(c.id)?state.retryLikes.get(c.id):!(state.social.get(c.id)?.liked??c.likedByMe);
+      state.likes.add(c.id);refresh();
+      try{const result=await api('/api/comments/'+encodeURIComponent(c.id)+'/like',{method:'POST',body:{liked:desired}});acceptLike(c.id,result);state.retryLikes.delete(c.id);}
+      catch(error){
+        let confirmed=false;
+        try{const actual=await api('/api/comments/'+encodeURIComponent(c.id)+'/like');acceptLike(c.id,actual);confirmed=actual.liked===desired;}catch{}
+        if(confirmed)state.retryLikes.delete(c.id);else{state.retryLikes.set(c.id,desired);notice('点赞暂未确认，点击爱心重试。');}
+      }finally{state.likes.delete(c.id);refresh();}
+    }
+  });
+  more.addEventListener('click',()=>load(true));refresh();load();
+}

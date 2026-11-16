@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { ApiError, fail, authenticate, verifyWrite, requiredText, eventId, safeURL, coverType, htmlSource, sessionEvents, GAME_CSP, gameDocument, likedState, cardDetails, cardSnapshot } from './rules.mjs';
+import { ApiError, fail, authenticate, verifyWrite, requiredText, eventId, safeURL, coverType, htmlSource, sessionEvents, GAME_CSP, gameDocument, likedState, cardDetails, cardSnapshot, cardTemplate, commentInput, validateCommentParent, commentPageLimit, encodeCommentCursor, decodeCommentCursor } from './rules.mjs';
 
 type Row = Record<string, any>;
 type User = { id: string; name: string; email: string };
@@ -29,14 +29,18 @@ function workJSON(w:Row) { return {id:w.id,authorId:w.author_id,authorName:w.aut
 async function getWork(id:unknown) { if(typeof id!=='string'||id.length>128)throw new ApiError(404,'WORK_NOT_FOUND','作品不存在');const w=await first(WORK_QUERY+' WHERE w.id=?',id);if(!w)throw new ApiError(404,'WORK_NOT_FOUND','作品不存在');return w; }
 async function ownWork(id:unknown,user:User) {const w=await getWork(id);if(w.author_id!==user.id)throw new ApiError(403,'NOT_OWNER','只能访问自己的作品数据');return w;}
 async function userProfile(user:User) {const p=await first('SELECT name,bio,signature,headline,website,back_style FROM ft_profiles WHERE id=?',user.id);return {id:user.id,name:p?.name||user.name,bio:p?.bio||'',signature:p?.signature||'',headline:p?.headline||'',website:p?.website||'',backStyle:p?.back_style||'ink'};}
-async function withLikes(works:Row[],user:User) {
+async function withWorkStats(works:Row[],user:User) {
   if(!works.length)return [];
   // Keep each statement below D1's bound-parameter limit, including a full
   // 200-work discovery response. Counts are live data, not card snapshot data.
   const batches:Row[][]=[];for(let at=0;at<works.length;at+=80)batches.push(works.slice(at,at+80));
-  const counts=(await Promise.all(batches.map(batch=>rows(`SELECT work_id,COUNT(*) n,MAX(CASE WHEN actor_id=? THEN 1 ELSE 0 END) liked FROM ft_work_likes WHERE work_id IN (${batch.map(()=>'?').join(',')}) GROUP BY work_id`,user.id,...batch.map(w=>w.id))))).flat();
+  const [counts,commentCounts]=await Promise.all([
+    Promise.all(batches.map(batch=>rows(`SELECT work_id,COUNT(*) n,MAX(CASE WHEN actor_id=? THEN 1 ELSE 0 END) liked FROM ft_work_likes WHERE work_id IN (${batch.map(()=>'?').join(',')}) GROUP BY work_id`,user.id,...batch.map(w=>w.id)))).then(groups=>groups.flat()),
+    Promise.all(batches.map(batch=>rows(`SELECT work_id,COUNT(*) n FROM ft_comments WHERE work_id IN (${batch.map(()=>'?').join(',')}) GROUP BY work_id`,...batch.map(w=>w.id)))).then(groups=>groups.flat()),
+  ]);
   const byId=new Map(counts.map(row=>[row.work_id,row]));
-  return works.map(work=>({...work,likesCount:Number(byId.get(work.id)?.n||0),likedByMe:Boolean(byId.get(work.id)?.liked)}));
+  const commentsById=new Map(commentCounts.map(row=>[row.work_id,row.n]));
+  return works.map(work=>({...work,likesCount:Number(byId.get(work.id)?.n||0),likedByMe:Boolean(byId.get(work.id)?.liked),commentsCount:Number(commentsById.get(work.id)||0)}));
 }
 function likeJSON(workId:string,row:Row) {return {workId,liked:Boolean(row.liked),likesCount:Number(row.n||0)};}
 async function workLike(request:Request,user:User,workId:string) {
@@ -48,8 +52,8 @@ async function workLike(request:Request,user:User,workId:string) {
   const results=await db().batch<Row>([mutation,countQuery]);
   return json(likeJSON(workId,results[1].results[0]));
 }
-async function rateLimit(user:User,table:'ft_events'|'ft_play_sessions'|'ft_feedback',column:'received_at'|'created_at',limit:number) {
-  const actor=table==='ft_feedback'?'author_id':'actor_id';const result=await first(`SELECT COUNT(*) AS n FROM ${table} WHERE ${actor}=? AND ${column}>=?`,user.id,new Date(Date.now()-60000).toISOString());
+async function rateLimit(user:User,table:'ft_events'|'ft_play_sessions'|'ft_feedback'|'ft_comments',column:'received_at'|'created_at',limit:number) {
+  const actor=table==='ft_feedback'||table==='ft_comments'?'author_id':'actor_id';const result=await first(`SELECT COUNT(*) AS n FROM ${table} WHERE ${actor}=? AND ${column}>=?`,user.id,new Date(Date.now()-60000).toISOString());
   if(Number(result?.n)>=limit)throw new ApiError(429,'RATE_LIMITED','提交太频繁，请稍后重试');
 }
 function receipt(row:Row) { return {id:row.id,clientEventId:row.client_event_id,type:row.event_type,...(row.work_id?{workId:row.work_id}:{}),...(row.card_id?{cardId:row.card_id}:{}),receivedAt:row.received_at}; }
@@ -158,10 +162,92 @@ async function addFeedback(request:Request,user:User) {
   const f=await first('SELECT * FROM ft_feedback WHERE author_id=? AND client_event_id=?',user.id,clientId);if(!f)throw new Error('Feedback insertion failed');return response(f,f.id===id?201:200);
 }
 
+// These queries deliberately never read ft_feedback. Legacy private messages
+// retain their owner-only inbox and are not part of the work's public discussion.
+const COMMENT_COLUMNS=`c.*,w.name AS work_name,w.author_id AS creator_id,
+  (SELECT COUNT(*) FROM ft_comment_likes l WHERE l.comment_id=c.id) AS likes_count,
+  EXISTS(SELECT 1 FROM ft_comment_likes l WHERE l.comment_id=c.id AND l.actor_id=?) AS liked_by_me,
+  (SELECT COUNT(*) FROM ft_comments r WHERE r.parent_id=c.id) AS reply_count`;
+const COMMENT_QUERY=`SELECT ${COMMENT_COLUMNS} FROM ft_comments c JOIN ft_works w ON w.id=c.work_id`;
+function commentJSON(c:Row) {return {id:c.id,workId:c.work_id,workName:c.work_name,authorId:c.author_id,authorName:c.author_name,isCreator:c.author_id===c.creator_id,body:c.body,parentId:c.parent_id,createdAt:c.created_at,likesCount:Number(c.likes_count||0),likedByMe:Boolean(c.liked_by_me),replyCount:Number(c.reply_count||0)};}
+async function getComment(id:unknown,user:User) {
+  if(typeof id!=='string'||id.length>128)throw new ApiError(404,'COMMENT_NOT_FOUND','评论不存在');
+  const comment=await first(COMMENT_QUERY+' WHERE c.id=?',user.id,id);
+  if(!comment)throw new ApiError(404,'COMMENT_NOT_FOUND','评论不存在');return comment;
+}
+async function workComments(url:URL,user:User,workId:string) {
+  await getWork(workId);
+  const scope=`work:${workId}:roots`,limit=commentPageLimit(url.searchParams.get('limit')),cursor=decodeCommentCursor(url.searchParams.get('cursor'),scope);
+  const query=sql(COMMENT_QUERY+` WHERE c.work_id=? AND c.parent_id IS NULL${cursor?' AND c.seq<?':''} ORDER BY c.seq DESC LIMIT ?`,user.id,workId,...cursor?[cursor,limit+1]:[limit+1]);
+  const result=await db().batch<Row>([query,sql('SELECT COUNT(*) n FROM ft_comments WHERE work_id=?',workId)]);
+  const rootRows=result[0].results.slice(0,limit);
+  const comments=rootRows.map(c=>({...commentJSON(c),replies:[] as Row[],repliesNextCursor:null as string|null}));
+  if(rootRows.length){
+    // One bounded query for the first three replies per root, plus one sentinel.
+    // Window ranks preserve old-to-new replies without fetching whole threads.
+    const replies=await rows(`SELECT ${COMMENT_COLUMNS},c.thread_count FROM (
+      SELECT r.*,ROW_NUMBER() OVER (PARTITION BY r.parent_id ORDER BY r.seq ASC) AS thread_rank,
+        COUNT(*) OVER (PARTITION BY r.parent_id) AS thread_count
+      FROM ft_comments r WHERE r.parent_id IN (${rootRows.map(()=>'?').join(',')})
+    ) c JOIN ft_works w ON w.id=c.work_id WHERE c.thread_rank<=4 ORDER BY c.parent_id,c.seq ASC`,user.id,...rootRows.map(c=>c.id));
+    const grouped=new Map<string,Row[]>();for(const reply of replies){const list=grouped.get(reply.parent_id)||[];list.push(reply);grouped.set(reply.parent_id,list);}
+    for(const root of comments){const list=grouped.get(root.id)||[];root.replies=list.slice(0,3).map(commentJSON);root.replyCount=Number(list[0]?.thread_count||0);root.repliesNextCursor=list.length>3?encodeCommentCursor(list[2].seq,`comment:${root.id}:replies`):null;}
+  }
+  return json({comments,commentsCount:Number(result[1].results[0]?.n||0),nextCursor:result[0].results.length>limit?encodeCommentCursor(rootRows[rootRows.length-1].seq,scope):null});
+}
+async function commentReplies(url:URL,user:User,id:string) {
+  const parent=await getComment(id,user);if(parent.parent_id!==null)throw new ApiError(422,'INVALID_COMMENT_PARENT','只有根评论有回复列表');
+  const scope=`comment:${id}:replies`,limit=commentPageLimit(url.searchParams.get('limit')),cursor=decodeCommentCursor(url.searchParams.get('cursor'),scope);
+  const result=await db().batch<Row>([
+    sql(COMMENT_QUERY+` WHERE c.parent_id=?${cursor?' AND c.seq>?':''} ORDER BY c.seq ASC LIMIT ?`,user.id,id,...cursor?[cursor,limit+1]:[limit+1]),
+    sql('SELECT COUNT(*) n FROM ft_comments WHERE parent_id=?',id),
+  ]);
+  const page=result[0].results.slice(0,limit);
+  return json({replies:page.map(commentJSON),replyCount:Number(result[1].results[0]?.n||0),nextCursor:result[0].results.length>limit?encodeCommentCursor(page[page.length-1].seq,scope):null});
+}
+async function commentInbox(url:URL,user:User) {
+  if(url.searchParams.get('mine')!=='1')throw new ApiError(422,'MINE_REQUIRED','请指定 mine=1 查看自己的作品评论');
+  const workId=url.searchParams.get('work');if(workId)await ownWork(workId,user);
+  const scope=`mine:${user.id}:comments${workId?`:work:${workId}`:''}`,limit=commentPageLimit(url.searchParams.get('limit'),50,100),cursor=decodeCommentCursor(url.searchParams.get('cursor'),scope);
+  const filter=workId?' AND w.id=?':'',filterArgs=workId?[workId]:[];
+  const result=await db().batch<Row>([
+    sql(COMMENT_QUERY+` WHERE w.author_id=?${filter}${cursor?' AND c.seq<?':''} ORDER BY c.seq DESC LIMIT ?`,user.id,user.id,...filterArgs,...cursor?[cursor,limit+1]:[limit+1]),
+    sql('SELECT COUNT(*) n FROM ft_comments c JOIN ft_works w ON w.id=c.work_id WHERE w.author_id=?'+filter,user.id,...filterArgs),
+  ]);
+  const page=result[0].results.slice(0,limit);
+  return json({comments:page.map(commentJSON),commentsCount:Number(result[1].results[0]?.n||0),nextCursor:result[0].results.length>limit?encodeCommentCursor(page[page.length-1].seq,scope):null});
+}
+async function addComment(request:Request,user:User,workId:string) {
+  const w=await getWork(workId),input=commentInput(await bodyJSON(request)),key=eventId(request.headers.get('idempotency-key'));
+  const requestHash=await hash(JSON.stringify({workId,body:input.body,parentId:input.parentId}));
+  async function response(comment:Row,duplicate:boolean){
+    if(comment.request_hash!==requestHash)throw new ApiError(409,'IDEMPOTENCY_CONFLICT','评论提交内容已变化，请使用新的提交标识');
+    const count=await first('SELECT COUNT(*) n FROM ft_comments WHERE work_id=?',workId);
+    return json({comment:commentJSON(comment),commentsCount:Number(count?.n||0),duplicate},duplicate?200:201);
+  }
+  const prior=await first(COMMENT_QUERY+' WHERE c.author_id=? AND c.idempotency_key=?',user.id,user.id,key);if(prior)return response(prior,true);
+  if(input.parentId){const parent=await first('SELECT id,work_id,parent_id FROM ft_comments WHERE id=?',input.parentId);validateCommentParent(parent,workId);}
+  await rateLimit(user,'ft_comments','created_at',30);
+  const id=uuid();
+  await sql(`INSERT INTO ft_comments (id,work_id,author_id,author_name,body,parent_id,created_at,idempotency_key,request_hash)
+    VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(author_id,idempotency_key) DO NOTHING`,id,w.id,user.id,(await userProfile(user)).name,input.body,input.parentId,iso(),key,requestHash).run();
+  const comment=await first(COMMENT_QUERY+' WHERE c.author_id=? AND c.idempotency_key=?',user.id,user.id,key);if(!comment)throw new Error('Comment insertion failed');
+  return response(comment,comment.id!==id);
+}
+async function commentLike(request:Request,user:User,id:string) {
+  await getComment(id,user);
+  const query=sql('SELECT COUNT(*) n,MAX(CASE WHEN actor_id=? THEN 1 ELSE 0 END) liked FROM ft_comment_likes WHERE comment_id=?',user.id,id);
+  function response(row:Row){return json({commentId:id,liked:Boolean(row.liked),likesCount:Number(row.n||0)});}
+  if(request.method==='GET')return response((await query.first<Row>())!);
+  const liked=likedState((await bodyJSON(request)).liked);
+  const mutation=liked?sql('INSERT OR IGNORE INTO ft_comment_likes (comment_id,actor_id,created_at) VALUES (?,?,?)',id,user.id,iso()):sql('DELETE FROM ft_comment_likes WHERE comment_id=? AND actor_id=?',id,user.id);
+  const result=await db().batch<Row>([mutation,query]);return response(result[1].results[0]);
+}
+
 async function createCard(request:Request,user:User) {
   const input=await bodyJSON(request),name=requiredText(input.name,'名片名称',80),bio=requiredText(input.bio??'','简介',500,0);
   const details=cardDetails(input);
-  if(!['fold','wall'].includes(input.template))throw new ApiError(422,'INVALID_TEMPLATE','请选择现有模板');
+  cardTemplate(input.template);
   if(!Array.isArray(input.workIds)||input.workIds.length<1||input.workIds.length>30||input.workIds.some((id:unknown)=>typeof id!=='string')||new Set(input.workIds).size!==input.workIds.length)throw new ApiError(422,'INVALID_WORK_SELECTION','请选择 1–30 个不同的作品');
   const keyHeader=request.headers.get('idempotency-key'),key=keyHeader?eventId(keyHeader):null;
   const requestHash=await hash(JSON.stringify({name,bio,template:input.template,workIds:input.workIds,...details}));
@@ -188,12 +274,13 @@ async function analytics(url:URL,user:User) {
   const condition='w.author_id=? AND e.received_at>=? AND e.received_at<=?'+(workId?' AND w.id=?':'');const args=workId?[user.id,from,to,workId]:[user.id,from,to];
   const grouped=await rows(`SELECT e.work_id,e.event_type,COUNT(*) n FROM ft_events e JOIN ft_works w ON w.id=e.work_id WHERE ${condition} GROUP BY e.work_id,e.event_type`,...args);
   const feedbacks=await rows(`SELECT f.work_id,COUNT(*) n FROM ft_feedback f JOIN ft_works w ON w.id=f.work_id WHERE w.author_id=? AND f.created_at>=? AND f.created_at<=?${workId?' AND w.id=?':''} GROUP BY f.work_id`,...args);
+  const comments=await rows(`SELECT c.work_id,COUNT(*) n FROM ft_comments c JOIN ft_works w ON w.id=c.work_id WHERE w.author_id=? AND c.created_at>=? AND c.created_at<=?${workId?' AND w.id=?':''} GROUP BY c.work_id`,...args);
   const count=(id:string,type:string)=>Number(grouped.find(r=>r.work_id===id&&r.event_type===type)?.n||0);
-  const byWork=works.map(w=>({workId:w.id,name:w.name,versionId:w.current_version_id,source:w.source,views:count(w.id,'work_view'),starts:w.source==='html'?count(w.id,'play_start'):null,ends:w.source==='html'?count(w.id,'session_end'):null,feedback:Number(feedbacks.find(f=>f.work_id===w.id)?.n||0),outboundClicks:count(w.id,'outbound_click')}));
+  const byWork=works.map(w=>({workId:w.id,name:w.name,versionId:w.current_version_id,source:w.source,views:count(w.id,'work_view'),starts:w.source==='html'?count(w.id,'play_start'):null,ends:w.source==='html'?count(w.id,'session_end'):null,feedback:Number(feedbacks.find(f=>f.work_id===w.id)?.n||0),comments:Number(comments.find(c=>c.work_id===w.id)?.n||0),outboundClicks:count(w.id,'outbound_click')}));
   const daily=await rows(`SELECT substr(e.received_at,1,10) date,e.event_type,COUNT(*) n FROM ft_events e JOIN ft_works w ON w.id=e.work_id WHERE ${condition} AND e.event_type IN ('work_view','play_start') GROUP BY date,e.event_type`,...args);
   const byDay=Array.from({length:days},(_,i)=>{const date=new Date(start.getTime()+i*86400000).toISOString().slice(0,10);return {date,views:Number(daily.find(r=>r.date===date&&r.event_type==='work_view')?.n||0),starts:Number(daily.find(r=>r.date===date&&r.event_type==='play_start')?.n||0)};});
   const cardViews=workId?0:Number((await first(`SELECT COUNT(*) n FROM ft_events e JOIN ft_cards c ON c.id=e.card_id WHERE c.author_id=? AND e.event_type='card_view' AND e.received_at>=? AND e.received_at<=?`,user.id,from,to))?.n||0);
-  const summary={views:0,starts:0,ends:0,feedback:0,cardViews,outboundClicks:0};for(const w of byWork){summary.views+=w.views;summary.starts+=w.starts||0;summary.ends+=w.ends||0;summary.feedback+=w.feedback;summary.outboundClicks+=w.outboundClicks;}
+  const summary={views:0,starts:0,ends:0,feedback:0,comments:0,cardViews,outboundClicks:0};for(const w of byWork){summary.views+=w.views;summary.starts+=w.starts||0;summary.ends+=w.ends||0;summary.feedback+=w.feedback;summary.comments+=w.comments;summary.outboundClicks+=w.outboundClicks;}
   const eventReceipts=(await rows(`SELECT e.* FROM ft_events e JOIN ft_works w ON w.id=e.work_id WHERE ${condition} ORDER BY e.received_at DESC LIMIT 30`,...args)).map(receipt);
   const feedbackReceipts=(await rows(`SELECT f.id,f.work_id,f.created_at FROM ft_feedback f JOIN ft_works w ON w.id=f.work_id WHERE w.author_id=? AND f.created_at>=? AND f.created_at<=?${workId?' AND w.id=?':''} ORDER BY f.created_at DESC LIMIT 30`,...args)).map(f=>({id:f.id,type:'feedback',workId:f.work_id,receivedAt:f.created_at}));
   const cardReceipts=workId?[]:(await rows(`SELECT e.* FROM ft_events e JOIN ft_cards c ON c.id=e.card_id WHERE c.author_id=? AND e.received_at>=? AND e.received_at<=? ORDER BY e.received_at DESC LIMIT 30`,user.id,from,to)).map(receipt);
@@ -207,9 +294,13 @@ export async function handleAPI(request:Request) {
     if(request.method==='POST')verifyWrite(request);
     if(request.method==='GET') {
       if(parts[0]==='me'&&parts.length===1)return json({user:await userProfile(user)});
-      if(parts[0]==='works'&&parts.length===1)return json({works:await withLikes((await rows(WORK_QUERY+(url.searchParams.get('mine')==='1'?' WHERE w.author_id=?':'')+' ORDER BY w.created_at DESC LIMIT 200',...url.searchParams.get('mine')==='1'?[user.id]:[])).map(workJSON),user)});
-      if(parts[0]==='works'&&parts.length===2)return json({work:(await withLikes([workJSON(await getWork(parts[1]))],user))[0]});
+      if(parts[0]==='works'&&parts.length===1)return json({works:await withWorkStats((await rows(WORK_QUERY+(url.searchParams.get('mine')==='1'?' WHERE w.author_id=?':'')+' ORDER BY w.created_at DESC LIMIT 200',...url.searchParams.get('mine')==='1'?[user.id]:[])).map(workJSON),user)});
+      if(parts[0]==='works'&&parts.length===2)return json({work:(await withWorkStats([workJSON(await getWork(parts[1]))],user))[0]});
       if(parts[0]==='works'&&parts.length===3&&parts[2]==='like')return await workLike(request,user,parts[1]);
+      if(parts[0]==='works'&&parts.length===3&&parts[2]==='comments')return await workComments(url,user,parts[1]);
+      if(parts[0]==='comments'&&parts.length===1)return await commentInbox(url,user);
+      if(parts[0]==='comments'&&parts.length===3&&parts[2]==='replies')return await commentReplies(url,user,parts[1]);
+      if(parts[0]==='comments'&&parts.length===3&&parts[2]==='like')return await commentLike(request,user,parts[1]);
       if(parts[0]==='analytics'&&parts.length===1)return await analytics(url,user);
       if(parts[0]==='feedback'&&parts.length===1){const workId=url.searchParams.get('work');if(workId)await ownWork(workId,user);return json({feedback:(await rows(`SELECT f.*,w.name work_name FROM ft_feedback f JOIN ft_works w ON w.id=f.work_id WHERE w.author_id=?${workId?' AND w.id=?':''} ORDER BY f.created_at DESC LIMIT 200`,...workId?[user.id,workId]:[user.id])).map(feedbackJSON)});}
       if(parts[0]==='cards'&&parts.length===1)return json({cards:(await rows('SELECT c.snapshot_json FROM ft_cards c WHERE c.id=(SELECT d.id FROM ft_cards d WHERE d.author_id=c.author_id ORDER BY d.rowid DESC LIMIT 1) ORDER BY c.created_at DESC LIMIT 200')).map(c=>cardSnapshot(JSON.parse(c.snapshot_json)))});
@@ -219,6 +310,8 @@ export async function handleAPI(request:Request) {
     if(request.method==='POST') {
       if(parts[0]==='works'&&parts.length===1)return await publish(request,user);
       if(parts[0]==='works'&&parts.length===3&&parts[2]==='like')return await workLike(request,user,parts[1]);
+      if(parts[0]==='works'&&parts.length===3&&parts[2]==='comments')return await addComment(request,user,parts[1]);
+      if(parts[0]==='comments'&&parts.length===3&&parts[2]==='like')return await commentLike(request,user,parts[1]);
       if(parts[0]==='sessions'&&parts.length===1)return await createSession(request,user);
       if(parts[0]==='sessions'&&parts.length===3&&parts[2]==='events')return await ingestSession(request,user,parts[1]);
       if(parts[0]==='events'&&parts.length===1)return await ingestEvent(request,user);

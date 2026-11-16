@@ -10,19 +10,26 @@ SP.createPopup=function(core,paper,onChange){
   var root=new T.Group();root.userData.tourRoom={minX:-FX,maxX:FX,minY:Y0,maxY:Y1};core.scene.add(root);
 
   var disposed=false,images=[],targets=[];
+  function containCover(image,width,height){
+    var cover=document.createElement('canvas');cover.width=1024;cover.height=Math.max(1,Math.round(1024*height/width));
+    var ctx=cover.getContext('2d'),iw=image.naturalWidth||image.width||1024,ih=image.naturalHeight||image.height||640,scale=Math.min(width/iw,height/ih),px=cover.width/width,py=cover.height/height;
+    ctx.fillStyle='#EEEAE1';ctx.fillRect(0,0,cover.width,cover.height);
+    // Fit in physical slot coordinates so integer canvas sizing cannot distort the mapped image.
+    ctx.drawImage(image,(width-iw*scale)*px/2,(height-ih*scale)*py/2,iw*scale*px,ih*scale*py);return cover;
+  }
   /* Selected project covers are images, never simulated running games. */
-  var works=PR.WORKS.map(function(w){
-    var o={w:w,tex:paper.tex(PR.placeholder(w)),mats:[],coverCanvas:null};
+  var works=PR.WORKS.map(function(w,i){
+    var placeholder=PR.placeholder(w),slot=PR.SLOTS[i];
+    var o={w:w,tex:paper.tex(placeholder),thumbTex:paper.tex(containCover(placeholder,slot.w,slot.h)),mats:[],thumbMats:[],coverCanvas:null};
     if(w.cover){
       var im=new Image();images.push(im);im.decoding='async';
       im.onload=function(){
         if(disposed)return;
-        // Rasterize both SVG and bitmap covers to a fixed-size canvas for WebGL uploads.
-        var cover=document.createElement('canvas');cover.width=1024;cover.height=640;
-        var ctx=cover.getContext('2d'),iw=im.naturalWidth||1024,ih=im.naturalHeight||640,scale=Math.max(1024/iw,640/ih);
-        ctx.fillStyle='#EEEAE1';ctx.fillRect(0,0,1024,640);ctx.drawImage(im,(1024-iw*scale)/2,(640-ih*scale)/2,iw*scale,ih*scale);
+        // Wall frames and closed-card slots have different physical aspect ratios.
+        var cover=containCover(im,1.6,1),thumb=containCover(im,slot.w,slot.h);
         o.coverCanvas=cover;var tx=paper.tex(cover);tx.needsUpdate=true;
         var old=o.tex;o.tex=tx;o.mats.forEach(function(m){m.uniforms.tMap.value=tx;});old.dispose();
+        var nextThumb=paper.tex(thumb);nextThumb.needsUpdate=true;old=o.thumbTex;o.thumbTex=nextThumb;o.thumbMats.forEach(function(m){m.uniforms.tMap.value=nextThumb;});old.dispose();
         if(works[0]===o&&bodyMat){var nextBack=paper.tex(PR.back(me,512,cover));bodyMat.uniforms.tB.value=nextBack;backTex.dispose();backTex=nextBack;}
         if(onChange)onChange();
       };
@@ -86,7 +93,7 @@ SP.createPopup=function(core,paper,onChange){
   /* Cover thumbnails follow the selected-work layout and split at the physical seam. */
   function thumb(pn,i,x0,x1,u0,u1){
     var slot=PR.SLOTS[i],cy=slot.y,dx=(x0+x1)/2-pn.hx,dy=cy-pn.hy,ca=Math.cos(pn.rz),sa=Math.sin(pn.rz);
-    var m=paper.art(works[i].tex,{rad:0.04});m.uniforms.uRect.value.set(u0,0,u1-u0,1);works[i].mats.push(m);
+    var m=paper.art(works[i].thumbTex,{rad:0.04});m.uniforms.uRect.value.set(u0,0,u1-u0,1);works[i].thumbMats.push(m);
     var mesh=new T.Mesh(new T.PlaneGeometry(x1-x0,slot.h),m);
     mesh.position.set(ca*dx+sa*dy,-sa*dx+ca*dy,t+0.0015);mesh.rotation.z=-pn.rz;pn.leaf.add(mesh);
   }
@@ -153,7 +160,7 @@ SP.createPopup=function(core,paper,onChange){
       if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(function(m){mats.add(m);});
     });core.scene.remove(node);});
     mats.forEach(function(m){Object.keys(m.uniforms||{}).forEach(function(k){var v=m.uniforms[k].value;if(v&&v.isTexture&&k!=='tSh'&&v!==paper.white)textures.add(v);});m.dispose();});
-    works.forEach(function(o){textures.add(o.tex);});textures.forEach(function(tx){tx.dispose();});geos.forEach(function(g){g.dispose();});
+    works.forEach(function(o){textures.add(o.tex);textures.add(o.thumbTex);});textures.forEach(function(tx){tx.dispose();});geos.forEach(function(g){g.dispose();});
     targets.length=0;
   }
   return {root:root,update:update,works:works,body:body,ground:ground,targets:targets,dispose:dispose,TC:TC,top:zL3+hS};
