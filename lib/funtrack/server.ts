@@ -1,6 +1,9 @@
 import { env } from 'cloudflare:workers';
 import { handleBuildAPI, handleBuildWorker, getBuildArtifact } from './build-service';
 import { resolveGithubHTML } from './github-import.mjs';
+import { publicationArtifact } from './publication-artifact.mjs';
+import { createVersionService } from './version-service.mjs';
+import { cardWorkRefs } from './version-rules.mjs';
 import { ApiError, fail, authenticate, verifyWrite, requiredText, eventId, safeURL, coverType, htmlSource, sessionEvents, GAME_CSP, gameDocument, likedState, cardDetails, cardSnapshot, cardTemplate, commentInput, validateCommentParent, commentPageLimit, encodeCommentCursor, decodeCommentCursor, discoverQuery, encodeDiscoverCursor, decodeDiscoverCursor } from './rules.mjs';
 
 type Row = Record<string, any>;
@@ -14,7 +17,7 @@ const sql=(query:string,...values:any[])=>db().prepare(query).bind(...values);
 const first=(query:string,...values:any[])=>sql(query,...values).first<Row>();
 async function rows(query:string,...values:any[]):Promise<Row[]> { return (await sql(query,...values).all<Row>()).results; }
 export function json(value:unknown,status=200) { return Response.json(value,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}}); }
-function errorResponse(error:unknown) { if(error instanceof ApiError)return json({error:{code:error.code,message:error.message}},error.status); return json({error:{code:'INTERNAL_ERROR',message:'服务暂不可用，请保留内容后重试'}},500); }
+function errorResponse(error:unknown) { if(error instanceof ApiError)return json({error:{code:error.code,message:error.message,...((error as ApiError&{current?:unknown}).current?{current:(error as ApiError&{current?:unknown}).current}:{})}},error.status); return json({error:{code:'INTERNAL_ERROR',message:'服务暂不可用，请保留内容后重试'}},500); }
 async function hash(value:string|Uint8Array) {const bytes=typeof value==='string'?new TextEncoder().encode(value):value;const result=await crypto.subtle.digest('SHA-256',bytes as BufferSource);return Array.from(new Uint8Array(result),n=>n.toString(16).padStart(2,'0')).join('');}
 async function limitedBody(request:Request,max:number) {
   const declared=Number(request.headers.get('content-length')||0);if(declared>max)fail(413,'BODY_TOO_LARGE','请求内容过大');
@@ -27,7 +30,7 @@ async function bodyJSON(request:Request):Promise<Row> {
   try {const body=JSON.parse(new TextDecoder().decode(await limitedBody(request,65536)));if(!body||typeof body!=='object'||Array.isArray(body))throw new Error();return body;}catch(e){if(e instanceof ApiError)throw e;throw new ApiError(400,'INVALID_JSON','JSON 格式无效');}
 }
 const WORK_QUERY=`SELECT w.*,v.version,v.game_key,v.cover_key,v.cover_mime,v.provenance_json FROM ft_works w JOIN ft_work_versions v ON v.id=w.current_version_id`;
-function workJSON(w:Row) { return {id:w.id,authorId:w.author_id,authorName:w.author_name,name:w.name,desc:w.description,source:w.source,versionId:w.current_version_id,version:w.version,coverUrl:w.cover_key?`/media/${w.current_version_id}`:'',...(w.url?{url:w.url}:{}),...(w.provenance_json?{build:JSON.parse(w.provenance_json)}:{}),createdAt:w.created_at}; }
+function workJSON(w:Row) { return {id:w.id,authorId:w.author_id,authorName:w.author_name,name:w.name,desc:w.description,source:w.source,versionId:w.current_version_id,version:w.version,coverUrl:w.cover_key?`/media/${w.current_version_id}`:'',...(w.url?{url:w.url}:{}),...(w.provenance_json?{build:JSON.parse(w.provenance_json)}:{}),createdAt:w.created_at,revision:w.revision,updatedAt:w.updated_at||w.created_at}; }
 async function getWork(id:unknown) { if(typeof id!=='string'||id.length>128)throw new ApiError(404,'WORK_NOT_FOUND','作品不存在');const w=await first(WORK_QUERY+' WHERE w.id=?',id);if(!w)throw new ApiError(404,'WORK_NOT_FOUND','作品不存在');return w; }
 async function ownWork(id:unknown,user:User) {const w=await getWork(id);if(w.author_id!==user.id)throw new ApiError(403,'NOT_OWNER','只能访问自己的作品数据');return w;}
 async function userProfile(user:User) {const p=await first('SELECT name,bio,signature,headline,website,back_style FROM ft_profiles WHERE id=?',user.id);return {id:user.id,name:p?.name||user.name,bio:p?.bio||'',signature:p?.signature||'',headline:p?.headline||'',website:p?.website||'',backStyle:p?.back_style||'ink'};}
@@ -82,46 +85,45 @@ async function rateLimit(user:User,table:'ft_events'|'ft_play_sessions'|'ft_feed
   const actor=table==='ft_feedback'||table==='ft_comments'?'author_id':'actor_id';const result=await first(`SELECT COUNT(*) AS n FROM ${table} WHERE ${actor}=? AND ${column}>=?`,user.id,new Date(Date.now()-60000).toISOString());
   if(Number(result?.n)>=limit)throw new ApiError(429,'RATE_LIMITED','提交太频繁，请稍后重试');
 }
-function receipt(row:Row) { return {id:row.id,clientEventId:row.client_event_id,type:row.event_type,...(row.work_id?{workId:row.work_id}:{}),...(row.card_id?{cardId:row.card_id}:{}),receivedAt:row.received_at}; }
+function receipt(row:Row) { return {id:row.id,clientEventId:row.client_event_id,type:row.event_type,...(row.work_id?{workId:row.work_id}:{}),...(row.version_id?{versionId:row.version_id}:{}),...(row.card_id?{cardId:row.card_id}:{}),receivedAt:row.received_at}; }
+
+async function readPublicationForm(request:Request){
+  const ct=request.headers.get('content-type')||'';if(!ct.startsWith('multipart/form-data;'))throw new ApiError(415,'FORM_REQUIRED','请使用文件上传表单');
+  try{return await new Response(await limitedBody(request,4194304),{headers:{'Content-Type':ct}}).formData();}catch(e){if(e instanceof ApiError)throw e;throw new ApiError(400,'INVALID_FORM','上传表单无效');}
+}
+const readArtifact=(form:FormData,source:string,owner:string)=>publicationArtifact(form,source,owner,getBuildArtifact);
+const handleVersionAPI=createVersionService({db,bucket,ownWork,workJSON,hash,readForm:readPublicationForm,readArtifact,bodyJSON});
 
 async function publish(request:Request,user:User) {
   const key=eventId(request.headers.get('idempotency-key'));
-  const ct=request.headers.get('content-type')||'';if(!ct.startsWith('multipart/form-data;'))throw new ApiError(415,'FORM_REQUIRED','请使用文件上传表单');
-  let form:FormData;try{form=await new Response(await limitedBody(request,4194304),{headers:{'Content-Type':ct}}).formData();}catch(e){if(e instanceof ApiError)throw e;throw new ApiError(400,'INVALID_FORM','上传表单无效');}
+  const form=await readPublicationForm(request);
   const name=requiredText(form.get('name'),'作品名',80),description=requiredText(form.get('desc'),'作品简介',500);
   const source=form.get('source');if(source!=='html'&&source!=='url')throw new ApiError(422,'INVALID_SOURCE','选择 HTML 上传或外部链接');
   const url=source==='url'?safeURL(form.get('url')):null;
-  let gameBytes:Uint8Array|null=null,coverBytes:Uint8Array|null=null,coverMime:string|null=null,provenanceJSON:string|null=null;
-  const rawBuildId=form.get('buildId'),buildId=typeof rawBuildId==='string'&&rawBuildId?eventId(rawBuildId):null;
-  if(rawBuildId&&typeof rawBuildId!=='string')fail(422,'INVALID_BUILD_ID','构建任务标识无效');
-  if(buildId&&source!=='html')fail(422,'INVALID_BUILD_SOURCE','构建产物须发布为站内作品');
-  if(source==='html') {
-    if(buildId){if(form.has('file'))fail(422,'AMBIGUOUS_BUILD_SOURCE','构建产物和本地文件不能同时发布');const artifact=await getBuildArtifact(buildId,user.id);gameBytes=artifact.bytes;provenanceJSON=JSON.stringify(artifact.provenance);}
-    else{const file=form.get('file');if(!file||typeof file==='string')throw new ApiError(422,'FILE_REQUIRED','请选择 HTML 文件');gameBytes=new Uint8Array(await file.arrayBuffer());htmlSource(gameBytes,file.type,file.name);}
-  }
-  const cover=form.get('cover');if(cover&&typeof cover!=='string'&&cover.size){if(cover.size>2097152)throw new ApiError(413,'COVER_TOO_LARGE','封面须在 2 MiB 以内');coverBytes=new Uint8Array(await cover.arrayBuffer());coverMime=coverType(coverBytes,cover.type);}
-  if(typeof cover==='string'&&cover)throw new ApiError(422,'INVALID_COVER','封面须为图片文件');
+  const {gameBytes,coverBytes,coverMime,provenanceJSON,buildId}=await readArtifact(form,source,user.id);
   const requestHash=await hash(JSON.stringify({name,description,source,url,...(buildId?{buildId}:{}),game:gameBytes?await hash(gameBytes):null,cover:coverBytes?await hash(coverBytes):null,coverMime}));
-  async function replay(){const found=await first(WORK_QUERY+' WHERE w.author_id=? AND w.idempotency_key=?',user.id,key);if(!found)return null;if(found.request_hash!==requestHash)throw new ApiError(409,'IDEMPOTENCY_CONFLICT','同一次提交的内容已变化，请创建新的提交标识');return json({work:workJSON(found)});}
+  const initialQuery=`SELECT w.*,v.id initial_version_id,v.version,v.game_key,v.cover_key,v.cover_mime,v.provenance_json FROM ft_works w JOIN ft_work_versions v ON v.work_id=w.id AND v.ordinal=1`;
+  function initialResponse(found:Row,status=200){if(found.request_hash!==requestHash)throw new ApiError(409,'IDEMPOTENCY_CONFLICT','同一次提交的内容已变化，请创建新的提交标识');return json({work:workJSON({...found,current_version_id:found.initial_version_id,revision:1,updated_at:found.created_at}),current:{versionId:found.current_version_id,revision:found.revision}},status);}
+  async function replay(){const found=await first(initialQuery+' WHERE w.author_id=? AND w.idempotency_key=?',user.id,key);return found?initialResponse(found):null;}
   const prior=await replay();if(prior)return prior;
   const id=uuid(),versionId=uuid(),createdAt=iso();const gameKey=gameBytes?`games/${versionId}.html`:null,coverKey=coverBytes?`covers/${versionId}`:null;const written:string[]=[];
   try {
     if(gameKey&&gameBytes){await bucket().put(gameKey,gameBytes,{httpMetadata:{contentType:'text/html'}});written.push(gameKey);}
     if(coverKey&&coverBytes){await bucket().put(coverKey,coverBytes,{httpMetadata:{contentType:coverMime!}});written.push(coverKey);}
     await db().batch([
-      sql('INSERT INTO ft_works (id,author_id,author_name,name,description,source,current_version_id,url,created_at,idempotency_key,request_hash) VALUES (?,?,?,?,?,?,?,?,?,?,?)',id,user.id,(await userProfile(user)).name,name,description,source,versionId,url,createdAt,key,requestHash),
-      sql('INSERT INTO ft_work_versions (id,work_id,version,game_key,cover_key,cover_mime,created_at,provenance_json) VALUES (?,?,?,?,?,?,?,?)',versionId,id,'v1',gameKey,coverKey,coverMime,createdAt,provenanceJSON),
+      sql('INSERT INTO ft_works (id,author_id,author_name,name,description,source,current_version_id,url,created_at,idempotency_key,request_hash,revision,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,1,?)',id,user.id,(await userProfile(user)).name,name,description,source,versionId,url,createdAt,key,requestHash,createdAt),
+      sql('INSERT INTO ft_work_versions (id,work_id,version,game_key,cover_key,cover_mime,created_at,provenance_json,ordinal,content_hash,created_by) VALUES (?,?,?,?,?,?,?,?,1,?,?)',versionId,id,'v1',gameKey,coverKey,coverMime,createdAt,provenanceJSON,gameBytes?await hash(gameBytes):null,user.id),
     ]);
   } catch(e) {
     // A database commit can succeed even if its response is lost. Confirm the
     // published row before deleting this attempt's objects; a failed read leaves
     // harmless orphans rather than risking deletion of a published game.
-    const committed=await first(WORK_QUERY+' WHERE w.author_id=? AND w.idempotency_key=?',user.id,key);
-    if(committed?.id===id)return json({work:workJSON(committed)});
+    const committed=await first(initialQuery+' WHERE w.author_id=? AND w.idempotency_key=?',user.id,key);
+    if(committed?.id===id)return initialResponse(committed,201);
     if(written.length)try{await bucket().delete(written);}catch{/* unreachable objects can be cleaned later; never delete another attempt */}
-    if(committed){if(committed.request_hash!==requestHash)throw new ApiError(409,'IDEMPOTENCY_CONFLICT','同一次提交的内容已变化，请创建新的提交标识');return json({work:workJSON(committed)});}throw e;
+    if(committed)return initialResponse(committed);throw e;
   }
-  return json({work:workJSON(await getWork(id))},201);
+  return initialResponse((await first(initialQuery+' WHERE w.id=?',id))!,201);
 }
 
 async function createSession(request:Request,user:User) {
@@ -166,11 +168,11 @@ async function ingestSession(request:Request,user:User,id:string) {
 
 async function ingestEvent(request:Request,user:User) {
   const input=await bodyJSON(request),clientId=eventId(input.eventId),type=input.type;let workId:null|string=null,cardId:null|string=null,versionId:null|string=null;
-  if(type==='work_view'||type==='outbound_click'){const w=await getWork(input.workId);if(type==='outbound_click'&&w.source!=='url')throw new ApiError(422,'INVALID_EVENT','该作品没有外链');workId=w.id;versionId=await targetVersion(input.versionId,w);}
+  const prior=await first('SELECT * FROM ft_events WHERE actor_id=? AND client_event_id=?',user.id,clientId);
+  if(type==='work_view'||type==='outbound_click'){const w=await getWork(input.workId);if(type==='outbound_click'&&w.source!=='url')throw new ApiError(422,'INVALID_EVENT','该作品没有外链');workId=w.id;versionId=input.versionId===undefined&&prior&&prior.work_id===w.id?prior.version_id:await targetVersion(input.versionId,w);}
   else if(type==='card_view'){const card=await first('SELECT id FROM ft_cards WHERE id=?',String(input.cardId||''));if(!card)throw new ApiError(404,'CARD_NOT_FOUND','名片不存在');cardId=card.id;}
   else throw new ApiError(422,'INVALID_EVENT','事件类型无效');
-  const prior=await first('SELECT * FROM ft_events WHERE actor_id=? AND client_event_id=?',user.id,clientId);
-  function response(row:Row,duplicate:boolean){if(row.event_type!==type||row.work_id!==workId||row.card_id!==cardId||row.version_id!==versionId)throw new ApiError(409,'EVENT_CONFLICT','事件标识已用于不同内容');return json({receipt:receipt(row),duplicate});}
+  function response(row:Row,duplicate:boolean){if(row.event_type!==type||row.work_id!==workId||row.card_id!==cardId||(input.versionId!==undefined&&row.version_id!==versionId))throw new ApiError(409,'EVENT_CONFLICT','事件标识已用于不同内容');return json({receipt:receipt(row),duplicate});}
   if(prior)return response(prior,true);await rateLimit(user,'ft_events','received_at',240);
   const id=uuid();await sql('INSERT OR IGNORE INTO ft_events (id,client_event_id,actor_id,work_id,version_id,card_id,event_type,received_at) VALUES (?,?,?,?,?,?,?,?)',id,clientId,user.id,workId,versionId,cardId,type,iso()).run();
   const row=await first('SELECT * FROM ft_events WHERE actor_id=? AND client_event_id=?',user.id,clientId);if(!row)throw new Error('Event insertion failed');return response(row,row.id!==id);
@@ -184,11 +186,12 @@ async function targetVersion(input:unknown,work:Row):Promise<string> {
 }
 async function addFeedback(request:Request,user:User) {
   const input=await bodyJSON(request),w=await getWork(input.workId),text=requiredText(input.text,'反馈',1000);
-  const versionId=await targetVersion(input.versionId,w);
   if(!['喜欢','建议','问题'].includes(input.type))throw new ApiError(422,'INVALID_FEEDBACK_TYPE','请选择反馈类型');
   const clientId=input.eventId===undefined?uuid():eventId(input.eventId);
-  function response(f:Row,status:number){if(f.work_id!==w.id||f.version_id!==versionId||f.text!==text||f.type!==input.type)throw new ApiError(409,'EVENT_CONFLICT','反馈标识已用于不同内容');return json({feedback:feedbackJSON({...f,work_name:w.name}),receipt:{id:f.id,clientEventId:f.client_event_id,type:'feedback',workId:f.work_id,receivedAt:f.created_at}},status);}
-  const prior=await first('SELECT * FROM ft_feedback WHERE author_id=? AND client_event_id=?',user.id,clientId);if(prior)return response(prior,200);
+  const prior=await first('SELECT * FROM ft_feedback WHERE author_id=? AND client_event_id=?',user.id,clientId);
+  const versionId=input.versionId===undefined&&prior&&prior.work_id===w.id?prior.version_id:await targetVersion(input.versionId,w);
+  function response(f:Row,status:number){if(f.work_id!==w.id||(input.versionId!==undefined&&f.version_id!==versionId)||f.text!==text||f.type!==input.type)throw new ApiError(409,'EVENT_CONFLICT','反馈标识已用于不同内容');return json({feedback:feedbackJSON({...f,work_name:w.name}),receipt:{id:f.id,clientEventId:f.client_event_id,type:'feedback',workId:f.work_id,versionId:f.version_id,receivedAt:f.created_at}},status);}
+  if(prior)return response(prior,200);
   await rateLimit(user,'ft_feedback','created_at',30);
   const id=uuid();await sql('INSERT OR IGNORE INTO ft_feedback (id,client_event_id,work_id,version_id,author_id,author_name,text,type,created_at) VALUES (?,?,?,?,?,?,?,?,?)',id,clientId,w.id,versionId,user.id,(await userProfile(user)).name,text,input.type,iso()).run();
   const f=await first('SELECT * FROM ft_feedback WHERE author_id=? AND client_event_id=?',user.id,clientId);if(!f)throw new Error('Feedback insertion failed');return response(f,f.id===id?201:200);
@@ -281,14 +284,19 @@ async function createCard(request:Request,user:User) {
   const details=cardDetails(input);
   cardTemplate(input.template);
   if(!Array.isArray(input.workIds)||input.workIds.length<1||input.workIds.length>30||input.workIds.some((id:unknown)=>typeof id!=='string')||new Set(input.workIds).size!==input.workIds.length)throw new ApiError(422,'INVALID_WORK_SELECTION','请选择 1–30 个不同的作品');
+  const workRefs=cardWorkRefs(input.workIds,input.workRefs);
   const keyHeader=request.headers.get('idempotency-key'),key=keyHeader?eventId(keyHeader):null;
-  const requestHash=await hash(JSON.stringify({name,bio,template:input.template,workIds:input.workIds,...details}));
+  const requestHash=await hash(JSON.stringify({name,bio,template:input.template,workIds:input.workIds,...(workRefs?{workRefs}:{}),...details}));
   // A pre-upgrade request without the new details can still replay its original
   // immutable snapshot. New detail values must never reuse that old request key.
-  const legacyHash=!details.signature&&!details.headline&&!details.website&&details.backStyle==='ink'?await hash(JSON.stringify({name,bio,template:input.template,workIds:input.workIds})):null;
+  const legacyHash=!workRefs&&!details.signature&&!details.headline&&!details.website&&details.backStyle==='ink'?await hash(JSON.stringify({name,bio,template:input.template,workIds:input.workIds})):null;
   async function replay(){if(!key)return null;const row=await first('SELECT * FROM ft_cards WHERE author_id=? AND idempotency_key=?',user.id,key);if(!row)return null;if(row.request_hash!==requestHash&&row.request_hash!==legacyHash)throw new ApiError(409,'IDEMPOTENCY_CONFLICT','名片提交内容已变化，请使用新的提交标识');return json({card:cardSnapshot(JSON.parse(row.snapshot_json))});}
   const prior=await replay();if(prior)return prior;
-  const works=[];for(const workId of input.workIds)works.push({...workJSON(await ownWork(workId,user)),authorName:name});
+  const works=[];for(let i=0;i<input.workIds.length;i++){
+    const w=await ownWork(input.workIds[i],user);
+    if(workRefs){const v=await first('SELECT * FROM ft_work_versions WHERE id=? AND work_id=?',workRefs[i].versionId,w.id);if(!v)throw new ApiError(422,'INVALID_VERSION','名片预览版本不属于该作品');Object.assign(w,{current_version_id:v.id,version:v.version,game_key:v.game_key,cover_key:v.cover_key,cover_mime:v.cover_mime,provenance_json:v.provenance_json});}
+    works.push({...workJSON(w),authorName:name});
+  }
   const card={id:uuid(),authorId:user.id,name,bio,...details,template:input.template,workIds:input.workIds,works,createdAt:iso()};
   try{await db().batch([
     sql('INSERT INTO ft_cards (id,author_id,snapshot_json,created_at,idempotency_key,request_hash) VALUES (?,?,?,?,?,?)',card.id,user.id,JSON.stringify(card),card.createdAt,key,requestHash),
@@ -308,16 +316,16 @@ async function analytics(url:URL,user:User) {
   const feedbacks=await rows(`SELECT f.work_id,COUNT(*) n FROM ft_feedback f JOIN ft_works w ON w.id=f.work_id WHERE w.author_id=? AND f.created_at>=? AND f.created_at<=?${workId?' AND w.id=?':''} GROUP BY f.work_id`,...args);
   const comments=await rows(`SELECT c.work_id,COUNT(*) n FROM ft_comments c JOIN ft_works w ON w.id=c.work_id WHERE w.author_id=? AND c.created_at>=? AND c.created_at<=?${workId?' AND w.id=?':''} GROUP BY c.work_id`,...args);
   const count=(id:string,type:string)=>Number(grouped.find(r=>r.work_id===id&&r.event_type===type)?.n||0);
-  const byWork=works.map(w=>({workId:w.id,name:w.name,versionId:w.current_version_id,source:w.source,views:count(w.id,'work_view'),starts:w.source==='html'?count(w.id,'play_start'):null,ends:w.source==='html'?count(w.id,'session_end'):null,feedback:Number(feedbacks.find(f=>f.work_id===w.id)?.n||0),comments:Number(comments.find(c=>c.work_id===w.id)?.n||0),outboundClicks:count(w.id,'outbound_click')}));
+  const byWork=works.map(w=>({workId:w.id,name:w.name,currentVersionId:w.current_version_id,source:w.source,views:count(w.id,'work_view'),starts:w.source==='html'?count(w.id,'play_start'):null,ends:w.source==='html'?count(w.id,'session_end'):null,feedback:Number(feedbacks.find(f=>f.work_id===w.id)?.n||0),comments:Number(comments.find(c=>c.work_id===w.id)?.n||0),outboundClicks:count(w.id,'outbound_click')}));
   const daily=await rows(`SELECT substr(e.received_at,1,10) date,e.event_type,COUNT(*) n FROM ft_events e JOIN ft_works w ON w.id=e.work_id WHERE ${condition} AND e.event_type IN ('work_view','play_start') GROUP BY date,e.event_type`,...args);
   const byDay=Array.from({length:days},(_,i)=>{const date=new Date(start.getTime()+i*86400000).toISOString().slice(0,10);return {date,views:Number(daily.find(r=>r.date===date&&r.event_type==='work_view')?.n||0),starts:Number(daily.find(r=>r.date===date&&r.event_type==='play_start')?.n||0)};});
   const cardViews=workId?0:Number((await first(`SELECT COUNT(*) n FROM ft_events e JOIN ft_cards c ON c.id=e.card_id WHERE c.author_id=? AND e.event_type='card_view' AND e.received_at>=? AND e.received_at<=?`,user.id,from,to))?.n||0);
   const summary={views:0,starts:0,ends:0,feedback:0,comments:0,cardViews,outboundClicks:0};for(const w of byWork){summary.views+=w.views;summary.starts+=w.starts||0;summary.ends+=w.ends||0;summary.feedback+=w.feedback;summary.comments+=w.comments;summary.outboundClicks+=w.outboundClicks;}
   const eventReceipts=(await rows(`SELECT e.* FROM ft_events e JOIN ft_works w ON w.id=e.work_id WHERE ${condition} ORDER BY e.received_at DESC LIMIT 30`,...args)).map(receipt);
-  const feedbackReceipts=(await rows(`SELECT f.id,f.work_id,f.created_at FROM ft_feedback f JOIN ft_works w ON w.id=f.work_id WHERE w.author_id=? AND f.created_at>=? AND f.created_at<=?${workId?' AND w.id=?':''} ORDER BY f.created_at DESC LIMIT 30`,...args)).map(f=>({id:f.id,type:'feedback',workId:f.work_id,receivedAt:f.created_at}));
+  const feedbackReceipts=(await rows(`SELECT f.id,f.work_id,f.version_id,f.created_at FROM ft_feedback f JOIN ft_works w ON w.id=f.work_id WHERE w.author_id=? AND f.created_at>=? AND f.created_at<=?${workId?' AND w.id=?':''} ORDER BY f.created_at DESC LIMIT 30`,...args)).map(f=>({id:f.id,type:'feedback',workId:f.work_id,versionId:f.version_id,receivedAt:f.created_at}));
   const cardReceipts=workId?[]:(await rows(`SELECT e.* FROM ft_events e JOIN ft_cards c ON c.id=e.card_id WHERE c.author_id=? AND e.received_at>=? AND e.received_at<=? ORDER BY e.received_at DESC LIMIT 30`,user.id,from,to)).map(receipt);
   const receipts=[...eventReceipts,...feedbackReceipts,...cardReceipts].sort((a,b)=>b.receivedAt.localeCompare(a.receivedAt)).slice(0,30);
-  return json({summary,byWork,byDay,receipts});
+  return json({scope:'work_period',from,to,summary,byWork,byDay,receipts});
 }
 
 export async function handleAPI(request:Request) {
@@ -326,6 +334,7 @@ export async function handleAPI(request:Request) {
     const user=authenticate(request.headers),url=new URL(request.url),parts=url.pathname.replace(/^\/api\/?/,'').split('/').filter(Boolean);
     if(request.method==='POST')verifyWrite(request);
     const buildResponse=await handleBuildAPI(request,user);if(buildResponse)return buildResponse;
+    const versionResponse=await handleVersionAPI(request,user);if(versionResponse)return versionResponse;
     if(request.method==='GET') {
       if(parts[0]==='me'&&parts.length===1)return json({user:await userProfile(user)});
       if(parts[0]==='discover'&&parts.length===1)return await discover(url,user);

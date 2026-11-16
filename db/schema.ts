@@ -9,6 +9,7 @@ export const works = sqliteTable('ft_works', {
   id: text('id').primaryKey(), authorId: text('author_id').notNull(), authorName: text('author_name').notNull(),
   name: text('name').notNull(), description: text('description').notNull(), source: text('source').notNull(),
   currentVersionId: text('current_version_id').notNull(), url: text('url'), createdAt: text('created_at').notNull(),
+  revision: integer('revision').notNull().default(1), updatedAt: text('updated_at').notNull().default(''),
   idempotencyKey: text('idempotency_key').notNull(), requestHash: text('request_hash').notNull(),
 }, t => [uniqueIndex('ft_works_owner_key').on(t.authorId, t.idempotencyKey), index('ft_works_owner_created').on(t.authorId,t.createdAt,t.id),
   index('ft_works_created_id').on(t.createdAt,t.id),index('ft_works_source_created').on(t.source,t.createdAt,t.id)]);
@@ -18,7 +19,16 @@ export const workLikes = sqliteTable('ft_work_likes', {
 export const versions = sqliteTable('ft_work_versions', {
   id: text('id').primaryKey(), workId: text('work_id').notNull().references(()=>works.id), version: text('version').notNull(),
   gameKey: text('game_key'), provenanceJson: text('provenance_json'), coverKey: text('cover_key'), coverMime: text('cover_mime'), createdAt: text('created_at').notNull(),
-}, t => [index('ft_versions_work').on(t.workId)]);
+  ordinal: integer('ordinal').notNull().default(1), releaseNotes: text('release_notes').notNull().default(''),
+  contentHash: text('content_hash'), createdBy: text('created_by'),
+}, t => [index('ft_versions_work').on(t.workId),uniqueIndex('ft_versions_work_ordinal').on(t.workId,t.ordinal)]);
+export const versionOperations = sqliteTable('ft_version_operations', {
+  id: text('id').primaryKey(), ownerId: text('owner_id').notNull(), workId: text('work_id').notNull().references(()=>works.id),
+  action: text('action').notNull(), idempotencyKey: text('idempotency_key').notNull(), requestHash: text('request_hash').notNull(),
+  fromVersionId: text('from_version_id').notNull().references(()=>versions.id), toVersionId: text('to_version_id').notNull().references(()=>versions.id),
+  previousRevision: integer('previous_revision').notNull(), revision: integer('revision').notNull(), changed: integer('changed').notNull(),
+  createdAt: text('created_at').notNull(),
+}, t=>[uniqueIndex('ft_version_operations_owner_key').on(t.ownerId,t.idempotencyKey),index('ft_version_operations_work_created').on(t.workId,t.createdAt)]);
 export const cards = sqliteTable('ft_cards', {
   id: text('id').primaryKey(), authorId: text('author_id').notNull(), snapshotJson: text('snapshot_json').notNull(), createdAt: text('created_at').notNull(),
   idempotencyKey: text('idempotency_key'), requestHash: text('request_hash'),

@@ -1,4 +1,6 @@
 import { mountDiscussion } from './discussion.js';
+import { renderVersioning, disposeVersioning } from './versioning.js';
+import { previewReferences, isPinnedPreview, prepareCardPreview, frozenAction } from './versioning-state.js';
 import { mountDiscovery, clearDiscovery, updateDiscoveryWork } from './discovery.js';
 const $ = (s, root=document) => root.querySelector(s);
 const $$ = (s, root=document) => [...root.querySelectorAll(s)];
@@ -26,7 +28,7 @@ async function api(path, options={}) {
   let response;
   try {response=await fetch(path,{credentials:'same-origin',...options,headers});} catch {throw new ApiError('连接暂时中断，请重试。',0,'NETWORK');}
   let data;try{data=await response.json();}catch{throw new ApiError('服务暂时不可用，请稍后重试。',response.status,'BAD_RESPONSE');}
-  if(!response.ok)throw new ApiError(data.error?.message||'暂时无法完成，请重试。',response.status,data.error?.code);
+  if(!response.ok){const error=new ApiError(data.error?.message||'暂时无法完成，请重试。',response.status,data.error?.code);if(data.error?.current)error.current=data.error.current;throw error;}
   return data;
 }
 function signinURL(){return '/signin-with-chatgpt?return_to='+encodeURIComponent('/site.html'+(location.hash||'#/'));}
@@ -85,7 +87,7 @@ async function loadMe(){try{me=(await api('/api/me')).user;}catch(e){if(e.status
 
 function applyHTML(html,number){if(number!==routeNumber)return false;main.innerHTML=html;const key=route().raw;requestAnimationFrame(()=>{if(number===routeNumber)window.scrollTo(0,scrolls.get(key)||0);});return true;}
 async function renderRoute(){
-  const r=route(),number=++routeNumber;stopBuildPolling();
+  const r=route(),number=++routeNumber;stopBuildPolling();disposeVersioning();
   if(currentRoute&&currentRoute!==r.raw)scrolls.set(currentRoute,window.scrollY);
   endSession('exit');currentGallery=null;currentRoute=r.raw;
   $$('.site-header nav a').forEach(a=>a.classList.toggle('active',a.dataset.nav===(r.path.startsWith('/cards')||r.path.startsWith('/card/')||r.path.startsWith('/author')?'cards':r.path.startsWith('/studio')||r.path==='/publish'?'studio':'feed')));
@@ -98,6 +100,7 @@ async function renderRoute(){
     else if(r.path.startsWith('/work/'))await renderWork(r,number);
     else if(r.path==='/publish')renderPublish(number);
     else if(r.path.startsWith('/published/'))await renderPublished(r,number);
+    else if(/^\/studio\/works\/[^/]+\/(update|versions)(\/[^/]+)?$/.test(r.path))await renderVersioning(r,{api,esc,owner:me.id,fileStore,signinURL,notify,go,workImage,startGame,isPlaying:()=>Boolean(activeSession),isCurrent:()=>number===routeNumber,render:html=>applyHTML(html,number),onChanged:()=>clearDiscovery()});
     else if(r.path==='/studio'||r.path==='/studio/works')await renderMyWorks(number);
     else if(r.path==='/studio/data')await renderData(r,number);
     else if(r.path==='/studio/feedback')await renderFeedback(r,number);
@@ -139,8 +142,8 @@ async function renderWork(r,number){
   if(r.params.get('discussion')==='1')requestAnimationFrame(()=>{if(number===routeNumber)$('#discussion')?.scrollIntoView({block:'start'});});
 }
 
-async function renderMyWorks(number){const works=await readMine();applyHTML(studio(`${head('我的作品',works.length?`${works.length} 件已发布作品`:'','<a class="button primary" href="#/publish">＋ 发布作品</a>')}${works.length?works.map(w=>`<article class="work-row">${cover(w,workHref(w),false)}<div><a href="${esc(workHref(w))}"><h3>${esc(w.name)}</h3></a><p>${esc(w.desc)}</p><span class="tiny muted">${esc(w.version)} · ${w.source==='url'?'外链':'HTML'} · ${date(w.createdAt)}</span></div><div class="row-actions"><a class="button quiet small" href="#/studio/data?work=${encodeURIComponent(w.id)}">数据</a><a class="button quiet small" href="#/studio/feedback?work=${encodeURIComponent(w.id)}">互动</a><a class="button quiet small" href="${esc(workHref(w))}">打开 ↗</a></div></article>`).join(''):empty('发布你的第一件作品','上传一个 HTML 小游戏，或放入已经部署好的作品链接。','<a class="button primary" href="#/publish">发布作品</a>')}`,'works'),number);}
-async function renderData(r,number){const work=r.params.get('work'),[data,works]=await Promise.all([api('/api/analytics?days=7'+(work?'&work='+encodeURIComponent(work):'')),readMine()]);const row=data.byWork.find(x=>x.workId===work),summary=data.summary;applyHTML(studio(`${head('数据','最近 7 天','<button class="button small" data-action="reload">刷新</button>')}<div class="field"><label for="data-work">作品</label><select id="data-work">${'<option value="">全部作品</option>'}${works.map(w=>`<option value="${esc(w.id)}" ${work===w.id?'selected':''}>${esc(w.name)}</option>`).join('')}</select></div><dl class="stats"><div class="stat"><dt>作品页访问</dt><dd>${n(summary.views)}</dd></div><div class="stat"><dt>开始试玩</dt><dd>${n(row?.source==='url'||(!work&&data.byWork.length>0&&data.byWork.every(w=>w.source==='url'))?null:summary.starts)}</dd>${row?.source==='url'||(!work&&data.byWork.length>0&&data.byWork.every(w=>w.source==='url'))?'<small>外链试玩情况未知</small>':''}</div><div class="stat"><dt>评论</dt><dd>${n(summary.comments)}</dd></div></dl>${works.length?`<div class="table-wrap"><table class="data-table"><thead><tr><th>作品</th><th>作品页访问</th><th>开始试玩</th><th>评论</th><th>出站点击</th></tr></thead><tbody>${data.byWork.map(w=>`<tr><td><a href="#/work/${encodeURIComponent(w.workId)}">${esc(w.name)}</a></td><td>${n(w.views)}</td><td>${n(w.source==='url'?null:w.starts)}</td><td>${n(w.comments)}</td><td>${n(w.outboundClicks)}</td></tr>`).join('')}</tbody></table></div><p class="data-note">开始试玩按收到首次游戏输入的会话计数；外链显示为 —。日期按 UTC 统计。</p>`:empty('还没有作品数据','先发布一件作品。有人打开、试玩或反馈后，记录会出现在这里。','<a class="button primary" href="#/publish">发布作品</a>')}`,'data'),number);$('#data-work')?.addEventListener('change',e=>go('/studio/data'+(e.target.value?'?work='+encodeURIComponent(e.target.value):'')));}
+async function renderMyWorks(number){const works=await readMine();applyHTML(studio(`${head('我的作品',works.length?`${works.length} 件已发布作品`:'','<a class="button primary" href="#/publish">＋ 发布作品</a>')}${works.length?works.map(w=>`<article class="work-row">${cover(w,workHref(w),false)}<div><a href="${esc(workHref(w))}"><h3>${esc(w.name)}</h3></a><p>${esc(w.desc)}</p><span class="tiny muted">${esc(w.version)} · ${w.source==='url'?'外链':'HTML'} · ${date(w.createdAt)}</span></div><div class="row-actions"><details class="work-row-more"><summary>更多</summary>${w.source==='html'?`<a href="#/studio/works/${encodeURIComponent(w.id)}/update">更新版本</a><a href="#/studio/works/${encodeURIComponent(w.id)}/versions">版本历史</a>`:''}<a href="#/studio/data?work=${encodeURIComponent(w.id)}">数据</a><a href="#/studio/feedback?work=${encodeURIComponent(w.id)}">互动</a><a href="${esc(workHref(w))}">打开作品</a></details></div></article>`).join(''):empty('发布你的第一件作品','上传一个 HTML 小游戏，或放入已经部署好的作品链接。','<a class="button primary" href="#/publish">发布作品</a>')}`,'works'),number);}
+async function renderData(r,number){const work=r.params.get('work'),[data,works]=await Promise.all([api('/api/analytics?days=7'+(work?'&work='+encodeURIComponent(work):'')),readMine()]);const row=data.byWork.find(x=>x.workId===work),summary=data.summary;applyHTML(studio(`${head('数据','最近 7 天 · 含所有版本','<button class="button small" data-action="reload">刷新</button>')}<div class="field"><label for="data-work">作品</label><select id="data-work">${'<option value="">全部作品</option>'}${works.map(w=>`<option value="${esc(w.id)}" ${work===w.id?'selected':''}>${esc(w.name)}</option>`).join('')}</select></div><dl class="stats"><div class="stat"><dt>作品页访问</dt><dd>${n(summary.views)}</dd></div><div class="stat"><dt>开始试玩</dt><dd>${n(row?.source==='url'||(!work&&data.byWork.length>0&&data.byWork.every(w=>w.source==='url'))?null:summary.starts)}</dd>${row?.source==='url'||(!work&&data.byWork.length>0&&data.byWork.every(w=>w.source==='url'))?'<small>外链试玩情况未知</small>':''}</div><div class="stat"><dt>评论</dt><dd>${n(summary.comments)}</dd></div></dl>${works.length?`<div class="table-wrap"><table class="data-table"><thead><tr><th>作品</th><th>作品页访问</th><th>开始试玩</th><th>评论</th><th>出站点击</th></tr></thead><tbody>${data.byWork.map(w=>`<tr><td><a href="#/work/${encodeURIComponent(w.workId)}">${esc(w.name)}</a></td><td>${n(w.views)}</td><td>${n(w.source==='url'?null:w.starts)}</td><td>${n(w.comments)}</td><td>${n(w.outboundClicks)}</td></tr>`).join('')}</tbody></table></div><p class="data-note">开始试玩按收到首次游戏输入的会话计数；外链显示为 —。日期按 UTC 统计。</p>`:empty('还没有作品数据','先发布一件作品。有人打开、试玩或反馈后，记录会出现在这里。','<a class="button primary" href="#/publish">发布作品</a>')}`,'data'),number);$('#data-work')?.addEventListener('change',e=>go('/studio/data'+(e.target.value?'?work='+encodeURIComponent(e.target.value):'')));}
 async function renderFeedback(r,number){
   const work=r.params.get('work')||'',legacy=r.params.get('tab')==='legacy';
   const scope=work?'&work='+encodeURIComponent(work):'';
@@ -164,7 +167,7 @@ async function renderFeedback(r,number){
   });
 }
 function openDraftDB(){return new Promise((resolve,reject)=>{if(!window.indexedDB){reject(new Error('unavailable'));return;}const req=indexedDB.open('funtrack-real-drafts',1);req.onupgradeneeded=()=>req.result.createObjectStore('files');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
-async function fileStore(action,key,value,unscoped=false){key=(unscoped?'':fileScope)+key;let db;try{db=await openDraftDB();return await new Promise((resolve,reject)=>{const tx=db.transaction('files',action==='get'?'readonly':'readwrite'),store=tx.objectStore('files');const req=action==='get'?store.get(key):action==='delete'?store.delete(key):store.put(value,key);req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}catch{return null;}finally{db?.close();}}
+async function fileStore(action,key,value,unscoped=false){key=(unscoped?'':fileScope)+key;let db;try{db=await openDraftDB();return await new Promise((resolve,reject)=>{const tx=db.transaction('files',action==='get'?'readonly':'readwrite'),store=tx.objectStore('files');const req=action==='get'?store.get(key):action==='delete'?store.delete(key):store.put(value,key);tx.oncomplete=()=>resolve(req.result);tx.onabort=()=>reject(tx.error||req.error);tx.onerror=()=>reject(tx.error||req.error);});}catch{return null;}finally{db?.close();}}
 function refreshCoverPreview(){if(coverPreview)URL.revokeObjectURL(coverPreview);coverPreview=coverFile?URL.createObjectURL(coverFile):'';}
 const buildSteps=['queued','fetching','installing','building','packaging'];
 const buildLabels={queued:'等待构建',fetching:'导入源码',installing:'安装依赖',building:'构建项目',packaging:'整理运行包',ready:'构建完成',failed:'构建失败',cancelled:'已取消'};
@@ -309,10 +312,10 @@ async function renderBuilder(r,number){
       if(cardDraft.website.trim()&&!safeExternal(cardDraft.website.trim())){form.elements.website.setCustomValidity('请填写不含账号密码的 http:// 或 https:// 网址。');form.elements.website.reportValidity();return;}
       for(const key of ['name','bio','headline','signature','website'])cardDraft[key]=cardDraft[key].trim();saveCardDraft();
       const selected=cardDraft.ids.map(id=>works.find(w=>w.id===id)),key=JSON.stringify({name:cardDraft.name,bio:cardDraft.bio,...cardProfile(cardDraft),template:cardDraft.template,works:selected});
-      if(preview?.fingerprint!==key){preview={id:'preview',authorId:me.id,name:cardDraft.name,bio:cardDraft.bio,...cardProfile(cardDraft),template:cardDraft.template,workIds:[...cardDraft.ids],works:structuredClone(selected),fingerprint:key,saveKey:uid()};write(storage.preview,preview);}go('/cards/me/preview');
+      preview=prepareCardPreview(preview,{id:'preview',authorId:me.id,name:cardDraft.name,bio:cardDraft.bio,...cardProfile(cardDraft),template:cardDraft.template,workIds:[...cardDraft.ids],works:structuredClone(selected),fingerprint:key},uid());write(storage.preview,preview);go('/cards/me/preview');
     });return;
   }
-  if(!applyHTML(cardsPage(`${head('名片预览')}${steps(2)}${cardMarkup(preview,'/cards/me/preview')}<p id="card-error" class="error" role="alert">${esc(cardError)}</p><div class="card-actions"><a class="button quiet" href="#/cards/me/template">← 返回选模板</a><button class="button primary" id="save-card" ${cardPending?'disabled':''}>${cardPending?'正在保存…':cardError?'重试保存':'保存名片'}</button></div>`,'mine'),number))return;
+  if(!applyHTML(cardsPage(`${head('名片预览')}${steps(2)}${cardMarkup(preview,'/cards/me/preview')}<p id="card-error" class="error" role="alert">${esc(cardError||(!isPinnedPreview(preview)?'这份预览来自旧版，请重新生成后保存。':''))}</p><div class="card-actions"><a class="button quiet" href="#/cards/me/template">← 返回选模板</a><button class="button primary" id="save-card" ${cardPending?'disabled':''}>${cardPending?'正在保存…':!isPinnedPreview(preview)?'重新生成预览':cardError?'重试保存':'保存名片'}</button></div>`,'mine'),number))return;
   mountCard(preview,'/cards/me/preview');$('#save-card').addEventListener('click',saveCard);
 }
 function cardMarkup(card,from,cardId=''){
@@ -337,8 +340,8 @@ function mountCard(card,key){
 }
 function initializeGallery(gallery){if(!gallery||gallery!==currentGallery||gallery.initialized||!gallery.frame.contentWindow)return;gallery.initialized=true;gallery.view=normalizeGalleryView(gallery.card,gallery.view);gallery.frame.contentWindow.postMessage({type:'funtrack:gallery:init',payload:{author:{id:gallery.card.authorId,name:gallery.card.name,bio:gallery.card.bio,...cardProfile(gallery.card)},works:gallery.card.works.map(w=>({id:w.id,name:w.name,desc:w.desc,cover:safeCover(w.coverUrl),kind:w.source==='url'?'外链作品':'网页游戏',version:w.version})),...gallery.view}},location.origin);}
 async function saveCard(){
-  if(cardPending||!preview)return;cardPending=true;cardError='';const button=$('#save-card');button.disabled=true;button.textContent='正在保存…';const saving=preview;
-  try{const {card}=await api('/api/cards',{method:'POST',headers:{'Idempotency-Key':saving.saveKey},body:{workIds:saving.workIds,template:saving.template,name:saving.name,bio:saving.bio,...cardProfile(saving)}});cardPending=false;me={...me,name:card.name,bio:card.bio,...cardProfile(card)};identity();if(route().path==='/cards/me/preview')go('/card/'+encodeURIComponent(card.id)+'?saved=1');else notify('名片已保存。');}
+  if(cardPending||!preview)return;if(!isPinnedPreview(preview)){go('/cards/me/template');return;}cardPending=true;cardError='';const button=$('#save-card');button.disabled=true;button.textContent='正在保存…';const saving=preview;
+  try{const {card}=await api('/api/cards',{method:'POST',headers:{'Idempotency-Key':saving.saveKey},body:{workIds:saving.workIds,workRefs:previewReferences(saving),template:saving.template,name:saving.name,bio:saving.bio,...cardProfile(saving)}});cardPending=false;me={...me,name:card.name,bio:card.bio,...cardProfile(card)};identity();if(route().path==='/cards/me/preview')go('/card/'+encodeURIComponent(card.id)+'?saved=1');else notify('名片已保存。');}
   catch(error){cardPending=false;cardError=error.message;if($('#save-card')){$('#save-card').disabled=false;$('#save-card').textContent='重试保存';$('#card-error').textContent=error.message;}}
 }
 async function renderCard(r,number){
@@ -388,7 +391,7 @@ function manualShare(url,title=''){
 async function copyLink(url){try{await navigator.clipboard.writeText(url);notify('链接已复制。');return true;}catch{manualShare(url);return false;}}
 function shareLink(title,url){return manualShare(url,title);}
 
-function postAction(type,fields){const item={eventId:uid(),type,...fields};actionQueue.set(item.eventId,{body:item,attempts:0,timer:null});flushAction(item.eventId);}
+function postAction(type,fields){const item=frozenAction(uid(),type,fields);actionQueue.set(item.eventId,{body:item,attempts:0,timer:null});flushAction(item.eventId);}
 async function flushAction(id){const item=actionQueue.get(id);if(!item||item.sending)return;item.sending=true;try{const result=await api('/api/events',{method:'POST',body:item.body,keepalive:true});if(result.receipt?.clientEventId===id||result.duplicate)actionQueue.delete(id);else throw new Error('Missing receipt');}catch(error){if([400,403,404,422].includes(error.status)){actionQueue.delete(id);return;}item.attempts++;clearTimeout(item.timer);item.timer=setTimeout(()=>flushAction(id),Math.min(30000,700*2**Math.min(item.attempts,6)));}finally{item.sending=false;}}
 
 function makeQueue(session){const queue={id:session.id,token:session.token,pending:[],sending:false,timer:null,seq:0,attempts:0,startedAt:performance.now(),expiresAt:Date.parse(session.expiresAt)||Date.now()+3600000};sessionQueues.add(queue);return queue;}
@@ -413,7 +416,7 @@ async function startGame(work){
     const gameUrl=new URL(session.gameUrl,location.origin);if(gameUrl.origin!==location.origin)throw new Error('作品地址不正确，请重试。');
     const bridge=uid();gameUrl.hash='bridge='+encodeURIComponent(bridge);
     const area=$('#play-area'),coverHTML=previousCover||area.innerHTML;
-    area.innerHTML=`<section class="game-shell"><div class="game-tools"><span>${esc(work.name)}</span><button class="button quiet small" id="exit-game">退出试玩</button></div><iframe id="game-frame" class="game-frame" sandbox="allow-scripts" referrerpolicy="no-referrer" title="${esc(work.name)}"></iframe><div id="game-result" class="game-result" hidden></div></section>`;
+    area.innerHTML=`<section class="game-shell"><div class="game-tools"><span>${esc(work.name)} · ${esc(work.version)}</span><button class="button quiet small" id="exit-game">退出试玩</button></div><iframe id="game-frame" class="game-frame" sandbox="allow-scripts" referrerpolicy="no-referrer" title="${esc(work.name)}"></iframe><div id="game-result" class="game-result" hidden></div></section>`;
     const frame=$('#game-frame');activeSession={...session,queue,bridge,frame,work,started:false,completed:false,ended:false,coverHTML};frame.src=gameUrl.href;
     $('#exit-game').addEventListener('click',()=>restoreGameCover(work,coverHTML));
     buttons.filter(b=>b.isConnected).forEach(b=>{b.hidden=true;});
