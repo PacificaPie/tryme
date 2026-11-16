@@ -1,7 +1,9 @@
-import { sqliteTable, text, integer, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, index, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core';
 
 export const profiles = sqliteTable('ft_profiles', {
   id: text('id').primaryKey(), name: text('name').notNull(), bio: text('bio').notNull().default(''),
+  signature: text('signature').notNull().default(''), headline: text('headline').notNull().default(''),
+  website: text('website').notNull().default(''), backStyle: text('back_style').notNull().default('ink'),
 });
 export const works = sqliteTable('ft_works', {
   id: text('id').primaryKey(), authorId: text('author_id').notNull(), authorName: text('author_name').notNull(),
@@ -9,6 +11,9 @@ export const works = sqliteTable('ft_works', {
   currentVersionId: text('current_version_id').notNull(), url: text('url'), createdAt: text('created_at').notNull(),
   idempotencyKey: text('idempotency_key').notNull(), requestHash: text('request_hash').notNull(),
 }, t => [uniqueIndex('ft_works_owner_key').on(t.authorId, t.idempotencyKey), index('ft_works_owner_created').on(t.authorId,t.createdAt)]);
+export const workLikes = sqliteTable('ft_work_likes', {
+  workId: text('work_id').notNull().references(()=>works.id), actorId: text('actor_id').notNull(), createdAt: text('created_at').notNull(),
+}, t => [primaryKey({columns:[t.workId,t.actorId]})]);
 export const versions = sqliteTable('ft_work_versions', {
   id: text('id').primaryKey(), workId: text('work_id').notNull().references(()=>works.id), version: text('version').notNull(),
   gameKey: text('game_key'), coverKey: text('cover_key'), coverMime: text('cover_mime'), createdAt: text('created_at').notNull(),

@@ -2,13 +2,15 @@
 
 All endpoints require Sites-injected `oai-authenticated-user-id` and `oai-authenticated-user-email`; missing identity returns 401. No production mock identity is accepted. Local tests must explicitly supply these headers. Every POST also requires an exact same-origin `Origin` (never `null`) and `X-Funtrack-CSRF: 1`. Browser requests use same-origin credentials. Errors are JSON `{error:{code,message}}`, with 400/401/403/404/409/413/415/422/429/503 as appropriate. Responses are `Cache-Control: no-store` unless an immutable media response states otherwise.
 
-`Work = {id,authorId,authorName,name,desc,source:'html'|'url',versionId,version,coverUrl,url?,createdAt}`. IDs are opaque strings. `version` initially is `v1`. Missing cover is `coverUrl:''`. HTML launch is `/game/:versionId`, obtained when creating a session. Existing URL works never report inferred gameplay starts.
+`Work = {id,authorId,authorName,name,desc,source:'html'|'url',versionId,version,coverUrl,url?,createdAt}`. GET work list/detail additionally include live `likesCount:number, likedByMe:boolean`. These live fields are not frozen in `Card.works` snapshots. IDs are opaque strings. `version` initially is `v1`. Missing cover is `coverUrl:''`. HTML launch is `/game/:versionId`, obtained when creating a session. Existing URL works never report inferred gameplay starts.
 
 | Method / path | Request | Response |
 | --- | --- | --- |
-| GET `/api/me` | — | `{user:{id,name,bio}}` |
+| GET `/api/me` | — | `{user:{id,name,bio,signature,headline,website,backStyle}}` |
 | GET `/api/works` | optional `mine=1` | `{works:Work[]}`; bounded newest first |
 | GET `/api/works/:id` | — | `{work:Work}` |
+| GET `/api/works/:id/like` | — | `{workId,liked:boolean,likesCount:number}` for the requesting user |
+| POST `/api/works/:id/like` | `{liked:boolean}` (strict boolean; explicit set, never toggle) | `{workId,liked:boolean,likesCount:number}` from the database transaction |
 | POST `/api/works` | multipart `name` (1–80), `desc` (1–500), `source` (`html` or `url`), `file` (HTML only), optional `cover`, `url` (URL only); required `Idempotency-Key` of 8–128 URL-safe ASCII characters | 201 `{work}`; same completed key/body returns 200 `{work}`; reused key with different content returns 409 |
 | GET `/media/:versionId` or `/api/media/:versionId` | — | Version's cover bytes or 404 |
 | GET `/game/:versionId` | — | Isolated uploaded HTML, or 404; version must be HTML |
@@ -20,9 +22,11 @@ All endpoints require Sites-injected `oai-authenticated-user-id` and `oai-authen
 | GET `/api/analytics` | `days=7` (1–30), optional `work=workId` | `{summary:{views,starts,ends,feedback,cardViews,outboundClicks},byWork:[{workId,name,versionId,source,views,starts,ends,feedback,outboundClicks}],byDay:[{date,views,starts}],receipts:[{id,type,workId?,cardId?,receivedAt}]}` |
 | GET `/api/cards` | — | `{cards:Card[]}`; latest published snapshot per author |
 | GET `/api/cards/:id` | `id=me` resolves current user's latest snapshot | `{card}` or 404 |
-| POST `/api/cards` | `{workIds,template:'fold'|'wall',name,bio}`; 1–30 distinct owned works; name 1–80, bio ≤500; optional `Idempotency-Key` | 201 `{card}`; same key/body returns 200; changed body 409 |
+| POST `/api/cards` | `{workIds,template:'fold'|'wall',name,bio,signature?,headline?,website?,backStyle?}`; 1–30 distinct owned works; name 1–80, bio ≤500; optional `Idempotency-Key` | 201 `{card}`; same key/body returns 200; changed body 409 |
 
-`Card = {id,authorId,name,bio,template,workIds,works:Work[],createdAt}`. Publishing appends an immutable snapshot; generating/changing a client draft has no server effect. Only owned works may be included. No AI calls occur.
+`Card = {id,authorId,name,bio,signature,headline,website,backStyle,template,workIds,works:Work[],createdAt}`. All details are flat fields supplied by the author: `signature` ≤80 characters, `headline` ≤120, `website` empty or an HTTP(S) URL without credentials ≤2000, `backStyle` one of `ink|ivory|cobalt`. Omitted details default to empty strings and `ink`. Publishing appends an immutable snapshot and updates the current author's profile in the same transaction; generating/changing a client draft has no server effect. Only owned works may be included. Old snapshot JSON is never rewritten or populated from a newer profile; read responses supply only empty/ink compatibility defaults. Existing default-detail idempotency keys remain replayable across the upgrade. No AI calls occur.
+
+Work likes store at most one row per authenticated user and work. Repeating `liked:true` cannot add a second like; repeating `liked:false` cannot decrement another user's like. No actor ID is accepted from the body. The returned count is the current stored total, not a client increment; it is separate from feedback of type `喜欢`. Clients serialize changes for the same work and use the acknowledged response (or re-fetch after an uncertain request), rather than issuing old and new intent concurrently. Concurrent distinct commands resolve in database execution order. Card snapshots use the standalone GET like endpoint for current social state; the snapshot itself stays immutable. This release does not add card likes, payments, or billing.
 
 Write receipts and session `accepted` items additionally include `clientEventId`, matching the input event ID for client queue acknowledgement. Their `id` is the durable server record ID; `duplicates` contains the client event IDs. Clients must clear pending events using `clientEventId`, not the server ID.
 

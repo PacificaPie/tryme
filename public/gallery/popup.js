@@ -12,7 +12,7 @@ SP.createPopup=function(core,paper,onChange){
   var disposed=false,images=[],targets=[];
   /* Selected project covers are images, never simulated running games. */
   var works=PR.WORKS.map(function(w){
-    var o={w:w,tex:paper.tex(PR.placeholder(w)),mats:[]};
+    var o={w:w,tex:paper.tex(PR.placeholder(w)),mats:[],coverCanvas:null};
     if(w.cover){
       var im=new Image();images.push(im);im.decoding='async';
       im.onload=function(){
@@ -21,8 +21,9 @@ SP.createPopup=function(core,paper,onChange){
         var cover=document.createElement('canvas');cover.width=1024;cover.height=640;
         var ctx=cover.getContext('2d'),iw=im.naturalWidth||1024,ih=im.naturalHeight||640,scale=Math.max(1024/iw,640/ih);
         ctx.fillStyle='#EEEAE1';ctx.fillRect(0,0,1024,640);ctx.drawImage(im,(1024-iw*scale)/2,(640-ih*scale)/2,iw*scale,ih*scale);
-        var tx=paper.tex(cover);tx.needsUpdate=true;
+        o.coverCanvas=cover;var tx=paper.tex(cover);tx.needsUpdate=true;
         var old=o.tex;o.tex=tx;o.mats.forEach(function(m){m.uniforms.tMap.value=tx;});old.dispose();
+        if(works[0]===o&&bodyMat){var nextBack=paper.tex(PR.back(me,512,cover));bodyMat.uniforms.tB.value=nextBack;backTex.dispose();backTex=nextBack;}
         if(onChange)onChange();
       };
       im.onerror=function(){if(!disposed&&onChange)onChange();};im.src=w.cover;
@@ -35,9 +36,9 @@ SP.createPopup=function(core,paper,onChange){
   s.moveTo(-w2+RAD,-h2);s.lineTo(w2-RAD,-h2);s.quadraticCurveTo(w2,-h2,w2,-h2+RAD);s.lineTo(w2,h2-RAD);s.quadraticCurveTo(w2,h2,w2-RAD,h2);
   s.lineTo(-w2+RAD,h2);s.quadraticCurveTo(-w2,h2,-w2,h2-RAD);s.lineTo(-w2,-h2+RAD);s.quadraticCurveTo(-w2,-h2,-w2+RAD,-h2);
   var bodyGeo=new T.ExtrudeGeometry(s,{depth:TC,bevelEnabled:false,curveSegments:12});bodyGeo.translate(0,0,-TC);
-  var me=PR.PEOPLE[0],frontTex=paper.tex(PR.front(me,512,null,PR.caps())),backTex=paper.tex(PR.back(me,342));
+  var me=PR.PEOPLE[0],frontTex=paper.tex(PR.front(me,512,null,PR.caps())),backTex=paper.tex(PR.back(me,512));
   var STIP=256,stipR=new T.Vector4(-FX/W+0.5,Y0/H+0.5,FX/W+0.5,(Y1+t)/H+0.5);
-  var bodyMat=paper.board({tA:frontTex,tB:backTex,sheenA:0.11,sheenB:0.11,stipA:STIP,stipB:STIP});
+  var bodyMat=paper.board({tA:frontTex,tB:backTex,sheenA:0.11,sheenB:0.05,stipA:STIP,stipB:0});
   bodyMat.uniforms.uMA.value.set(1/W,0,0,1/H);bodyMat.uniforms.uOA.value.set(0.5,0.5);
   bodyMat.uniforms.uMB.value.set(-1/W,0,0,1/H);bodyMat.uniforms.uOB.value.set(0.5,0.5);bodyMat.uniforms.uStipR.value=stipR;
   var body=new T.Mesh(bodyGeo,bodyMat);body.castShadow=true;root.add(body);
@@ -76,7 +77,7 @@ SP.createPopup=function(core,paper,onChange){
   PR.HANG.forEach(function(a,i){
     var pn=a.wall==='L'?PL:a.wall==='R'?PRt:PB,w=a.w,h=w*0.625,b=0.012,dep=0.03;
     var g=new T.Group();g.position.set(-a.s,a.v,0);g.rotation.y=PI;pn.leaf.add(g);
-    var fr=new T.Mesh(new T.BoxGeometry(w+2*b,h+2*b,dep),inkMat);fr.position.z=dep/2;fr.castShadow=true;g.add(fr);
+    var fr=new T.Mesh(new T.BoxGeometry(w+2*b,h+2*b,dep),inkMat);fr.position.z=dep/2;fr.castShadow=true;fr.userData.workId=works[i].w.id;g.add(fr);
     var m=paper.art(works[i].tex);works[i].mats.push(m);
     var im=new T.Mesh(new T.PlaneGeometry(w,h),m);im.position.z=dep+0.0015;im.userData.workId=works[i].w.id;g.add(im);targets.push(im);
     arts.push({g:g,mat:m});
