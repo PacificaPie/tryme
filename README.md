@@ -74,7 +74,7 @@ This is frontend flow verification, not production authentication, analytics acc
 
 ## Card-in-gallery integration
 
-`dist/gallery/` adapts the original 卡中展厅 demo. It receives a same-origin, selected-work snapshot from the card builder. Each work carries its ID, name, description, cover reference and version. The original unrelated sample works, people, invented statistics, card ring and promotional timeline are removed. Salt Run uses the supplied demo image; Orbit and 纸上花园 reuse the existing prototype SVG covers. Missing media stays a placeholder.
+`dist/gallery/` adapts the original 卡中展厅 demo. It receives a same-origin, selected-work snapshot from the card builder. Each work carries its ID, name, description, cover reference and version. The original unrelated sample works, people, invented statistics, card ring and promotional timeline are removed. Salt Run uses the supplied demo image; Orbit and 纸上花园 reuse the existing prototype SVG covers. Missing media stays a placeholder. Three selected works use one lead cover above two supporting covers; the first work also anchors the back wall of the gallery.
 
 The initial view is a stable closed card. The visitor controls unfold/fold and front/back. Direct gallery clicks and equivalent HTML work buttons lead to the corresponding work route. Returning restores gallery state. Reduced-motion requests skip transitions; non-WebGL browsers retain ordinary work navigation. This same-origin frame is a trusted renderer, not a security boundary for uploaded game code.
 

@@ -148,7 +148,8 @@ SP.configurePrints=function(author,works,total,offset){
   PEOPLE=[{n:author.name,g:author.name.slice(-1)||'作',h:author.bio||'',no:hash%9999,w:total,bio:author.bio||''}];
   var count=WORKS.length,cols=count===1?1:count<=4?2:3,rows=Math.ceil(count/cols),cw=2.45/cols,rh=2.22/rows;
   SLOTS=WORKS.map(function(w,i){var width=Math.min(1.56,cw-.1),height=Math.min(width*.625,rh-.20);return{x:((i%cols)-(cols-1)/2)*cw,y:1.70-Math.floor(i/cols)*rh-height/2,w:width,h:height};});
-  var wallNames=count<=2?WORKS.map(function(){return'B';}):WORKS.map(function(w,i){return['L','B','R'][i%3];});
+  if(count===3)SLOTS=[{x:0,y:1.075,w:2.45,h:1.25},{x:-.65,y:-.10,w:1.15,h:.60},{x:.65,y:-.10,w:1.15,h:.60}];
+  var wallNames=count<=2?WORKS.map(function(){return'B';}):WORKS.map(function(w,i){return['B','L','R'][i%3];});
   HANG=WORKS.map(function(w,i){var wall=wallNames[i],ids=wallNames.map(function(v,j){return v===wall?j:-1;}).filter(function(v){return v>=0;}),position=ids.indexOf(i),span=wall==='B'?2.25:2.08,width=Math.min(count===1?1.4:.95,span/ids.length-.12);return{wall:wall,s:(position+.5)*span/ids.length-span/2,v:.57,w:width};});
   SP.prints={W:W,H:H,FX:FX,Y0:Y0,Y1:Y1,WORKS:WORKS,HANG:HANG,SLOTS:SLOTS,PEOPLE:PEOPLE,front:front,back:back,wall:wall,floorPrint:floorPrint,backOut:backOut,BENCH:BENCH,FIGS:FIGS,placeholder:placeholder,caps:function(){return WORKS.map(function(w){return w.t;});}};
   return SP.prints;

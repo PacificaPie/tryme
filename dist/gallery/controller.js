@@ -127,7 +127,7 @@ function draw(){
   var closedD=Math.max(3/(.72*2*th*asp),4.6/(.82*2*th));
   var openD=Math.max(4.0/(.84*2*th*asp),3.15/(.78*2*th))*1.32;
   var target=new T.Vector3(0,U.lerp(2.8,.24,blend),U.lerp(0,-.35,blend));
-  var az=(-.40+yaw)*blend,el=U.lerp(.015,.55,blend),d=U.lerp(closedD,openD,blend);
+  var az=(-.10+yaw)*blend,el=U.lerp(.015,.55,blend),d=U.lerp(closedD,openD,blend);
   core.camera.position.set(target.x+d*Math.sin(az)*Math.cos(el),target.y+d*Math.sin(el),target.z+d*Math.cos(az)*Math.cos(el));core.camera.lookAt(target);
   paper.aim(new T.Vector3(0,U.lerp(.3,1.6,stand),-.2),3.7);
   core.shared.uTime.value=0;core.scene.updateMatrixWorld(true);
