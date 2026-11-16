@@ -1,85 +1,82 @@
-# Funtrack prototype
+# Funtrack
 
-A frontend prototype for discovering games, playing and leaving feedback, publishing a linked work, and generating an expandable creator card.
+发现作品、上传并试玩小游戏、留下反馈，以及用自己的作品制作可分享名片。当前应用入口是 `/site.html#/`，已经连接服务端 API、D1 和 R2；`/wireframe.html` 及早期前端演示仅保留作设计参考，其中的身份和统计不属于当前应用数据。
 
-## Structure review wireframe
+## 本地运行
 
-Run the local server and visit `/wireframe.html`; the embedded 3D gallery requires an HTTP(S) origin. This standalone HTML file is the current planning artifact; the earlier prototype at `/` is retained for comparison.
+需要 Node.js ≥22.13。首次安装、构建并初始化本地数据库：
 
-The default page is a clickable architecture board. Its three product destinations are work discovery, public creator cards, and the creator center. The center has an overview with a visible personal card, works, analytics, feedback, and a card builder. Cards follow **select works → choose template → generate → optionally publish**. The reviewer toolbar can switch between an established creator, a new creator, and a signed-out visitor.
+```sh
+npm install
+npm run build
+node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_dapper_pet_avengers.sql
+```
 
-### Iteration: content, templates, and cost
+这条初始迁移只对新的本地数据库执行一次；已有表时不要重复执行。随后启动开发预览：
 
-- Discovery puts covers, titles, authors, search, and three content filters together. Search/filter state survives opening a work and returning. The creator's works use the same visual identity, with per-work statistics and links to data/feedback.
-- Card creation reuses existing author and work records. Selected works can be reordered. Four layouts adapt the original demo directions: 白墙画展, 卡中展厅, 一镜展廊, 作品星球. 卡中展厅 now embeds the original Three.js paper geometry and shader treatment with manual folding and current selected work data. The other three remain HTML wireframe adaptations. The planet layout explicitly uses its flat view above six works.
-- Generation creates a snapshot of the selected works, their versions, and the template. Changing the draft does not change the published snapshot. Repeating the same generation reuses its result. Fold/flat viewing state and gallery face survive work navigation; gallery routes also restore page scroll. Covers are included in snapshot identity.
-- `/wireframe.html#/costs` is an internal planning calculator, outside the product flow. The generation receipt records actual local configuration size, assembly time, cache reuse, and zero model calls. Assembly time excludes painting and is not a cloud latency measurement. The calculator sends no requests and is not connected to billing.
+```sh
+npm run dev -- --hostname 127.0.0.1 --port 8766
+```
 
-Research references: [Pinterest discovery](https://help.pinterest.com/en/article/discover-ideas-on-pinterest), [Creator Hub](https://help.pinterest.com/en/business/article/use-the-creator-hub), and [individual Pin stats](https://help.pinterest.com/en/business/article/pin-stats) support a discovery → creator overview → individual-content analysis hierarchy. [Xiaohongshu's official course](https://school.xiaohongshu.com/lesson/normal/af0fe7e97bb0433fac9da5d1df52b07f?fromPage=LessonList&viewSource=LESSON) was available through indexed content about recent data and individual notes; the current authenticated creator dashboard was not visually inspected. Funtrack's specific layout is a design decision, not a claim to reproduce either product.
+打开 `http://127.0.0.1:8766/site.html#/`。本地便携开发模式的登录入口 `/signin-with-chatgpt?return_to=/site.html` 使用测试身份；它不验证生产 ChatGPT 登录。生产身份由 Sites 注入，当前功能均要求登录，分享链接的访问范围仍受站点 audience 限制。
 
-Cost assumptions checked on 2026-11-16: pure client-side template composition has no model cost. Optional short-text cleanup uses [GPT-6 Luna Standard](https://developers.openai.com/api/docs/models/gpt-6-luna) at $0.10/M input and $0.50/M output tokens. At 2,000 input and 500 total billed output tokens, a 10% extra-call allowance gives $0.000495 per new request or $0.495 per 1,000 requests. This is an unbenchmarked usage/quality scenario, not a measured production cost. Long-context price multipliers and model capacity limits are accounted for.
+本地 D1/R2 状态保存在 `.wrangler/state`；它不代表云端数据。`.openai/hosting.json` 声明 `DB`、`BUCKET` 绑定，生产资源与持久化仍需部署后验收。
 
-The separate cloud scenario uses [R2 Standard](https://developers.cloudflare.com/r2/pricing/) with adjustable remaining account-level free allowance and rounded billing units, and [Workers](https://developers.cloudflare.com/workers/platform/pricing/) Free or Paid. Paid includes the shared $5/month base fee. The Free scenario rejects monthly dynamic requests above the maximum of 30 daily allowances; lower monthly volume still does not prove compliance with daily limits. Existing game hosting, authentication, analytics, support, payments, taxes, new image/video generation, and server-side image exports are excluded. Shared fees must not be counted once per card.
+## 当前功能与限制
 
-This iteration was checked with browser walkthroughs for zero-selection blocking, ordering, template switching, result/publication isolation, fold-state return, login cancellation/resumption, new-creator back navigation, search-return state, and narrow layouts. Separate read-only state and formula checks covered four template variants, direct-route startup, snapshot invalidation, cache reuse, calculator defaults, remaining-quota rounding, long-context pricing, and invalid-capacity states.
+- **发布：** 自包含 UTF-8 `.html` / `.htm`，最多 1 MiB；可选 PNG/JPEG/WebP 封面，最多 2 MiB。脚本、样式和图片应内联，外部脚本、网络 API、字体、多文件与 ZIP 游戏包不在支持范围。也可发布 HTTP(S) 外链。
+- **试玩：** 上传 HTML 由 `/game/:versionId` 返回，响应本身强制 CSP sandbox，嵌入 iframe 也不允许 `allow-same-origin`。可信的 Three.js 名片展厅使用另一套同源消息协议。
+- **反馈与数据：** 发布、反馈和事件保存在 D1，游戏文件及封面保存在 R2。创作者只能查询自己作品的统计和收件箱；草稿与尚未发送的内容另保存在当前浏览器。
+- **名片：** 从 1–30 件自己的作品选择、排序并预览，提供白墙画展和卡中展厅。保存会追加不可变快照，包含作品版本及封面引用；修改草稿或保存另一张名片不会改动旧链接。没有 AI 请求，也没有作品编辑、删除或替换版本接口。
 
-All wireframe statistics, identities, game regions, and submissions are illustrative. State lasts only until refresh or a scenario reset. No external game, authentication service, analytics service, or AI generation is called. External-link-only works show unknown gameplay starts as `—`. Outgoing feedback on another author's work does not enter the current creator's inbox.
+`examples/` 和 `/examples/` 提供三个明确标注为本地测试作品的单文件游戏及封面。最快验收使用 `tiles.html` + `tiles.png`：开始后依次点击左上、正中、右下，三步终局为 1000 分。完整操作见 [示例说明](examples/README.md)。ZIP 仅用于下载，上传时仍选择单个 HTML。
 
-Wireframe validation: inline JavaScript syntax checked; browser walkthroughs covered login cancellation/resumption, back navigation during login, required publish fields, retained form inputs after back/forward, publication into the work list and card draft, card preview/publication, gallery-to-work return, and 390px creator/data layouts without document overflow. A separate state review checked author identity, incoming/outgoing feedback, retry from the feedback shortcut, and fixed overview chart semantics. These are prototype flow checks, not backend or usability validation.
+## 数据含义
 
-## Run
+统计使用已入库记录和服务端接收时间，日期按 UTC 分桶。作品页访问不是独立访客数；“开始试玩”表示收到 `play_start` 的会话数。正常 SDK 在首次可信输入时上报开始，游戏调用 `window.funtrack.complete({score,label})` 上报终局，退出只记 `session_end`。完成事件不等于通关，后台停留也不自动记为完成。
 
-`npm run dev` serves `dist/` at http://127.0.0.1:8766. No install or build is needed. `npm run check` checks JavaScript syntax. `npm test` runs the state/storage tests.
+这些都是**客户端上报事件**，不能证明真人、认真试玩或无作弊。上传的游戏可自行发送消息，来源检查和入库回执不是防作弊认证。事件在页面存活期间重试并由数据库去重；关页使用 `keepalive` 尽力送达，内存队列不会保证断网关页后的补报。
 
-## Scope
+外链只记录作品页访问及出站点击；试玩次数保持未知，界面显示 `—`。不据此推断外部游戏开始或完成。
 
-- Three bundled, playable examples: Salt Run, Orbit, and a 3×3 light puzzle. Their authors are illustrative.
-- A local demo identity, not production authentication. No password, email, account registration, or identity provider.
-- Works, compressed covers, draft inputs, feedback and creator profile are stored under `funtrack.prototype.v1` in this browser's localStorage. They are not shared across browsers or devices.
-- New works are HTTP(S) links. Clicking opens the original site; it does not deploy or instrument its code. External clicks are not labeled as completed plays.
-- Cards are deterministic HTML/CSS templates using confirmed profile/works data. No AI request, billing, or game-source analysis.
-- The site shell has no remote font requests, third-party analytics or tracking. The embedded gallery vendors Three.js r128 locally under its MIT license.
+## 验证状态
 
-## Structure
+截至 2026-11-16：
 
-- `dist/app.js`: hash routes, native forms/dialog, UI state and action handlers.
-- `dist/store.js`: storage boundary, URL validation, transactional publish and escaping.
-- `dist/games.js`: isolated canvas examples; every mount returns a cleanup function.
-- `dist/style.css`, `dist/refinements.css`: design system, layouts, responsive and reduced-motion rules.
-- `dist/assets/`: local SVG artwork.
+| 层级 | 已有证据 / 尚待验证 |
+| --- | --- |
+| 本地 API | Miniflare 的真实本地 D1/R2 集成检查通过 10 项：上传与重试、失败不发布、隔离响应、事件去重、会话及数据所有权、反馈、不可变名片、统计、外链未知。运行报告在 `.preview/local-api-integration.json`。 |
+| 示例游戏 | 自动检查覆盖自包含文件、大小、键盘/点击终局、单次完成、手动结束、隐藏暂停及资源清理；不是浏览器实测。 |
+| 当前应用本地浏览器 | 已实际上传 tiles HTML + PNG，刷新后仍可读取；三步完成 1000 分并发送反馈；重玩未输入即退出后，数据页开始/反馈/访问各为 1；fold 名片生成、保存、展开 3D 及图片内容正常。 |
+| 生产 | Sites 登录、D1/R2 绑定与迁移、跨浏览器持久化、部署后隔离及 audience 均待实际验收；本地通过不等于已上线验证。 |
 
-Routes: `/discover`, `/work/:id`, `/publish`, `/published/:id`, `/works`, `/card/:authorId`, `/card/me?edit=1` (prefixed by `#`). Browser back/forward and direct route refresh are supported.
+本轮最新构建、11 项自动测试及 10 项 API 集成检查通过。当前浏览器证据来自本地测试身份；跨浏览器、真机表现及生产身份尚未验证。旧 wireframe 的检查不自动继承为当前版本证据。
 
-The primary actions are opening a game, beginning/ending a play session, submitting feedback, publishing a work and generating/opening a card. Additional actions use overflow menus. Controls use native form semantics, names, labels and links. Hidden faces of the card are inert and absent from the accessibility tree.
+常规检查：
 
-## Implementation boundary for a backend
+```sh
+npm run check
+npm test
+node examples/verify.mjs
+```
 
-Replace the demo identity and storage adapter first. Preserve separate work/version, feedback and profile records. Add a persistent media service for covers. Game analytics and hosted user code are separate capabilities; they are not required to render a creator card. Do not promote client-reported events to verified usage automatically.
+重跑 API 集成检查时，先重新构建，在一个终端启动编译后的本地 Worker，再于另一个终端运行测试：
 
-## Validation, 2026-11-16
+```sh
+npm run build
+npm start -- --port 8767
+```
 
-Five automated state tests cover unsafe links, identity gating, publication/draft transitions, replayed draft identity, storage failure/reload recovery and HTML escaping. Browser checks covered:
+```sh
+FUNTRACK_TEST_URL=http://127.0.0.1:8767 node tests/integration/api.mjs
+```
 
-- Nine-grid game completed with keyboard input; feedback form appeared.
-- Runner accepted jump input and reached a collision result; Orbit mounted and accepted keyboard interaction.
-- Guest feedback: cancel login preserved text and focus; login continued submission once.
-- Back navigation during the login dialog closed it without executing the stale submission.
-- Empty publish validation, typing a draft, returning, browser forward and refresh preserved fields.
-- JPEG cover selection, cancelled login and resumed publication produced one work.
-- Card generation, open/close, work entry, return, profile editing and work listing.
-- Mobile account menu/card at 390 CSS pixels, with no document horizontal overflow.
-- Skip-to-content retained the active route.
+该脚本仅允许 loopback 地址，为隔离的测试身份创建本地记录，并直接发送事件验证持久化与去重；它不模拟真人浏览器输入，也不应对生产环境运行。
 
-This is frontend flow verification, not production authentication, analytics accuracy, cross-device syncing, a performance benchmark, or a usability study.
+## 代码与契约
 
-## Card-in-gallery integration
-
-`dist/gallery/` adapts the original 卡中展厅 demo. It receives a same-origin, selected-work snapshot from the card builder. Each work carries its ID, name, description, cover reference and version. The original unrelated sample works, people, invented statistics, card ring and promotional timeline are removed. Salt Run uses the supplied demo image; Orbit and 纸上花园 reuse the existing prototype SVG covers. Missing media stays a placeholder. Three selected works use one lead cover above two supporting covers; the first work also anchors the back wall of the gallery.
-
-The initial view is a stable closed card. The visitor controls unfold/fold and front/back. Direct gallery clicks and equivalent HTML work buttons lead to the corresponding work route. Returning restores gallery state. Reduced-motion requests skip transitions; non-WebGL browsers retain ordinary work navigation. This same-origin frame is a trusted renderer, not a security boundary for uploaded game code.
-
-Generation still performs no model calls. Shared renderer files and existing covers are referenced, not duplicated per card. The generation receipt measures data assembly only; WebGL rendering happens on the visitor's device. Arbitrary hosted games, source understanding, authentication and server-side analytics are not implemented by this integration.
-
-Integration validation: browser checks covered three-work and single-work generation, front/back, manual unfold, a direct raycast click on Orbit, HTML work links, work/feedback/browser-back return, and local publication. Viewports 390px and 360px showed no document overflow; SVG cover upload to WebGL was corrected through CanvasTexture. The actual Three.js model also passed geometry/disposal checks across 1–9 works, plus a 12-work pagination/state restoration check. Browser checks are not real-device performance measurements.
-
-`dist/play/` is a separately prepared local-game harness for the next real-event iteration. It mounts the existing three playable demos only after a user starts a session. Its events are client reports; no remote event store is connected yet. The current wireframe game stage remains explicitly illustrative. See `docs/real-data-plan.md` for the planned durable data boundary.
+- `public/site.html`、`public/site.js`：当前应用、表单、名片与事件队列。
+- `app/api/`、`app/game/`、`app/media/`：API 和隔离资源响应。
+- `lib/funtrack/`：授权、输入约束、存储与统计；`db/schema.ts`、`drizzle/`：D1 表与迁移。
+- `public/gallery/`：复用本地 Three.js 的可信名片渲染器；不执行上传游戏代码。
+- [API 契约](docs/api-contract.md) · [真实数据实现与剩余验收](docs/real-data-plan.md)。

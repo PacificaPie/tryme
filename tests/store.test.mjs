@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createStore,initialState,publishDraft,validURL,escapeHTML,STORAGE_KEY} from '../dist/store.js';
+import {createStore,initialState,publishDraft,validURL,escapeHTML,STORAGE_KEY} from '../public/store.js';
 const ready=()=>({...initialState(),signedIn:true,profile:{id:'local-creator',name:'测试者',bio:''},draft:{id:'draft-1',title:' 小游戏 ',url:'https://example.com/game',description:' 点击方块 ',cover:''}});
 test('publish validates identity and rejects executable links',()=>{
  const s=ready();assert.throws(()=>publishDraft({...s,signedIn:false}));

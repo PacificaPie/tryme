@@ -20,5 +20,5 @@ function checkDirectory(directory) {
     }
   }
 }
-checkDirectory('dist');
+checkDirectory('public');
 console.log('Application scripts and inline HTML scripts parsed successfully.');
