@@ -1,6 +1,6 @@
 # Automatic opening-screen covers
 
-Implemented locally on 2026-11-17. Cloud rendering, the actual image and cloud billing behavior still require staging acceptance. No remote migration or deployment was performed by this implementation task.
+Implemented and accepted on staging on 2026-11-17. Migration 0011 is applied and deployment `13c9a469` runs the cloud scheduler and Browser Run binding. Existing-work generation and new publication without a cover both produced real images. Provider billing remains separate from the platform task-duration record.
 
 ## Behavior
 
@@ -66,4 +66,13 @@ Migration: `drizzle/0011_automatic_work_covers.sql`. It adds task and attempt ta
 
 Local tests use the real HTTP router, SQLite transactions and an R2 fixture; the remote browser client is injected. `node --test tests/auto-cover.test.mjs` verifies immutable history, ownership, current-version validation, manual-cover races, restored-work retry, atomic global budgets, interrupted/failed work, lost commit receipts, byte limits, absent binding/migration, no event writes and capture isolation/deadlines. `npm run check` checks scripts and TypeScript.
 
-Staging acceptance still required: generate a cover for an existing uncovered hosted Snake, publish a second uncovered HTML, view both actual JPEGs, confirm the new metadata revision, inspect old card/version/media URLs, confirm no increase in play sessions/events, and inspect Browser Run close reason and duration. Do not report these as passed based on mocked browser tests.
+### Staging acceptance
+
+- Existing uncovered Snake (`f76d712f-9eb8-4ba8-986f-4ce01aea58bc`) generated a real opening-screen JPEG after the owner requested it. New self-contained Prism HTML (`c2bcc979-f816-41fc-9909-d905f9368e1d`) was published without selecting a cover, then received its automatic JPEG. Both actual images and ready states were inspected in Chrome.
+- Both tasks succeeded on the first attempt. Platform elapsed times were 3488 ms and 1710 ms; each reserved 90 seconds. These measurements include platform task work and are not Cloudflare billing durations.
+- Both works gained a metadata revision (1 → 2) with unchanged game-version IDs. Prism was then recoverably archived (revision 3). Old versions remain present; the three existing saved-card snapshot hashes exactly match the baseline.
+- All 32 play sessions and all six event-type counts were unchanged across the two captures. No game input or normal player route was used for capture.
+- Cron was created at 06:07:49 UTC; its first observed successful execution was about 06:13:43. This is consistent with documented new-trigger propagation delay, not local processing. No manual job invocation was used.
+- Browser Run's official GraphQL close events confirmed `NormalClosure` for both sessions: Snake 06:13:44.481 → 06:13:46.454 UTC (1973 ms), Prism 06:14:44.029 → 06:14:45.020 UTC (991 ms). Active sessions were zero at 06:17:03 UTC. These were normal closes, not idle-timeout cleanup. Aggregate usage can lag; the authoritative account-wide bill is still separate from this two-session acceptance.
+
+Evidence files and screenshots are under the ignored local `.preview/interface-review/` directory; database snapshots and user uploads are not committed. Full application checks passed 359 tests, with successful standalone build and [GitHub Actions](https://github.com/PacificaPie/funtrack/actions/runs/44028978849).
