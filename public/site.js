@@ -1,5 +1,5 @@
 import { t, getLocale, setLocale } from './i18n.js';
-import {discoveryPath,discoveryState,changeVisibility,renderDiscoverySettings,renderReviewQueue,disposePublicationControls,hasPendingPublicationControl,publicationFailureMessage,publicationFailureActions} from './publication-controls.js';
+import {discoveryPath,discoveryState,changeVisibility,renderDiscoverySettings,disposePublicationControls,hasPendingPublicationControl,publicationFailureMessage,publicationFailureActions} from './publication-controls.js';
 import './site.messages.js';
 import { emptyState, pageSkeleton } from './empty-state.js';
 import { syncNavigation } from './navigation.js';
@@ -23,7 +23,7 @@ const write = (key,value) => { try { sessionStorage.setItem(key,JSON.stringify(v
 const storage = {publish:'funtrack.real.publish',card:'funtrack.real.card',preview:'funtrack.real.preview',feedback:'funtrack.real.feedback',views:'funtrack.real.gallery'};
 const storageBase={...storage};let draftOwner=null,fileScope='';
 let startPending=false, analyticsPanel=null, visitRecorded=false, publishAvailability=null;
-let canReview=false,publishFailure=null,publishRelatedWorks=[];
+let publishFailure=null,publishRelatedWorks=[];
 let me=null, authChecked=false, routeNumber=0, currentRoute='', noticeTimer, currentGallery=null, activeSession=null;
 const scrolls=new Map();
 const galleryViews=new Map(Object.entries(read(storage.views,{})));
@@ -49,7 +49,7 @@ function identity(){ $('#identity').innerHTML=me?`<details class="account-menu">
 function notify(message){message=t(message);clearTimeout(noticeTimer);$('#notice').textContent=message;$('#notice').hidden=false;noticeTimer=setTimeout(()=>$('#notice').hidden=true,3500);}
 function urlFor(path){return '#'+path;}
 function go(path){if(location.hash==='#'+path)renderRoute();else location.hash=path;}
-function canonicalPath(path){if(path==='/'||path==='/discover')return '/feed';if(path==='/creators')return '/cards';if(path==='/studio/card'||path.startsWith('/studio/card/'))return '/cards/me'+path.slice('/studio/card'.length);return path;}
+function canonicalPath(path){if(path==='/'||path==='/discover')return '/feed';if(path==='/creators')return '/cards';if(path==='/studio/review')return '/studio/works';if(path==='/studio/card'||path.startsWith('/studio/card/'))return '/cards/me'+path.slice('/studio/card'.length);return path;}
 function route(){const raw=(location.hash.slice(1)||'/');const index=raw.indexOf('?');return {path:canonicalPath(index<0?raw:raw.slice(0,index)),params:new URLSearchParams(index<0?'':raw.slice(index+1)),raw};}
 function safeCover(value){try{const u=new URL(value,location.origin);return value&&u.origin===location.origin?u.href:'';}catch{return '';}}
 function safeExternal(value){try{const u=new URL(value);return ['http:','https:'].includes(u.protocol)&&!u.username&&!u.password?u.href:'';}catch{return '';}}
@@ -67,7 +67,7 @@ function commentIcon(){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path
 
 
 function empty(title,description,action=''){const path=route().path;return emptyState({kind:path.includes('feedback')?'activity':path.startsWith('/cards')?'cards':'works',title,description,action});}
-function studio(content,tab){return `<div class="page"><div class="studio"><nav class="studio-nav" aria-label="${t("创作中心")}">${[['works',t("我的作品")],['data',t("数据")],['feedback',t("互动")]].map(([id,name])=>`<a href="#/studio/${id}" class="${tab===id?'active':''}">${name}</a>`).join('')}${canReview?`<details class="studio-manage" ${tab==='review'?'open':''}><summary>${t('管理')}</summary><a href="#/studio/review" class="${tab==='review'?'active':''}">${t('收录管理')}</a></details>`:''}</nav><div class="studio-main">${content}</div></div></div>`;}
+function studio(content,tab){return `<div class="page"><div class="studio"><nav class="studio-nav" aria-label="${t("创作中心")}">${[['works',t("我的作品")],['data',t("数据")],['feedback',t("互动")]].map(([id,name])=>`<a href="#/studio/${id}" class="${tab===id?'active':''}">${name}</a>`).join('')}</nav><div class="studio-main">${content}</div></div></div>`;}
 function cardsPage(content,tab='mine'){return `<div class="page cards-page"><nav class="cards-nav" aria-label="${t("名片")}"><a href="#/cards" class="${tab==='browse'?'active':''}">${t("浏览名片")}</a><a href="#/cards/me" class="${tab==='mine'?'active':''}">${t("我的名片")}</a></nav>${content}</div>`;}
 function cardProfile(card){return {signature:typeof card.signature==='string'?card.signature:'',headline:typeof card.headline==='string'?card.headline:'',website:safeExternal(card.website),backStyle:['ink','ivory','cobalt'].includes(card.backStyle)?card.backStyle:'ink'};}
 function pageError(error){if(error.status===401){me=null;identity();const standalone=getAuthConfig().provider==='clerk';return `<div class="page narrow">${empty(t("登录后继续"),t(standalone?"使用邮箱或已连接账号继续。":"使用 ChatGPT 账号访问作品和创作中心。"),signinLink(t(standalone?"登录":"使用 ChatGPT 登录")))}</div>`;}return `<div class="page narrow"><section class="error-state"><h2>${t("暂时没能加载")}</h2><p>${esc(t(error.message))}</p><button class="button" data-action="reload">${t("重试")}</button></section></div>`;}
@@ -96,7 +96,7 @@ async function activateDrafts(user){
   if(canMigrate){if(!publishFile){publishFile=await fileStore('get','game',null,true);if(publishFile)await fileStore('put','game',publishFile);}if(!coverFile){coverFile=await fileStore('get','cover',null,true);if(coverFile)await fileStore('put','cover',coverFile);}}
   refreshCoverPreview();savePublish();saveCardDraft();saveFeedback();write(storage.preview,preview);write(storage.views,Object.fromEntries(galleryViews));if(!legacyOwner)write('funtrack.real.owner',user.id);write('funtrack.real.migrated:'+user.id,true);
 }
-async function loadMe(){try{const data=await api('/api/me');me=data.user;canReview=data.canReview===true;}catch(e){if(e.status!==401)throw e;me=null;canReview=false;}finally{identity();}authChecked=true;if(me)await activateDrafts(me);}
+async function loadMe(){try{const data=await api('/api/me');me=data.user;}catch(e){if(e.status!==401)throw e;me=null;}finally{identity();}authChecked=true;if(me)await activateDrafts(me);}
 
 function applyHTML(html,number){if(number!==routeNumber)return false;main.innerHTML=html;syncNavigation();const key=route().raw;requestAnimationFrame(()=>{if(number===routeNumber)window.scrollTo(0,scrolls.get(key)||0);});return true;}
 async function renderRoute(options={}){
@@ -115,7 +115,6 @@ async function renderRoute(options={}){
     else if(r.path==='/publish')renderPublish(number);
     else if(r.path.startsWith('/published/'))await renderPublished(r,number);
     else if(/^\/studio\/works\/[^/]+\/discovery$/.test(r.path))await renderDiscoverySettings(r,publicationHelpers(number));
-    else if(r.path==='/studio/review')await renderReviewQueue(r,publicationHelpers(number));
     else if(/^\/studio\/works\/[^/]+\/edit$/.test(r.path))await renderWorkEdit(r,{api,esc,owner:me.id,fileStore,signinURL,notify,go,isCurrent:()=>number===routeNumber,render:html=>applyHTML(html,number),onChanged:()=>clearDiscovery()});
     else if(/^\/studio\/works\/[^/]+\/(update|versions)(\/[^/]+)?$/.test(r.path))await renderVersioning(r,{api,esc,owner:me.id,fileStore,signinURL,notify,go,workImage,startGame,isPlaying:()=>Boolean(activeSession),isCurrent:()=>number===routeNumber,render:html=>applyHTML(html,number),onChanged:()=>clearDiscovery()});
     else if(r.path==='/studio'||r.path==='/studio/works')await renderMyWorks(number);
@@ -159,10 +158,10 @@ async function renderWork(r,number,countView=true,autoPlay=true){
   if(r.params.get('discussion')==='1')requestAnimationFrame(()=>{if(number===routeNumber)$('#discussion')?.scrollIntoView({block:'start'});});
 }
 
-function publicationHelpers(number){return {api,esc,owner:me.id,canReview,studio,notify,go,isCurrent:()=>number===routeNumber,render:html=>applyHTML(html,number),onChanged:()=>clearDiscovery(),reload:()=>renderRoute()};}
+function publicationHelpers(number){return {api,esc,owner:me.id,notify,isCurrent:()=>number===routeNumber,render:html=>applyHTML(html,number),onChanged:()=>clearDiscovery(),reload:()=>renderRoute()};}
 async function renderMyWorks(number){
   const works=await readMine();
-  if(!applyHTML(studio(`${head(t("我的作品"),works.length?`${works.length} ${t("件已发布作品")}`:'',works.length?`<a class="button primary" href="#/publish">${t("＋ 发布作品")}</a>`:'')}${works.length?works.map(w=>{const d=discoveryState(w);return `<article class="work-row">${cover(w,workHref(w),false)}<div><a href="${esc(workHref(w))}"><h3>${esc(w.name)}</h3></a><p>${esc(w.desc)}</p><span class="tiny muted">${esc(w.version)} · ${w.source==='url'?t("外链"):'HTML'} · ${date(w.createdAt)}</span><span class="discovery-status work-discovery-status">${esc(t(d.label))}</span></div><div class="row-actions"><details class="work-row-more"><summary>${t("更多")}</summary><a href="#/studio/works/${encodeURIComponent(w.id)}/edit">${t("编辑作品信息")}</a>${w.source==='html'?`<a href="#/studio/works/${encodeURIComponent(w.id)}/update">${t("更新版本")}</a><a href="#/studio/works/${encodeURIComponent(w.id)}/versions">${t("版本历史")}</a>`:''}<a href="#${discoveryPath(w.id)}">${t(w.discovery?.reviewStatus==='unsubmitted'?'申请进入 Feed':'收录与展示')}</a>${d.canHide?`<button type="button" data-discovery-visibility="hide" data-work-id="${esc(w.id)}">${t('从 Feed 隐藏')}</button>`:d.canRestore?`<button type="button" data-discovery-visibility="restore" data-work-id="${esc(w.id)}">${t('恢复到 Feed')}</button>`:''}<a href="#/studio/data?work=${encodeURIComponent(w.id)}">${t("数据")}</a><a href="#/studio/feedback?work=${encodeURIComponent(w.id)}">${t("互动")}</a><a href="${esc(workHref(w))}">${t("打开作品")}</a></details></div></article>`;}).join(''):empty(t("发布你的第一件作品"),t("上传一个 HTML 小游戏，或放入已经部署好的作品链接。"),`<a class="button primary" href="#/publish">${t("发布作品")}</a>`)}`,'works'),number))return;
+  if(!applyHTML(studio(`${head(t("我的作品"),works.length?`${works.length} ${t("件已发布作品")}`:'',works.length?`<a class="button primary" href="#/publish">${t("＋ 发布作品")}</a>`:'')}${works.length?works.map(w=>{const d=discoveryState(w);return `<article class="work-row">${cover(w,workHref(w),false)}<div><a href="${esc(workHref(w))}"><h3>${esc(w.name)}</h3></a><p>${esc(w.desc)}</p><span class="tiny muted">${esc(w.version)} · ${w.source==='url'?t("外链"):'HTML'} · ${date(w.createdAt)}</span><span class="discovery-status work-discovery-status">${esc(t(d.label))}</span></div><div class="row-actions"><details class="work-row-more"><summary>${t("更多")}</summary><a href="#/studio/works/${encodeURIComponent(w.id)}/edit">${t("编辑作品信息")}</a>${w.source==='html'?`<a href="#/studio/works/${encodeURIComponent(w.id)}/update">${t("更新版本")}</a><a href="#/studio/works/${encodeURIComponent(w.id)}/versions">${t("版本历史")}</a>`:''}<a href="#${discoveryPath(w.id)}">${t('展示设置')}</a>${d.canHide?`<button type="button" data-discovery-visibility="hide" data-work-id="${esc(w.id)}">${t('从 Feed 隐藏')}</button>`:d.canRestore?`<button type="button" data-discovery-visibility="restore" data-work-id="${esc(w.id)}">${t('恢复到 Feed')}</button>`:''}<a href="#/studio/data?work=${encodeURIComponent(w.id)}">${t("数据")}</a><a href="#/studio/feedback?work=${encodeURIComponent(w.id)}">${t("互动")}</a><a href="${esc(workHref(w))}">${t("打开作品")}</a></details></div></article>`;}).join(''):empty(t("发布你的第一件作品"),t("上传一个 HTML 小游戏，或放入已经部署好的作品链接。"),`<a class="button primary" href="#/publish">${t("发布作品")}</a>`)}`,'works'),number))return;
   $$('[data-discovery-visibility]').forEach(button=>button.onclick=()=>{const work=works.find(w=>w.id===button.dataset.workId);if(work)changeVisibility(work,button.dataset.discoveryVisibility,publicationHelpers(number));});
 }
 async function renderData(r,number){
@@ -331,7 +330,7 @@ async function submitPublish(form){
 }
 async function renderPublished(r,number){
   const {work}=await api('/api/works/'+encodeURIComponent(r.path.split('/')[2]));
-  applyHTML(`<div class="page narrow">${head(t("作品已发布"),work.name)}<div class="work-grid" style="max-width:560px;grid-template-columns:1fr">${workTile(work)}</div><p class="discovery-scope">${t('作品链接已可分享，收录通过后会进入 Feed。')}</p><div class="form-footer"><a class="button primary" href="${esc(workHref(work,'/studio/works'))}">${t("试玩作品")}</a><details class="version-secondary"><summary>${t('更多')}</summary><a class="button quiet" href="#${discoveryPath(work.id)}">${t('申请进入 Feed')}</a><a class="button quiet" href="#/cards/me">${t("放进名片")}</a><a class="button quiet" href="#/studio/works">${t("我的作品")}</a></details></div></div>`,number);
+  applyHTML(`<div class="page narrow">${head(t("作品已发布"),work.name)}<div class="work-grid" style="max-width:560px;grid-template-columns:1fr">${workTile(work)}</div><div class="form-footer"><a class="button primary" href="${esc(workHref(work,'/studio/works'))}">${t("试玩作品")}</a><details class="version-secondary"><summary>${t('更多')}</summary><a class="button quiet" href="#${discoveryPath(work.id)}">${t('展示设置')}</a><a class="button quiet" href="#/cards/me">${t("放进名片")}</a><a class="button quiet" href="#/studio/works">${t("我的作品")}</a></details></div></div>`,number);
 }
 const steps = current => `<div class="steps" aria-label="${t("制作步骤")}">${[t("选择作品"),t("选择模板"),t("预览与保存")].map((name,index)=>`<span class="${index===current?'active':''}" ${index===current?'aria-current="step"':''}><b>${index+1}</b>${name}</span>`).join('')}</div>`;
 async function renderBuilder(r,number){

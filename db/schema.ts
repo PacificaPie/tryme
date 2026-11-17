@@ -41,7 +41,8 @@ export const workFingerprints = sqliteTable('ft_work_fingerprints', {
   createdAt: text('created_at').notNull(),
 }, t=>[primaryKey({columns:[t.ownerId,t.kind,t.fingerprint]}),index('ft_work_fingerprints_work').on(t.workId)]);
 // Discovery eligibility is independent of direct links, immutable cards and
-// ownership. Only an approved current version with listed visibility is fed.
+// ownership. Listed visibility alone controls discovery; review fields remain
+// historical. Publication explicitly lists new work via the 0008 trigger.
 export const workDiscovery = sqliteTable('ft_work_discovery', {
   workId: text('work_id').primaryKey().references(()=>works.id), visibility: text('visibility').notNull().default('unlisted'),
   reviewStatus: text('review_status').notNull().default('unsubmitted'), kind: text('kind').notNull().default('unspecified'),

@@ -57,6 +57,13 @@
       "when": 1794887910706,
       "tag": "0007_work_publication_controls",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1794889306108,
+      "tag": "0008_direct_feed_publication",
+      "breakpoints": true
     }
   ]
 }

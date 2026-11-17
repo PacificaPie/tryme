@@ -10,7 +10,6 @@
   "vars": {
     "APP_ORIGIN": "https://funtrack-staging.zhayizha-pacificapie.workers.dev",
     "FUNTRACK_BUILD_MODE": "cloud",
-    "FUNTRACK_REVIEWER_IDS": "clerk:user_3MDPsFr8TSIKbkAUu5MSf8rv69p",
     "CLERK_TEST_MODE": "1",
     "CLERK_PUBLISHABLE_KEY": "pk_test_cHJlbWl1bS1ncmlmZm9uLTk3NzEuY2xlcmsuYWNjb3VudHMuZGV2JA"
   },

@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { versions } from './fixtures/version-games.mjs';
-import { createDiscoveryReviewer } from './fixtures/discovery-review.mjs';
 
 const base = new URL(process.env.FUNTRACK_TEST_URL || 'http://127.0.0.1:8767');
 assert(['127.0.0.1', 'localhost', '[::1]'].includes(base.hostname), 'Work edit fixtures only run on loopback.');
@@ -37,7 +36,6 @@ function ok(response, status = 200) {
   assert.equal(response.status, status, `Expected ${status}, got ${response.status}: ${JSON.stringify(response.body).slice(0, 1600)}`);
   return response.body;
 }
-const approveFixture=createDiscoveryReviewer({request,ok});
 function rejected(response, statuses, code) {
   assert(statuses.includes(response.status), `Expected ${statuses}, got ${response.status}: ${JSON.stringify(response.body).slice(0, 1600)}`);
   if (code) assert.equal(response.body.error?.code, code); return response.body;
@@ -151,8 +149,8 @@ try {
     Object.assign(report.ids, { textMetadata: textEdit.work.metadataId, coverMetadata: latest.metadataId, editedCover: latest.coverUrl });
   });
   await check('detail, creator listing and discover expose the edited metadata without adding a work', async () => {
-    assert.equal(ok(await request('/api/discover?' + new URLSearchParams({ q: textInput.name, author: owner }))).works.length,0,'Unreviewed metadata must not enter Feed.');
-    latest=await approveFixture(original.id,owner);
+    latest=ok(await request('/api/works/'+original.id)).work;
+    assert.equal(latest.discovery.eligible,true,'Editing a listed work must preserve Feed visibility.');assert.equal(latest.discovery.reviewRequired,false);
     const mine = ok(await request('/api/works?mine=1')).works; assert.equal(mine.length, 2);
     assert.deepEqual(publicMetadata(mine.find(work => work.id === original.id)), publicMetadata(latest));
     const discovered = ok(await request('/api/discover?' + new URLSearchParams({ q: textInput.name, author: owner }))).works;

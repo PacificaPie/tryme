@@ -1,5 +1,7 @@
 # 同作者去重、展示控制与 Feed 收录
 
+> 历史阶段记录：用户后续决定先取消收录确认。人工申请/审核门槛由新增迁移 `0008_direct_feed_publication.sql` 和对应代码撤销；新作品直接进 Feed，更新保持原展示状态。同作者去重和作者隐藏/恢复继续生效，旧作品及名片不重写。下面保留当时的实现与验收，不代表当前仍需审核。
+
 2026-11-16（America/New_York）已部署至 [独立测试站](https://funtrack-staging.zhayizha-pacificapie.workers.dev/site)。主站 Worker 版本 `28d56664-a51c-4849-94da-bcbe916688d4`。仅更新 `funtrack-staging`；原 Sites、production 数据库和云构建器部署不变。
 
 ## 用户流程与规则

@@ -6,7 +6,7 @@ import { publicationArtifact } from './publication-artifact.mjs';
 import { createVersionService } from './version-service.mjs';
 import { createWorkEditService } from './work-edit-service.mjs';
 import { createDuplicateService } from './duplicate-service.mjs';
-import { createDiscoveryService,discoveryJSON,canReview,initialDiscovery,DISCOVERY_COLUMNS,DISCOVERY_JOIN,DISCOVERY_ELIGIBLE } from './discovery-service.mjs';
+import { createDiscoveryService,discoveryJSON,initialDiscovery,DISCOVERY_COLUMNS,DISCOVERY_JOIN,DISCOVERY_ELIGIBLE } from './discovery-service.mjs';
 import { metadataId } from './work-metadata.mjs';
 import { cardWorkRefs } from './version-rules.mjs';
 import { analyticsResponse } from './analytics';
@@ -16,7 +16,7 @@ type Row = Record<string, any>;
 type User = { id: string; name: string; email: string };
 const iso = () => new Date().toISOString();
 const uuid = () => crypto.randomUUID();
-const bindings = () => env as unknown as { DB?: D1Database; BUCKET?: R2Bucket; FUNTRACK_REVIEWER_IDS?: string };
+const bindings = () => env as unknown as { DB?: D1Database; BUCKET?: R2Bucket };
 function db(): D1Database { const d=bindings().DB; if(!d)throw new ApiError(503,'STORAGE_UNAVAILABLE','数据库暂不可用'); return d; }
 function bucket(): R2Bucket { const b=bindings().BUCKET; if(!b)throw new ApiError(503,'STORAGE_UNAVAILABLE','文件存储暂不可用'); return b; }
 const sql=(query:string,...values:any[])=>db().prepare(query).bind(...values);
@@ -101,7 +101,7 @@ async function readPublicationForm(request:Request,max=PUBLICATION_MAX_BYTES){
 }
 const readArtifact=(form:FormData,source:string,owner:string)=>publicationArtifact(form,source,owner,getBuildArtifact);
 const duplicates=createDuplicateService({db});
-const handleDiscoveryAPI=createDiscoveryService({db,ownWork,getWork,workJSON,bodyJSON,reviewerIds:()=>bindings().FUNTRACK_REVIEWER_IDS,workQuery:WORK_QUERY});
+const handleDiscoveryAPI=createDiscoveryService({db,ownWork,getWork,workJSON,bodyJSON});
 const handleWorkEditAPI=createWorkEditService({db,bucket,ownWork,workJSON,hash,readForm:readPublicationForm});
 const handleVersionAPI=createVersionService({db,bucket,ownWork,workJSON,hash,readForm:readPublicationForm,readArtifact,bodyJSON});
 
@@ -342,7 +342,7 @@ export async function handleAPI(request:Request) {
     const buildResponse=await handleBuildAPI(request,user);if(buildResponse)return buildResponse;
     const versionResponse=await handleVersionAPI(request,user);if(versionResponse)return versionResponse;
     if(request.method==='GET') {
-      if(parts[0]==='me'&&parts.length===1)return json({user:await userProfile(user),canReview:canReview(user,bindings().FUNTRACK_REVIEWER_IDS)});
+      if(parts[0]==='me'&&parts.length===1)return json({user:await userProfile(user),canReview:false});
       if(parts[0]==='discover'&&parts.length===1)return await discover(url,user);
       if(parts[0]==='works'&&parts.length===1){if(url.searchParams.get('mine')==='1')return await discover(url,user,true);return json({works:await withWorkStats((await rows(WORK_QUERY+' WHERE '+DISCOVERY_ELIGIBLE+' ORDER BY w.created_at DESC LIMIT 200')).map(workJSON),user)});}
       if(parts[0]==='works'&&parts.length===2)return json({work:(await withWorkStats([workJSON(await getWork(parts[1]))],user))[0]});

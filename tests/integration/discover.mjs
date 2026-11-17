@@ -7,7 +7,6 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
-import { createDiscoveryReviewer } from './fixtures/discovery-review.mjs';
 const base=new URL(process.env.FUNTRACK_TEST_URL||'http://127.0.0.1:8767');
 assert(['localhost','127.0.0.1','[::1]'].includes(base.hostname),'This fixture harness is local only.');
 const seedOnly=process.argv.includes('--seed');
@@ -19,7 +18,6 @@ async function request(path,{method='GET',user=owner,json,form,headers={}}={}){
   const raw=await response.text();let body;try{body=JSON.parse(raw);}catch{body=raw;}return {status:response.status,body};
 }
 function ok(r,status=200){assert.equal(r.status,status,JSON.stringify(r.body).slice(0,500));return r.body;}
-const approveFixture=createDiscoveryReviewer({request,ok});
 async function check(name,fn){await fn();report.checks.push(name);console.log(`PASS ${name}`);}
 const query=(values={})=>'/api/discover?'+new URLSearchParams({q:marker,...values});
 const quote=value=>"'"+String(value).replace(/'/g,"''")+"'";
@@ -35,10 +33,8 @@ execFileSync(process.execPath,['--import','./scripts/sites-env.mjs','./node_modu
 await writeFile('.preview/discover-fixtures.json',JSON.stringify({run,fixtures}));
 console.log('Seeded 207 local-only discovery fixtures. Start the Worker before running this harness without --seed.');process.exit(0);
 }
-async function publish(name,source='url'){const form=new FormData();form.set('name',name);form.set('desc','An actual HTTP-published work.');form.set('source',source);if(source==='html')form.set('file',new File(['<!doctype html><body>Test game</body>'],'test.html',{type:'text/html'}));else form.set('url','https://example.com/discover/'+randomUUID());const work=ok(await request('/api/works',{method:'POST',form,headers:{'Idempotency-Key':randomUUID()}}),201).work;assert.equal(work.discovery.eligible,false);return approveFixture(work.id,owner);}
-// Seed SQL creates unlisted fixtures just like a new application publication.
-// Promote each through authenticated owner submission and reviewer HTTP APIs.
-for(const fixture of fixtures)await approveFixture(fixture.id,fixture.author);
+async function publish(name,source='url'){const form=new FormData();form.set('name',name);form.set('desc','An actual HTTP-published work.');form.set('source',source);if(source==='html')form.set('file',new File(['<!doctype html><body>Test game</body>'],'test.html',{type:'text/html'}));else form.set('url','https://example.com/discover/'+randomUUID());const work=ok(await request('/api/works',{method:'POST',form,headers:{'Idempotency-Key':randomUUID()}}),201).work;assert.equal(work.discovery.eligible,true);assert.equal(work.discovery.reviewRequired,false);return work;}
+// Migration 0008's insert trigger lists SQL fixtures just like a new publication.
 const html=await publish(marker+' HTML','html'),hot=fixtures[0];
 for(const user of [owner,other,third])ok(await request(`/api/works/${hot.id}/like`,{method:'POST',user,json:{liked:true}}));
 for(let i=0;i<3;i++)ok(await request(`/api/works/${hot.id}/comments`,{method:'POST',user:third,json:{body:'Popularity fixture '+i},headers:{'Idempotency-Key':randomUUID()}}),201);

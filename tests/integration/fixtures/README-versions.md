@@ -15,7 +15,7 @@ Before starting the Worker, apply both files with the project's local D1 configu
 
 The first file adds isolated build jobs under a unique test owner. The second installs a trigger matching only the dedicated test owner prefix and release note. That trigger raises a real SQLite error after a current-version update, so the harness can verify D1 rolls back the complete batch. Neither file is a production migration.
 
-Start the local Worker with the same dummy `FUNTRACK_BUILD_RUNNER_TOKEN` used by the harness, and with `FUNTRACK_REVIEWER_IDS=local-reviewer`. The Feed assertion now submits the work and approves its current version through the actual review API. See [publication test setup](../README-publication.md); use `FUNTRACK_TEST_REVIEWER_ID` if the local reviewer ID differs. Then run:
+Start the local Worker with the same dummy `FUNTRACK_BUILD_RUNNER_TOKEN` used by the harness. Apply all migrations through `0008_direct_feed_publication.sql`; no reviewer identity is required. The Feed assertion checks that publication and version updates remain discoverable directly. See [publication test setup](../README-publication.md). Then run:
 
 ```sh
 FUNTRACK_TEST_URL=http://127.0.0.1:8767 \

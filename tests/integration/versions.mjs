@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 import { randomUUID, createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { gameHTML, versions } from './fixtures/version-games.mjs';
-import { createDiscoveryReviewer } from './fixtures/discovery-review.mjs';
 
 const base = new URL(process.env.FUNTRACK_TEST_URL || 'http://127.0.0.1:8767');
 assert(['localhost', '127.0.0.1', '[::1]'].includes(base.hostname), 'Version fixtures only run on loopback.');
@@ -29,7 +28,6 @@ function ok(response, status = 200) {
   assert.equal(response.status, status, `Expected ${status}, got ${response.status}: ${JSON.stringify(response.body).slice(0, 1200)}`);
   return response.body;
 }
-const approveFixture=createDiscoveryReviewer({request,ok});
 function rejected(response, statuses, code) {
   assert(statuses.includes(response.status), `Expected ${statuses}, got ${response.status}: ${JSON.stringify(response.body).slice(0, 1200)}`);
   if (code) assert.equal(response.body.error?.code, code);
@@ -124,9 +122,8 @@ try {
     assert.equal(ok(await request('/api/works?mine=1')).works.length, before);
     assert.notEqual(await game(v2.version.id, versions[1].marker), initialGame); assert.equal(await game(v1.versionId, versions[0].marker), initialGame);
     assert.equal(digest(await image(v1.coverUrl)), digest(initialImage)); assert.equal(digest(await image(latest.coverUrl)), digest(versions[1].cover));
-    assert(!ok(await request('/api/discover?q=' + encodeURIComponent(workName))).works.some(item=>item.id===v1.id),'An unreviewed version must not enter Feed.');
-    await approveFixture(v1.id,owner);
     const discovered = ok(await request('/api/discover?q=' + encodeURIComponent(workName))).works.find(item => item.id === v1.id); assert.equal(discovered.versionId, v2.version.id); assert.equal(discovered.createdAt, v1.createdAt);
+    assert.equal(discovered.discovery.reviewRequired,false);assert.equal(discovered.discovery.eligible,true,'A new version must preserve Feed visibility.');
   });
   await check('same publish retries freeze the original operation; changed requests conflict', async () => {
     const replay = ok(await publish(v1.id, 1, v2Input, keyV2)); assert.deepEqual(replay.version, v2.version); assert.deepEqual(replay.operation, v2.operation);
