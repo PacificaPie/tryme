@@ -58,7 +58,7 @@ export async function mountDiscovery(root, options) {
         kind:filtered?'search':'works',
         title:t(filtered?'没有找到作品':authorId?'还没有公开作品':query.following==='1'?'关注的人还没有公开作品':'还没有作品'),
         description:!filtered&&query.following==='1'?t('关注创作者后，可以在这里看到他们的作品。'):'',
-        action:filtered?`<button class="button primary" data-clear>${t('清除筛选')}</button>`:authorId?'':query.following==='1'?`<a class="button primary" href="#/cards">${t('发现创作者')}</a>`:`<a class="button primary" href="#/publish">${t('发布作品')}</a>`,
+        action:filtered?`<button class="button primary" data-clear>${t('清除筛选')}</button>`:authorId?'':query.following==='1'?`<a class="button primary" href="#/feed">${t('发现作品')}</a>`:`<a class="button primary" href="#/publish">${t('发布作品')}</a>`,
       });
       more.hidden=true;return;
     }

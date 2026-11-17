@@ -64,7 +64,7 @@ async function api(path, options={}) {
 }
 function signinURL(){return authURL('sign-in','/site.html'+(location.hash||'#/'));}
 function signinLink(label=t("登录")){return `<a class="button primary" href="${esc(signinURL())}" target="_top">${esc(label)}</a>`;}
-function identity(){ $('#identity').innerHTML=me?`<details class="account-menu"><summary class="avatar" aria-label="${t("账号菜单")}">${avatarMarkup(me,{className:'account-avatar'})}</summary><div class="account-options"><span>${esc(me.name)}</span><a href="#/author/${encodeURIComponent(me.id)}">${t('我的主页')}</a><button type="button" data-edit-profile>${t('编辑个人资料')}</button><a href="#/studio/works">${t("打开创作中心")}</a><a href="${esc(authURL('sign-out','/site.html#/feed'))}" target="_top">${t("退出登录")}</a></div></details><span class="identity-name">${esc(me.name)}</span>`:getAuthConfig().provider==='unknown'?'':`<a class="button quiet" href="${esc(signinURL())}" target="_top">${t("登录")}</a>`; }
+function identity(){ $('#identity').innerHTML=me?`<details class="account-menu"><summary class="avatar" aria-label="${t("账号菜单")}">${avatarMarkup(me,{className:'account-avatar'})}</summary><div class="account-options"><span>${esc(me.name)}</span><a href="#/author/${encodeURIComponent(me.id)}">${t('个人主页')}</a><a href="#/following">${t('关注列表')}</a><button type="button" data-edit-profile>${t('编辑个人资料')}</button><a href="#/studio/works">${t("打开创作中心")}</a><a href="${esc(authURL('sign-out','/site.html#/feed'))}" target="_top">${t("退出登录")}</a></div></details><span class="identity-name">${esc(me.name)}</span>`:getAuthConfig().provider==='unknown'?'':`<a class="button quiet" href="${esc(signinURL())}" target="_top">${t("登录")}</a>`; }
 function editProfile(){
   if(!me)return;const owner=me.id;
   const profileAPI=(path,options)=>{if(me?.id!==owner||draftOwner!==owner)throw new ApiError(t('请重新登录后重试。'),401,'AUTH_SESSION_CHANGED');return api(path,options);};
@@ -77,7 +77,7 @@ function editProfile(){
       // hand-written card details and saved card snapshots intact.
       preview={...preview,avatarUrl,fingerprint,saveKey:uid()};write(storage.preview,preview);
     }
-    const r=route();if(r.path==='/feed'||r.path==='/cards'||r.path==='/author/'+encodeURIComponent(me.id)||r.path==='/author/'+me.id||(avatarChanged&&r.path==='/cards/me/preview'))renderRoute();
+    const r=route();if(r.path==='/feed'||r.path==='/cards'||r.path==='/following'||r.path==='/author/'+encodeURIComponent(me.id)||r.path==='/author/'+me.id||(avatarChanged&&r.path==='/cards/me/preview'))renderRoute();
   }});
 }
 function notify(message){message=t(message);clearTimeout(noticeTimer);$('#notice').textContent=message;$('#notice').hidden=false;noticeTimer=setTimeout(()=>$('#notice').hidden=true,3500);}
@@ -143,14 +143,16 @@ async function renderRoute(options={}){
   const r=route(),number=++routeNumber;publishedAutoCover?.dispose();publishedAutoCover=null;stopBuildPolling();publishAvailability?.dispose();publishAvailability=null;disposeVersioning();disposeWorkEdit();disposePublicationControls();analyticsPanel?.dispose();analyticsPanel=null;discoveryPanel?.dispose();discoveryPanel=null;creatorPanel?.dispose();creatorPanel=null;
   if(currentRoute&&currentRoute!==r.raw)scrolls.set(currentRoute,window.scrollY);
   endSession('exit');currentGallery?.dispose?.();currentGallery=null;currentRoute=r.raw;
-  $$('.site-header nav a').forEach(a=>a.classList.toggle('active',a.dataset.nav===(r.path.startsWith('/cards')||r.path.startsWith('/card/')||r.path.startsWith('/author')?'cards':r.path.startsWith('/studio')||r.path==='/publish'?'studio':'feed')));
+  const activeNav=r.path.startsWith('/cards')||r.path.startsWith('/card/')?'cards':r.path.startsWith('/studio')||r.path==='/publish'?'studio':r.path.startsWith('/author/')||r.path==='/following'?null:'feed';
+  $$('.site-header nav a').forEach(a=>a.classList.toggle('active',a.dataset.nav===activeNav));
   syncNavigation();finishRouteLoading?.();finishRouteLoading=beginRouteLoading(main,{html:pageSkeleton(t("正在加载…"),r.path),slowText:t('还在加载，请稍候或重试。'),retryText:t('重试')});
   try{
     if(!authChecked)await loadMe();
     if(!me){applyHTML(pageError(new ApiError('',401)),number);return;}
     if(r.path==='/feed')await renderDiscover(r,number);
     else if(r.path.startsWith('/author/'))await renderCreator(r,number);
-    else if(r.path==='/cards')await renderCreators(r,number);
+    else if(r.path==='/following'||(r.path==='/cards'&&r.params.get('following')==='1'))await renderFollowing(r,number);
+    else if(r.path==='/cards')await renderCards(number);
     else if(r.path.startsWith('/work/'))await renderWork(r,number,!visitRecorded,options.localeOnly!==true);
     else if(r.path==='/publish')renderPublish(number);
     else if(r.path.startsWith('/published/'))await renderPublished(r,number);
@@ -177,15 +179,24 @@ async function renderDiscover(r,number){
   if(number===routeNumber)discoveryPanel=panel;else panel?.dispose();
 }
 
-async function renderCreators(r,number){
+async function renderCards(number){
+  const owner=me.id,{cards}=await api('/api/cards');if(number!==routeNumber||me?.id!==owner)return;
+  const tiles=cards.map(c=>{
+    const shared=location.origin+publicCardPath(c.id),own=c.authorId===me.id;
+    return `<article class="creator-card"><a class="creator-card-link" href="#/card/${encodeURIComponent(c.id)}"><div class="creator-covers">${c.works.slice(0,3).map(w=>safeCover(w.coverUrl)?`<img src="${esc(safeCover(w.coverUrl))}" alt="" loading="lazy">`:'<span></span>').join('')}</div><footer><div><h2>${esc(c.name)}</h2>${c.headline||c.bio?`<p>${esc(c.headline||c.bio)}</p>`:''}</div><span aria-hidden="true">↗</span></footer></a><div class="creator-card-actions" aria-label="${esc(t('名片操作'))}"><button type="button" data-share-url="${esc(shared)}" data-share-title="${esc(c.name)}" data-share-text="${esc(cardShareText(c,own))}">${t('分享名片')}</button>${own?`<a href="#/cards/me">${t('重新制作')}</a><button type="button" class="danger-text" data-delete-card="${esc(c.id)}" data-card-name="${esc(c.name)}">${t('删除名片')}</button>`:''}</div></article>`;
+  }).join('');
+  applyHTML(cardsPage(`${head(t("创作者名片"),'',cards.length?`<a class="button primary" href="#/cards/me">${t("制作名片")}</a>`:'')}${cards.length?`<div class="creator-grid">${tiles}</div>`:empty(t("还没有名片"),t("选几件自己的作品，制作第一张名片。"),`<a class="button primary" href="#/cards/me">${t("制作名片")}</a>`)}`,'browse'),number);
+}
+
+async function renderFollowing(r,number){
   if(!applyHTML('<div class="page creator-directory-page"></div>',number))return;
-  creatorPanel=mountCreatorDirectory($('.creator-directory-page'),{api,esc,me,following:r.params.get('following')==='1',onQuery:following=>{if(number!==routeNumber)return;const next='/cards'+(following?'?following=1':'');history.replaceState(null,'','#'+next);currentRoute=next;}});
+  creatorPanel=mountCreatorDirectory($('.creator-directory-page'),{api,esc,me});
 }
 async function renderCreator(r,number){
   const id=decodeURIComponent(r.path.split('/')[2]);
   const {creator,card}=await api('/api/creators/'+encodeURIComponent(id));
   if(!applyHTML('<div class="page creator-home-page"></div>',number))return;
-  const home=mountCreatorHome($('.creator-home-page'),{creator,card,me,api,esc,notify,onEditProfile:editProfile,onFollowChange:()=>clearDiscovery()});
+  const home=mountCreatorHome($('.creator-home-page'),{creator,card,me,api,esc,notify,backHref:r.params.get('from')==='/following'?'#/following':'#/feed',onEditProfile:editProfile,onFollowChange:()=>clearDiscovery()});
   creatorPanel=home;
   const panel=await mountDiscovery(home.worksRoot,{api,esc,workTile:(work,options)=>workTile(work,{...options,creator:false,from:r.raw}),syncSocial,userId:me.id,authorId:id,authorCard:card,worksOnly:true,initial:{sort:'newest'},onQuery(){},restoreScroll:()=>window.scrollTo(0,scrolls.get(r.raw)||0)});
   if(number===routeNumber)discoveryPanel=panel;else {panel.dispose();home.dispose();}
@@ -275,7 +286,7 @@ async function renderFeedback(r,number){
   let comments=data.comments,nextCursor=data.nextCursor,pending=false;
   const draw=()=>{
     if(number!==routeNumber)return;
-    $('#inbox-records').innerHTML=comments.length?comments.map(c=>`<article class="inbox-comment">${avatarMarkup({name:c.authorName,avatarUrl:c.authorAvatarUrl},{className:"comment-avatar"})}<div class="inbox-main"><header><span>${esc(c.authorName)}</span>${c.isCreator?`<span class="author-badge">${t("作者")}</span>`:''}<span>${c.parentId?t("回复"):t("评论")}</span><time>${date(c.createdAt)}</time></header><p>${esc(c.body)}</p><a class="inbox-work" href="#/work/${encodeURIComponent(c.workId)}?from=${encodeURIComponent(r.raw)}&discussion=1">${esc(c.workName)} ${t("· 查看讨论")}</a>${archivedBadge(c.workId)}</div></article>`).join(''):empty(t("还没有评论"),'');
+    $('#inbox-records').innerHTML=comments.length?comments.map(c=>`<article class="inbox-comment">${c.authorId?`<a href="#/author/${encodeURIComponent(c.authorId)}" aria-label="${esc(c.authorName)}">${avatarMarkup({name:c.authorName,avatarUrl:c.authorAvatarUrl},{className:"comment-avatar"})}</a>`:avatarMarkup({name:c.authorName,avatarUrl:c.authorAvatarUrl},{className:"comment-avatar"})}<div class="inbox-main"><header>${c.authorId?`<a href="#/author/${encodeURIComponent(c.authorId)}">${esc(c.authorName)}</a>`:`<span>${esc(c.authorName)}</span>`}${c.isCreator?`<span class="author-badge">${t("作者")}</span>`:''}<span>${c.parentId?t("回复"):t("评论")}</span><time>${date(c.createdAt)}</time></header><p>${esc(c.body)}</p><a class="inbox-work" href="#/work/${encodeURIComponent(c.workId)}?from=${encodeURIComponent(r.raw)}&discussion=1">${esc(c.workName)} ${t("· 查看讨论")}</a>${archivedBadge(c.workId)}</div></article>`).join(''):empty(t("还没有评论"),'');
     $('#inbox-more').hidden=!nextCursor;
   };draw();
   $('#inbox-more').addEventListener('click',async()=>{
@@ -681,7 +692,7 @@ function renderChrome(){
   $('.brand').setAttribute('aria-label',t('Funtrack 首页'));
   $('.site-header nav').setAttribute('aria-label',t('主导航'));
   $('[data-nav="studio"]').textContent=t('创作中心');
-  $('[data-nav="cards"]').textContent=t('创作者');
+  $('[data-nav="cards"]').textContent=t('名片');
   const button=$('#locale-toggle');button.textContent=getLocale()==='en'?'中':'EN';
   button.setAttribute('aria-label',getLocale()==='en'?'切换为中文':'Switch to English');
   button.title=getLocale()==='en'?'中文':'English';

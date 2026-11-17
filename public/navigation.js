@@ -4,13 +4,15 @@ const positions = new Map();
 const groups = [['.site-header nav','primary','line'],['.studio-nav','studio','pill'],['.cards-nav','cards','line'],['.inbox-tabs','inbox','line']];
 export function syncNavigation(root = document, animate = true) {
   for (const [selector,key,kind] of groups) {
-    const nav=root.querySelector(selector),active=nav?.querySelector('a.active');if(!nav||!active)continue;
+    const nav=root.querySelector(selector),active=nav?.querySelector('a.active');if(!nav)continue;
+    if(!active){const previous=nav.querySelector('.nav-indicator');if(previous)previous.hidden=true;nav.querySelectorAll('a').forEach(link=>link.removeAttribute('aria-current'));continue;}
     const bounds=nav.getBoundingClientRect(),target=active.getBoundingClientRect();
     if(!bounds.width||!target.width)continue;
     const next={x:target.left-bounds.left,y:kind==='line'?bounds.height-(key==='primary'?14:2):target.top-bounds.top,width:target.width,height:kind==='line'?2:target.height};
     let indicator=nav.querySelector('.nav-indicator');
     const apply=value=>{indicator.style.width=value.width+'px';indicator.style.height=value.height+'px';indicator.style.transform=`translate(${value.x}px,${value.y}px)`;};
     if(!indicator){indicator=document.createElement('span');indicator.className='nav-indicator '+kind;indicator.setAttribute('aria-hidden','true');nav.append(indicator);const old=positions.get(key);apply(animate&&old&&old.x<bounds.width?old:next);}
+    indicator.hidden=false;
     if(!animate)indicator.style.transition='none';
     requestAnimationFrame(()=>requestAnimationFrame(()=>{if(!nav.isConnected)return;if(animate)indicator.style.removeProperty('transition');apply(next);}));
     positions.set(key,next);

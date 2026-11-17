@@ -19,6 +19,7 @@ class Element {
   querySelectorAll(selector){return this.nodes.flatMap(node=>[...(node.matches(selector)?[node]:[]),...node.querySelectorAll(selector)]);}
   querySelector(selector){return this.querySelectorAll(selector)[0]||null;}
   addEventListener(type,handler){this.listeners.set(type,handler);}
+  removeEventListener(type,handler){if(this.listeners.get(type)===handler)this.listeners.delete(type);}
   fire(type,target=this){return this.listeners.get(type)?.({target});}
 }
 const escape=value=>String(value??'').replace(/[&<>"']/g,character=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
@@ -27,36 +28,33 @@ const person=(id,patch={})=>({id,name:'Creator '+id,headline:'Makes small things
 const page=(creators=[],nextAfter=null)=>({creators,nextAfter});
 const params=request=>new URL(request.url,'https://funtrack.test').searchParams;
 function fixture(t,options={}){
-  const root=new Element(),calls=[],queries=[];
-  const panel=mountCreatorDirectory(root,{api:(url,options)=>new Promise((resolve,reject)=>calls.push({url,signal:options.signal,resolve,reject})),esc:escape,me:{id:'mine'},onQuery:value=>queries.push(value),...options});
+  const root=new Element(),calls=[];
+  const panel=mountCreatorDirectory(root,{api:(url,options)=>new Promise((resolve,reject)=>calls.push({url,signal:options.signal,resolve,reject})),esc:escape,me:{id:'mine'},...options});
   t.after(()=>panel.dispose());
   const results=()=>root.querySelector('.creator-directory-results'),more=()=>root.querySelector('[data-more]');
-  const scope=value=>root.querySelectorAll('[data-creators]').find(button=>button.dataset.creators===value);
-  return {root,calls,queries,panel,results,more,scope};
+  return {root,calls,panel,results,more};
 }
 
-test('directory shows creator identities, safe avatars and profile links even without a public card',async t=>{
+test('following list shows only its scope, safe identities and links back to each profile without requiring a card',async t=>{
   const f=fixture(t);
-  assert.equal(params(f.calls[0]).get('limit'),'48');assert.equal(params(f.calls[0]).get('following'),null);
+  assert.equal(params(f.calls[0]).get('limit'),'48');assert.equal(params(f.calls[0]).get('following'),'1');
+  assert.match(f.root.innerHTML,/<h1>关注列表<\/h1>/);assert.doesNotMatch(f.root.innerHTML,/data-creators|creator-directory-tabs|我关注的|发现创作者/);
   f.calls[0].resolve(page([person('mine'),person('a/b',{name:'<img onerror="bad">',headline:'<script>bad</script>',followedByMe:true}),person('no-card',{worksCount:0,avatarUrl:'https://tracker.test/image',headline:'',bio:'A new maker'})]));await settle();
   const html=f.results().innerHTML;
-  assert.equal(f.results().querySelectorAll('.creator-person').length,3);assert.match(html,/href="#\/author\/a%2Fb"/);
+  assert.equal(f.results().querySelectorAll('.creator-person').length,3);assert.match(html,/href="#\/author\/a%2Fb\?from=%2Ffollowing"/);
   assert.match(html,/&lt;img onerror=&quot;bad&quot;&gt;/);assert.match(html,/&lt;script&gt;bad&lt;\/script&gt;/);assert.doesNotMatch(html,/<script>|<img onerror/);
   assert.match(html,/\/avatars\/sprout.svg/);assert.doesNotMatch(html,/tracker.test/);assert.match(html,/我的主页/);assert.match(html,/已关注/);assert.match(html,/A new maker/);
-  assert.match(html,/href="#\/author\/no-card"/);assert.equal(f.results().getAttribute('aria-busy'),'false');assert.equal(f.more().hidden,true);
+  assert.match(html,/href="#\/author\/no-card\?from=%2Ffollowing"/);assert.equal(f.results().getAttribute('aria-busy'),'false');assert.equal(f.more().hidden,true);
 });
 
-test('directory scope changes abort old pagination, clear its cursor, and ignore responses from the old scope',async t=>{
-  const f=fixture(t);f.calls[0].resolve(page([person('public')],'all-cursor'));await settle();
-  f.more().fire('click');assert.equal(params(f.calls[1]).get('after'),'all-cursor');
-  const old=f.calls[1],following=f.scope('following');f.root.fire('click',following);
-  assert.equal(old.signal.aborted,true);assert.equal(params(f.calls[2]).get('following'),'1');assert.equal(params(f.calls[2]).get('after'),null);
-  assert.deepEqual(f.queries,[true]);assert.equal(following.getAttribute('aria-pressed'),'true');assert.equal(f.scope('all').getAttribute('aria-pressed'),'false');
-  f.root.fire('click',following);assert.equal(f.calls.length,3,'Reselecting the active scope must not reload it');
-  f.calls[2].resolve(page([person('followed',{followedByMe:true})],'followed-cursor'));await settle();const html=f.results().innerHTML;
-  old.resolve(page([person('stale-public')],'stale-cursor'));await settle();assert.equal(f.results().innerHTML,html);
-  assert.doesNotMatch(html,/Creator public|stale-public/);assert.match(html,/Creator followed/);
-  f.more().fire('click');assert.equal(params(f.calls[3]).get('after'),'followed-cursor');assert.equal(params(f.calls[3]).get('following'),'1');
+test('initial failure retries only followed creators and repeated retry clicks cannot start concurrent loads',async t=>{
+  const f=fixture(t,{following:false}),old=f.calls[0];assert.equal(params(old).get('following'),'1','Legacy options cannot open a global creator directory');
+  old.reject(new Error('Could not load'));await settle();assert.match(f.results().innerHTML,/暂时没能加载关注列表/);
+  const retry=f.results().querySelector('[data-retry]');f.root.fire('click',retry);f.root.fire('click',retry);
+  assert.equal(f.calls.length,2);assert.equal(old.signal.aborted,true);assert.equal(params(f.calls[1]).get('following'),'1');assert.equal(params(f.calls[1]).get('after'),null);
+  f.calls[1].resolve(page([person('followed',{followedByMe:true})],'followed-cursor'));await settle();
+  assert.match(f.results().innerHTML,/Creator followed/);assert.doesNotMatch(f.results().innerHTML,/Could not load/);
+  f.more().fire('click');assert.equal(params(f.calls[2]).get('after'),'followed-cursor');assert.equal(params(f.calls[2]).get('following'),'1');
 });
 
 test('directory pagination keeps visible people on failure and retries the same cursor without duplicate creators',async t=>{
@@ -71,17 +69,15 @@ test('directory pagination keeps visible people on failure and retries the same 
   assert.match(f.results().innerHTML,/Creator second/);assert.doesNotMatch(f.results().innerHTML,/role="alert"/);assert.equal(f.more().hidden,true);
 });
 
-test('empty followed directory can discover everyone; a failed initial load retries in its current scope',async t=>{
-  const f=fixture(t,{following:true});assert.equal(f.scope('following').getAttribute('aria-pressed'),'true');
-  f.calls[0].reject(new Error('Could not load'));await settle();assert.match(f.results().innerHTML,/暂时没能加载创作者/);
-  f.root.fire('click',f.results().querySelector('[data-retry]'));assert.equal(params(f.calls[1]).get('following'),'1');
-  f.calls[1].resolve(page());await settle();assert.match(f.results().innerHTML,/还没有关注创作者/);
-  f.root.fire('click',f.results().querySelector('[data-discover]'));
-  assert.equal(params(f.calls[2]).get('following'),null);assert.deepEqual(f.queries,[false]);
-  f.calls[2].resolve(page());await settle();assert.match(f.results().innerHTML,/还没有公开的创作者/);assert.match(f.results().innerHTML,/href="#\/publish"/);
+test('empty following list leads to Feed rather than a global directory or card gallery',async t=>{
+  const f=fixture(t);f.calls[0].resolve(page());await settle();
+  assert.match(f.results().innerHTML,/还没有关注创作者/);assert.match(f.results().innerHTML,/href="#\/feed">去发现作品<\/a>/);
+  assert.doesNotMatch(f.results().innerHTML,/href="#\/cards"|href="#\/publish"|data-discover|发现创作者|还没有公开的创作者/);
+  assert.equal(f.more().hidden,true);assert.equal(f.calls.length,1);
 });
 
 test('directory disposal aborts an in-flight load and prevents late completion from changing the old page',async t=>{
   const f=fixture(t),html=f.results().innerHTML;f.panel.dispose();assert.equal(f.calls[0].signal.aborted,true);
   f.calls[0].resolve(page([person('too-late')]));await settle();assert.equal(f.results().innerHTML,html);
+  f.more().fire('click');f.root.fire('click',new Element('button','data-retry'));assert.equal(f.calls.length,1);
 });

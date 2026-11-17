@@ -12,6 +12,8 @@
 .creator-home-website:hover{color:var(--text)}
 .creator-home-counts{display:flex;gap:15px 20px;flex-wrap:wrap;margin-top:18px;color:var(--text-tertiary);font-size:12px}
 .creator-home-counts strong{font-size:13px;font-weight:550;color:var(--text-secondary);font-variant-numeric:tabular-nums}
+.creator-home-following{color:inherit;text-underline-offset:3px}
+.creator-home-following:hover{color:var(--text);text-decoration:underline}
 .creator-home-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:23px}
 .creator-home-actions .button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:38px;font-size:13px}
 .creator-home-actions svg{width:16px;height:16px;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;fill:none;flex-shrink:0}

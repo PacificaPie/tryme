@@ -49,6 +49,16 @@ test('homepage card actions avoid the legacy hover-only card action class', () =
   }
 });
 
+test('profile back navigation stays generic and only the owner’s following count opens their following list', () => {
+  const visitor=creatorHomeMarkup({creator,card,me:{id:'visitor'}}),owner=creatorHomeMarkup({creator,card,me:{id:creator.id}});
+  assert(visitor.startsWith('<a class="back" href="#/feed">← 返回</a>'));
+  assert(!visitor.includes('creator-home-following'));assert(!visitor.includes('href="#/cards">← 创作者'));
+  assert(owner.includes('<a class="creator-home-following" href="#/following"><strong>1</strong> 正在关注</a>'));
+  const fromFollowing=creatorHomeMarkup({creator,card,me:{id:'visitor'},backHref:'#/following'});
+  assert(fromFollowing.startsWith('<a class="back" href="#/following">← 返回</a>'));assert(!fromFollowing.includes('creator-home-following'));
+  for(const backHref of ['https://example.com/','javascript:alert(1)',null])assert(creatorHomeMarkup({creator,card,backHref}).startsWith('<a class="back" href="#/feed">'));
+});
+
 test('home markup escapes profile and saved-card content, bounds images, and rejects external cover URLs', () => {
   const hostile = { ...creator, name:'<img onerror="x">', bio:'<script>alert(1)</script>', headline:'<svg onload="x">', website:'javascript:alert(1)' };
   const html = creatorHomeMarkup({creator:hostile,card:{...card,name:'<b>bad</b>',works:[{name:'<i>bad</i>',coverUrl:'https://evil.test/track'}]},me:{id:'visitor'},profileURL:'https://funtrack.test/site#/author/author-one'});

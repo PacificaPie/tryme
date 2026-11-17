@@ -139,7 +139,7 @@ test('following empty state leads to creators; clearing filters retains followin
   assert.equal(params.get('following'),'1');assert.equal(params.get('q'),'');assert.equal(params.get('source'),'all');assert.equal(params.get('sort'),'likes');
   assert.equal(f.root.querySelector('#work-search').value,'');
   f.calls[1].resolve(empty());await settle();
-  assert.match(f.results().innerHTML,/关注的人还没有公开作品/);assert.match(f.results().innerHTML,/href="#\/cards"/);assert.match(f.results().innerHTML,/发现创作者/);
+  assert.match(f.results().innerHTML,/关注的人还没有公开作品/);assert.match(f.results().innerHTML,/href="#\/feed"/);assert.match(f.results().innerHTML,/发现作品/);
   assert.doesNotMatch(f.results().innerHTML,/href="#\/publish"/);
   f.root.querySelectorAll('[data-sort]').find(button=>button.dataset.sort==='newest').fire('click');
   f.root.querySelectorAll('[data-filter]').find(button=>button.dataset.filter==='html').fire('click');

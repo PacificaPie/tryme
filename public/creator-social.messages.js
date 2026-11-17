@@ -1,5 +1,6 @@
 import {registerMessages} from './i18n.js';
 registerMessages({
+ '个人主页':'Profile','关注列表':'Following','正在加载关注列表…':'Loading following…','暂时没能加载关注列表':'Could not load following','去发现作品':'Discover works',
  '我的主页':'My profile','编辑个人资料':'Edit profile','创作者':'Creators','创作者列表':'Creator list','我关注的':'Following',
  '正在加载创作者…':'Loading creators…','暂时没能加载创作者':'Could not load creators','还没有关注创作者':'No followed creators yet',
  '还没有公开的创作者':'No public creators yet','遇到喜欢的作品，可以进入作者主页关注。':'Visit a creator’s profile to follow them when you find a work you enjoy.',
