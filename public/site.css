@@ -8,3 +8,12 @@
 @media(max-width:650px){.site-header nav a:last-child{font-size:12px}.site-header{gap:20px}.site-header nav{gap:17px}.cards-nav{margin-bottom:26px}.cards-page .select-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.work-actions button{min-height:44px;padding:9px 10px}.work-actions svg{height:17px;width:17px}.tile-bottom{margin-top:3px}.personalization-fields{display:block}.personalization-fields .field{margin-bottom:24px}.theme-options{gap:17px}.theme-option{min-height:40px}.personalization>summary,.card-secondary>summary{min-height:32px}.card-view-top{gap:10px}.card-view-top .button{padding:9px 12px}.card-signature{font-size:17px}.cards-page .template-grid{max-width:none}}@media(max-width:390px){.site-header{gap:15px;padding:0 16px}.site-header nav{gap:13px}.brand{font-size:20px}}
 
 .share-dialog-head{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:18px}.share-dialog-head h2{margin:0}.share-close{border:0;background:transparent;font-size:23px;color:#7b7d71;padding:2px 8px;line-height:1.2}.share-dialog .share-item-title{margin:0 0 14px;font-size:13px;color:#52564a}.share-dialog-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:17px}.share-dialog .share-status{min-height:20px;margin:13px 0 0;font-size:12px}.share-dialog .share-status.success{color:#3b614b}@media(max-width:650px){.share-close{min-height:40px;min-width:40px}.share-dialog-actions .button{flex:1}}
+
+/* The authenticated game stays isolated while its ready handshake is pending. */
+.game-shell[data-game-status]{position:relative}
+.game-shell[data-game-status="loading"] .game-frame,.game-shell[data-game-status="failed"] .game-frame{visibility:hidden}
+.game-load-state{position:absolute;inset:48px 0 0;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;background:var(--soft);text-align:center}
+.game-load-state p{margin:0;color:var(--muted);font-size:13px;line-height:1.6}
+.game-load-spinner{width:22px;height:22px;border:2px solid var(--line);border-top-color:var(--muted);border-radius:50%;animation:game-load-turn .8s linear infinite}
+@keyframes game-load-turn{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.game-load-spinner{animation:none}}

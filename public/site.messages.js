@@ -162,6 +162,8 @@ registerMessages({
   "请选中上方链接手动复制。": "Select the link above and copy it manually.",
   "未能打开系统分享，请复制链接。": "Couldn't open the share menu. Copy the link instead.",
   "正在打开…": "Opening…",
+  "正在加载试玩…": "Loading game…",
+  "试玩暂时未能加载": "The game could not load",
   "作品地址不正确，请重试。": "The work URL isn't valid. Try again.",
   "退出试玩": "Exit game",
   "重试打开": "Try opening again",

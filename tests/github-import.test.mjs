@@ -17,7 +17,10 @@ function fixture({source=html,branch='trunk',refs=[],override}={}){
     calls.push({url,options});
     if(override){const response=await override(url,options);if(response)return response;}
     if(url===root)return json({default_branch:branch,private:false});
-    if(url.includes('/git/matching-refs/'))return json(refs);
+    if(url.includes('/git/matching-refs/')){
+      const kind=url.includes('/matching-refs/heads/')?'heads':'tags';
+      return json(refs.filter(entry=>typeof entry?.ref==='string'&&entry.ref.startsWith(`refs/${kind}/`)));
+    }
     if(url.startsWith(root+'/commits/'))return new Response(sha);
     if(url.startsWith('https://raw.githubusercontent.com/'))return new Response(source);
     throw new Error('Unexpected URL '+url);
@@ -42,10 +45,30 @@ test('repository root uses its actual default branch then pins the raw file',asy
 test('blob and raw commit URLs return the same pinned source, including encoded filenames',async()=>{
   for(const url of [blob,raw]){
     const mock=fixture();assert.equal((await resolveGithubHTML(url,mock)).sourceUrl,blob);
-    assert.equal(mock.calls.length,2);assert.equal(mock.calls[0].url,root+'/commits/'+sha);
+    assert.equal(mock.calls.length,1);assert.equal(mock.calls[0].url,raw);
   }
   const result=await resolveGithubHTML(`https://github.com/example/game/blob/${sha}/games/a%20b.html`,fixture());
   assert.equal(result.path,'games/a b.html');assert.equal(result.filename,'a b.html');assert.match(result.sourceUrl,/games\/a%20b.html$/);
+});
+
+test('explicit SHA imports work when REST quota is exhausted and preserve immutable provenance',async()=>{
+  for(const host of ['https://github.com/example/game/blob/','https://raw.githubusercontent.com/example/game/']){
+    const mock=fixture({override:url=>url.startsWith('https://api.github.com/')?new Response('',{status:429}):null});
+    const result=await resolveGithubHTML(`${host}${sha.toUpperCase()}/games/a%20b.html`,mock);
+    assert.deepEqual(result,{html,filename:'a b.html',sourceUrl:`https://github.com/example/game/blob/${sha}/games/a%20b.html`,repository:'example/game',commitSha:sha,path:'games/a b.html'});
+    assert.equal(mock.calls.length,1);
+    assert.equal(mock.calls[0].url,`https://raw.githubusercontent.com/example/game/${sha}/games/a%20b.html`);
+    assert.equal(mock.calls[0].options.credentials,'omit');
+    assert.equal(mock.calls[0].options.headers.Authorization,undefined);
+  }
+});
+
+test('an unavailable explicit SHA never falls back to a branch, credential or REST lookup',async()=>{
+  for(const [status,code] of [[404,'GITHUB_NOT_FOUND'],[403,'GITHUB_INACCESSIBLE'],[503,'GITHUB_UNAVAILABLE']]){
+    const mock=fixture({override:()=>new Response('',{status})});
+    await assert.rejects(resolveGithubHTML(blob,mock),errorCode(code));
+    assert.deepEqual(mock.calls.map(call=>call.url),[raw]);
+  }
 });
 
 test('ordinary branch plus nested file works, slash-containing matching refs are rejected',async()=>{
@@ -55,6 +78,45 @@ test('ordinary branch plus nested file works, slash-containing matching refs are
   const ambiguous=fixture({refs:[{ref:'refs/heads/feature/mobile'}]});
   await assert.rejects(resolveGithubHTML('https://github.com/example/game/blob/feature/mobile/index.html',ambiguous),errorCode('GITHUB_AMBIGUOUS_REF'));
   assert.ok(ambiguous.calls.every(call=>!call.url.includes('/commits/')&&!call.url.includes('raw.githubusercontent.com')));
+});
+
+test('explicit raw heads and tags resolve the named ref before reading a pinned nested HTML file',async()=>{
+  for(const kind of ['heads','tags']){
+    const mock=fixture({refs:[{ref:`refs/${kind}/release`}]});
+    const result=await resolveGithubHTML(`https://raw.githubusercontent.com/example/game/refs/${kind}/release/games/play.HTM`,mock);
+    assert.equal(result.filename,'play.HTM');assert.equal(result.commitSha,sha);
+    assert.equal(mock.calls[0].url,`${root}/git/matching-refs/${kind}/release`);
+    assert.equal(mock.calls[1].url,`${root}/commits/refs%2F${kind}%2Frelease`);
+    assert.equal(mock.calls[2].url,`https://raw.githubusercontent.com/example/game/${sha}/games/play.HTM`);
+  }
+});
+
+test('an explicit heads namespace keeps a SHA-shaped branch name instead of interpreting it as a commit',async()=>{
+  const branch='b'.repeat(40),mock=fixture({refs:[{ref:`refs/heads/${branch}`}]});
+  const result=await resolveGithubHTML(`https://raw.githubusercontent.com/example/game/refs/heads/${branch}/index.html`,mock);
+  assert.equal(mock.calls[0].url,`${root}/git/matching-refs/heads/${branch}`);
+  assert.equal(mock.calls[1].url,`${root}/commits/refs%2Fheads%2F${branch}`);
+  assert.equal(result.commitSha,sha);assert.equal(result.sourceUrl,blob);
+});
+
+test('malformed repository and matching-ref metadata return actionable upstream errors, never TypeError',async()=>{
+  for(const metadata of [null,[],false,{}, {private:false,default_branch:null},{private:false,default_branch:'main\n'},{private:false,default_branch:'../main'}]){
+    const mock=fixture({override:url=>url===root?json(metadata):null});
+    await assert.rejects(resolveGithubHTML('https://github.com/example/game',mock),errorCode('GITHUB_RESPONSE_INVALID'));
+    assert.equal(mock.calls.length,1);
+  }
+  for(const refs of [null,{},[null],[false],[{}],[{ref:3}],[{ref:'refs/heads/'}],[{ref:'refs/tags/main'}]]){
+    const mock=fixture({override:url=>url.includes('/git/matching-refs/heads/')?json(refs):null});
+    await assert.rejects(resolveGithubHTML('https://github.com/example/game/blob/main/index.html',mock),errorCode('GITHUB_RESPONSE_INVALID'));
+    assert(mock.calls.every(call=>!call.url.includes('/commits/')&&!call.url.includes('raw.githubusercontent.com')));
+  }
+});
+
+test('explicit private metadata is distinct from an anonymously missing repository',async()=>{
+  const mock=fixture({override:url=>url===root?json({private:true,default_branch:'main'}):null});
+  await assert.rejects(resolveGithubHTML('https://github.com/example/game',mock),errorCode('GITHUB_PRIVATE_REPOSITORY'));
+  assert.equal(mock.calls.length,1);
+  await assert.rejects(resolveGithubHTML('https://github.com/example/game',fixture({override:()=>new Response('',{status:404})})),errorCode('GITHUB_NOT_FOUND'));
 });
 
 test('rejects nonofficial hosts, credentials, protocol, traversal and non-HTML URLs before fetching',async()=>{

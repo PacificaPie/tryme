@@ -207,7 +207,8 @@ function refreshPublishState(){
   $('#github-url').disabled=publishPending||d.source!=='github'||building;
   const readButton=$('#github-read');readButton.disabled=publishPending||githubPending||building||!d.githubURL?.trim()||blocked;readButton.textContent=githubPending?t("正在导入…"):building?t("构建中…"):isFile?t("读取文件"):build?.status==='failed'||build?.status==='cancelled'?t("重新构建"):t("导入并构建");
   readButton.classList.toggle('primary',d.source==='github'&&!ready&&!blocked);
-  $('#publish-import-availability').innerHTML=buildAvailabilityMarkup(availability,{selected:d.source==='github',directFile:isFile,ready,disabled:publishPending||githubPending});
+  const availabilityNode=$('#publish-import-availability');availabilityNode.hidden=d.source!=='github';
+  availabilityNode.innerHTML=buildAvailabilityMarkup(availability,{selected:d.source==='github',directFile:isFile,ready,disabled:publishPending||githubPending});
   $('#github-status').textContent=githubPending?t("正在读取 GitHub…"):build?`${t(buildLabels[build.status]||build.status)}${build.status==='ready'?' · '+Math.ceil(build.artifactBytes/1024)+' KB':''}`:ready?`${publishFile.name} ${t("· 已读取")} ${d.githubImport.commitSha.slice(0,7)}`:'';
   $('#github-build-panel').hidden=!build;
   if(build){
@@ -435,8 +436,35 @@ async function flushSession(queue){
 }
 function endSession(reason='exit'){
   const session=activeSession;if(!session)return;activeSession=null;
+  clearGameLoad(session);
   session.display?.dispose();
   if(!session.ended){session.ended=true;enqueueSession(session.queue,'session_end',session.clock.finish());}session.queue.closed=true;if(!session.queue.pending.length&&!session.queue.sending)sessionQueues.delete(session.queue);
+}
+function clearGameLoad(session){
+  clearTimeout(session.loadTimer);session.loadTimer=null;
+  if(session.loadError)session.frame.removeEventListener('error',session.loadError);
+  session.loadError=null;
+}
+function watchGameLoad(session){
+  session.loadError=()=>failGameLoad(session);
+  session.frame.addEventListener('error',session.loadError,{once:true});
+  session.loadTimer=setTimeout(()=>failGameLoad(session),30000);
+}
+function failGameLoad(session){
+  if(activeSession!==session||session.ready)return;
+  endSession('load_error');
+  session.frame.removeAttribute('src');
+  session.shell.dataset.gameStatus='failed';session.shell.setAttribute('aria-busy','false');
+  session.loadState.innerHTML=`<p>${t("试玩暂时未能加载")}</p><button class="button primary" type="button" data-game-retry>${t("重试打开")}</button>`;
+  $('[data-game-retry]',session.loadState).addEventListener('click',()=>{restoreGameCover(session.work,session.coverHTML);void startGame(session.work);},{once:true});
+}
+function gameLoadReady(session){
+  if(activeSession!==session||session.ready)return;
+  session.ready=true;clearGameLoad(session);
+  session.shell.dataset.gameStatus='ready';session.shell.setAttribute('aria-busy','false');session.loadState.hidden=true;
+  session.frame.removeAttribute('aria-hidden');session.frame.removeAttribute('tabindex');
+  const button=$('#expand-game',session.shell);button.hidden=false;
+  session.display=mountGameDisplay(session.shell,{button,labels:{enter:t("全屏"),exitNative:t("退出全屏"),exitExpanded:t("退出大屏")}});
 }
 async function startGame(work){
   if(startPending)return;const previousCover=activeSession?.coverHTML;endSession('exit');startPending=true;const originRoute=routeNumber;
@@ -447,9 +475,9 @@ async function startGame(work){
     const gameUrl=new URL(session.gameUrl,location.origin);if(gameUrl.origin!==location.origin)throw new Error(t("作品地址不正确，请重试。"));
     const bridge=uid();gameUrl.hash='bridge='+encodeURIComponent(bridge);
     const area=$('#play-area'),coverHTML=previousCover||area.innerHTML;
-    area.innerHTML=`<section class="game-shell"><div class="game-tools"><span class="game-title">${esc(work.name)} · ${esc(work.version)}</span><div class="game-tool-actions"><button class="button quiet small" id="expand-game" type="button" aria-controls="game-frame" aria-pressed="false">${t("全屏")}</button><button class="button quiet small" id="exit-game" type="button">${t("退出试玩")}</button></div></div><iframe id="game-frame" class="game-frame" sandbox="allow-scripts" referrerpolicy="no-referrer" title="${esc(work.name)}"></iframe><div id="game-result" class="game-result" hidden></div></section>`;
-    const frame=$('#game-frame');activeSession={...session,queue,bridge,frame,work,started:false,completed:false,ended:false,coverHTML,clock:createPlayClock(()=>performance.now(),!document.hidden)};frame.src=gameUrl.href;
-    activeSession.display=mountGameDisplay($('.game-shell',area),{button:$('#expand-game'),labels:{enter:t("全屏"),exitNative:t("退出全屏"),exitExpanded:t("退出大屏")}});
+    area.innerHTML=`<section class="game-shell" data-game-status="loading" aria-busy="true"><div class="game-tools"><span class="game-title">${esc(work.name)} · ${esc(work.version)}</span><div class="game-tool-actions"><button class="button quiet small" id="expand-game" type="button" aria-controls="game-frame" aria-pressed="false" hidden>${t("全屏")}</button><button class="button quiet small" id="exit-game" type="button">${t("退出试玩")}</button></div></div><div class="game-load-state" role="status" aria-live="polite"><span class="game-load-spinner" aria-hidden="true"></span><p>${t("正在加载试玩…")}</p></div><iframe id="game-frame" class="game-frame" sandbox="allow-scripts" referrerpolicy="no-referrer" title="${esc(work.name)}" aria-hidden="true" tabindex="-1"></iframe><div id="game-result" class="game-result" hidden></div></section>`;
+    const frame=$('#game-frame');activeSession={...session,queue,bridge,frame,work,ready:false,started:false,completed:false,ended:false,coverHTML,shell:$('.game-shell',area),loadState:$('.game-load-state',area),clock:createPlayClock(()=>performance.now(),!document.hidden)};
+    watchGameLoad(activeSession);frame.src=gameUrl.href;
     $('#exit-game').addEventListener('click',()=>restoreGameCover(work,coverHTML));
     buttons.filter(b=>b.isConnected).forEach(b=>{b.hidden=true;});
     area.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
@@ -459,7 +487,8 @@ async function startGame(work){
 function restoreGameCover(work,html){endSession('exit');const area=$('#play-area');if(!area)return;area.innerHTML=html;$$('[data-action="start-game"]').forEach(b=>{b.hidden=false;b.disabled=false;b.innerHTML=playIcon()+t("开始试玩");});$$('[data-action="start-game"]',area).forEach(b=>b.addEventListener('click',()=>startGame(work)));}
 function receiveGame(event){
   const session=activeSession,message=event.data;if(!session||event.source!==session.frame.contentWindow||event.origin!=='null'||!message||message.channel!=='funtrack-game'||message.version!==1||message.bridge!==session.bridge)return;
-  if(message.type==='input'&&!session.started&&!session.ended){session.started=true;session.clock.start();enqueueSession(session.queue,'play_start');}
+  if(message.type==='ready')gameLoadReady(session);
+  else if(message.type==='input'&&session.ready&&!session.started&&!session.ended){session.started=true;session.clock.start();enqueueSession(session.queue,'play_start');}
   else if(message.type==='complete'&&session.started&&!session.completed&&!session.ended){
     session.completed=true;const result={};if(message.result&&typeof message.result==='object'){if(typeof message.result.score==='number'&&Number.isFinite(message.result.score))result.score=message.result.score;if(typeof message.result.label==='string')result.label=message.result.label.slice(0,120);}
     const timing=session.clock.finish();enqueueSession(session.queue,'game_complete',result);session.ended=true;enqueueSession(session.queue,'session_end',timing);session.queue.closed=true;

@@ -36,6 +36,24 @@ test('offline, inaccessible, unsupported and oversize failures have distinct act
     assert.equal(importErrorText({message:'custom detail'}),'custom detail');
   }finally{setLocale(previous);}
 });
+test('status refresh keeps imported HTML independent of the builder and hides it for other sources',async()=>{
+  let selected=true,directFile=true,ready=true,online=false;const rendered=[];
+  const availability=createBuildAvailability(async()=>({online,status:online?'online':'offline'}),state=>{
+    rendered.push(buildAvailabilityMarkup(state,{selected,directFile,ready}));
+  });
+  try{
+    await availability.refresh();online=true;await availability.refresh();online=false;await availability.refresh();
+    assert(rendered.length>=6);for(const markup of rendered){assert.match(markup,/独立 HTML/);assert(!markup.includes('仓库构建'));assert(!markup.includes('data-import-local'));}
+    selected=false;
+    for(const staleDirectFile of [true,false])for(const staleReady of [true,false])for(const status of ['checking','online','offline','unknown']){
+      assert.equal(buildAvailabilityMarkup({status},{selected,directFile:staleDirectFile,ready:staleReady}),'');
+    }
+    rendered.length=0;await availability.refresh();assert(rendered.every(markup=>markup===''));
+    selected=true;directFile=false;ready=false;rendered.length=0;await availability.refresh();
+    assert.match(rendered.at(-1),/GitHub 仓库构建离线/);assert.match(rendered.at(-1),/data-import-local/);
+    online=true;await availability.refresh();assert.match(rendered.at(-1),/GitHub 仓库构建可用/);assert(!rendered.at(-1).includes('data-import-local'));
+  }finally{availability.dispose();}
+});
 test('availability reads deduplicate and a stale online reply cannot overwrite a newer offline rejection',async()=>{
   let resolve,calls=0,lastSignal;
   const availability=createBuildAvailability((_path,{signal})=>{calls++;lastSignal=signal;return new Promise(r=>resolve=r);});

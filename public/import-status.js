@@ -57,8 +57,9 @@ export function repositoryImportBlocked(state, url) {
 export function buildAvailabilityMarkup(state, { selected = false, directFile = false, ready = false, disabled = false } = {}) {
   const status = state?.status || 'checking';
   const label = status === 'online' ? 'GitHub 仓库构建可用' : status === 'offline' || status === 'unconfigured' ? 'GitHub 仓库构建离线' : status === 'checking' ? '正在检查仓库构建状态…' : '暂未确认仓库构建状态';
-  if (!selected || ready) return `<p class="import-availability-summary">${t(label)}</p>`;
+  if (!selected) return '';
   if (directFile) return `<p class="import-availability-summary">${t('独立 HTML 可直接导入，无需构建器。')}</p>`;
+  if (ready) return `<p class="import-availability-summary">${t(label)}</p>`;
   const offline = status === 'offline' || status === 'unconfigured';
   return `<div class="import-availability-panel${offline ? ' is-offline' : ''}"><p role="status">${t(label)}</p>${offline ? `<p class="import-availability-next">${t('可上传已打包的独立 HTML，最大 8 MiB。')}</p>` : ''}<div class="import-availability-actions">${offline ? `<button type="button" class="button primary small" data-import-local ${disabled ? 'disabled' : ''}>${t('改用本地 HTML')}</button>` : ''}${offline || status === 'unknown' ? `<button type="button" class="button quiet small" data-import-check ${state?.checking || disabled ? 'disabled' : ''}>${t(state?.checking ? '正在检查…' : '刷新状态')}</button>` : ''}</div><details class="import-requirements"><summary>${t('支持的项目')}</summary><p>${t('公开的 Vite 静态前端项目；根目录需有 build 脚本、package-lock.json（v2/v3）和 LICENSE。暂不支持后端服务、工作区或私有依赖。')}</p><p>${t('本地上传和 HTML 链接均需是已打包的独立 HTML；仅有 index.html 而资源仍在其他文件中，无法直接运行。')}</p></details></div>`;
 }

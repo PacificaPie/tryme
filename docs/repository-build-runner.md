@@ -19,7 +19,17 @@
 {"siteOrigin":"https://your-site.example","runnerToken":"runtime-secret-at-least-32-characters","siteAccessToken":"private-site-access-token","once":true}
 ```
 
-`runnerToken` 必须与 Sites 运行环境的 `FUNTRACK_BUILD_RUNNER_TOKEN` 相同；私有站点需要 `siteAccessToken`。真实凭据只放内存，不写仓库或命令参数。`once:true` 处理一个任务后退出，省略则持续轮询。终止使用 Ctrl-C。
+`runnerToken` 必须与**所选站点**运行环境的 `FUNTRACK_BUILD_RUNNER_TOKEN` 相同；这是构建器专用秘密，与 Clerk 登录密钥不同。仅 Sites 私有站点需要 `siteAccessToken`。真实凭据只放内存，不写仓库、日志或命令参数。`once:true` 处理一个任务（成功或失败）后退出；无任务时会等待，测试结束若未提交任务应使用 Ctrl-C 停止。省略 `once` 会持续轮询，临时验收不使用该模式。
+
+### 独立 staging
+
+当前临时测试站点的 exact origin 是 `https://funtrack-staging.zhayizha-pacificapie.workers.dev`。为这个 Worker 单独生成至少 32 字节的随机秘密，通过 stdin 写入 Cloudflare Secret `FUNTRACK_BUILD_RUNNER_TOKEN`；所有 Wrangler 命令明确指定 `--config wrangler.standalone.staging.jsonc`。不要读取、复制或覆盖 Sites 的 runner token，也不要把 Clerk token 当 runner token。秘密写入成功后，边缘运行时可能有短暂传播延迟；先确认新凭据的 heartbeat 成功，再让用户提交仓库。
+
+将同一个新秘密通过隐藏 stdin 传给 `scripts/build-runner.mjs`，其 JSON 只包含 `siteOrigin`、`runnerToken`、独立 UUID `workerId` 和 `once:true`，**省略 `siteAccessToken`**。独立 Worker 的 `/api/build-worker/*` 使用专用 Bearer 鉴权；普通作者创建任务、预览和发布仍须 Clerk 登录。Runner 不监听端口，凭据请求仅发送给指定 origin，重定向不会带着凭据继续。
+
+本轮使用的临时控制器只在内存中生成秘密，经 Wrangler 和 runner 的 stdin 分别传递。Runner 子进程环境只保留 Docker CLI 所需的本机基础环境，不继承 Sites、Cloudflare 或 Clerk 凭据。临时控制器在忽略的 `.preview/` 下，不作为常驻服务或部署产物。
+
+`once` 退出后不再发送心跳；最近一次心跳超过 90 秒，网页会显示构建器离线。刚退出的短暂窗口不保证还能接受新任务，页面提交时服务端会再次检查。已生成和发布的作品留在 R2，不依赖 runner 继续运行。完整 HTML 上传及 GitHub 单 HTML 直读也不依赖它。
 
 容器固定 Node 22 镜像摘要，以非 root 运行，宿主源码及工具只读挂载，工作区为 768 MiB tmpfs，限制内存/CPU/PID/时长。安装阶段关闭生命周期脚本；执行仓库 build 和封装前断开网络并检查。网站凭据不进入容器。根 LICENSE 及运行依赖许可保留在最终 HTML 中。
 
@@ -30,4 +40,4 @@
 - `node scripts/repo-builder.mjs owner/repo FULL_COMMIT_SHA`：独立构建，产物和元数据写入忽略的 `.preview/builds/`。
 - 真实样例为 `yuss-raa/Snake-Game`，来源细节见 `repository-build-reference.md`。它没有接入 Funtrack 通关协议，不能把操作事件当作通关。
 
-后续将此构建器迁移到常驻隔离执行环境，再扩展框架和多资源托管。当前不涉及收费、Webhook 自动发布或作品版本回滚。
+后续可将构建器迁移到常驻隔离执行环境，再扩展框架和多资源托管。构建完成只生成可预览产物，发布或更新作品仍由作者在页面完成；它不会通过 Webhook 自动发布。2026-11-16 的 staging 实测见 [仓库验证记录](./staging-repository-validation-2026-11-16.md)。
