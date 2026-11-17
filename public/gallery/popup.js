@@ -79,6 +79,23 @@ SP.createPopup=function(core,paper,onChange){
   var PB=panel(2*FX,hB,zL2,0,Y1,PI,paper.board({tA:paper.tex(PR.backOut(2*FX,hB,300)),tB:paper.tex(PR.wall('B',2*FX,hB,786)),sheenA:0.11,stipA:222,aoSide:-1}));
   PB.mat.uniforms.uMA.value.set(-1/(2*FX),0,0,-1/hB);PB.mat.uniforms.uOA.value.set(0.5,1);PB.mat.uniforms.uStipK.value.x=hB/(2*FX);PB.mat.uniforms.uStipR.value=new T.Vector4(2,2,3,3);
 
+  // The paper scene is usable immediately. A missing or slow avatar leaves its original portrait intact.
+  if(me.avatarUrl){
+    var portrait=new Image();images.push(portrait);portrait.decoding='async';
+    portrait.onload=function(){
+      if(disposed||!(portrait.naturalWidth>0)||!(portrait.naturalHeight>0))return;
+      var nextFront;
+      try{nextFront=paper.tex(PR.front(me,512,null,PR.caps(),portrait));}catch(e){return;}
+      nextFront.needsUpdate=true;
+      [bodyMat,PL.mat,PRt.mat].forEach(function(mat){mat.uniforms.tA.value=nextFront;});
+      frontTex.dispose();frontTex=nextFront;
+      // Extend the existing full-color cover region to include the real avatar. Other ink prints keep their stippling.
+      stipR.y=Math.min(stipR.y,(PR.AVATAR.y-PR.AVATAR.r-.01)/H+.5);
+      if(onChange)onChange();
+    };
+    portrait.onerror=function(){};portrait.src=me.avatarUrl;
+  }
+
   /* 墙上的画：墨色细框加画面。合上时框是压扁的，墙立起来以后才鼓出来 */
   var arts=[];
   PR.HANG.forEach(function(a,i){

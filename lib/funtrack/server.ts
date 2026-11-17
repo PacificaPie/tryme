@@ -13,6 +13,8 @@ import { createDiscoveryService,discoveryJSON,initialDiscovery,DISCOVERY_COLUMNS
 import { createRecommendationService,recommendationRank,RECOMMENDATION_VERSION } from './recommendation-service.mjs';
 import { metadataId } from './work-metadata.mjs';
 import { createPublicSharingService } from './public-sharing.mjs';
+import { createCreatorService } from './creator-service.mjs';
+import { safeAvatarURL } from './avatar-rules.mjs';
 import { cardWorkRefs } from './version-rules.mjs';
 import { analyticsResponse } from './analytics';
 import { ApiError, fail, authenticate, verifyWrite, requiredText, eventId, safeURL, coverType, htmlSource, sessionEvents, GAME_CSP, gameDocument, likedState, cardDetails, cardSnapshot, cardTemplate, commentInput, validateCommentParent, commentPageLimit, encodeCommentCursor, decodeCommentCursor, discoverQuery, encodeDiscoverCursor, decodeDiscoverCursor } from './rules.mjs';
@@ -42,28 +44,30 @@ async function bodyJSON(request:Request):Promise<Row> {
   try {const body=JSON.parse(new TextDecoder().decode(await limitedBody(request,65536)));if(!body||typeof body!=='object'||Array.isArray(body))throw new Error();return body;}catch(e){if(e instanceof ApiError)throw e;throw new ApiError(400,'INVALID_JSON','JSON 格式无效');}
 }
 const WORK_QUERY=`SELECT w.*,v.version,v.game_key,CASE WHEN m.id IS NOT NULL THEN m.cover_key ELSE v.cover_key END cover_key,CASE WHEN m.id IS NOT NULL THEN m.cover_mime ELSE v.cover_mime END cover_mime,v.provenance_json,${DISCOVERY_COLUMNS} FROM ft_works w JOIN ft_work_versions v ON v.id=w.current_version_id LEFT JOIN ft_work_metadata m ON m.id=w.current_metadata_id AND m.work_id=w.id${DISCOVERY_JOIN}`;
-function workJSON(w:Row) { return {id:w.id,authorId:w.author_id,authorName:w.author_name,name:w.name,desc:w.description,source:w.source,versionId:w.current_version_id,version:w.version,metadataId:w.current_metadata_id||null,coverUrl:w.cover_key?`/media/${w.current_metadata_id||w.current_version_id}`:'',...(w.url?{url:w.url}:{}),...(w.provenance_json?{build:JSON.parse(w.provenance_json)}:{}),createdAt:w.created_at,revision:w.revision,updatedAt:w.updated_at||w.created_at,archivedAt:w.archived_at||null,discovery:discoveryJSON(w)}; }
-async function getWork(id:unknown) { if(typeof id!=='string'||id.length>128)throw new ApiError(404,'WORK_NOT_FOUND','作品不存在');const w=await first(WORK_QUERY+' WHERE w.id=?',id);if(!w)throw new ApiError(404,'WORK_NOT_FOUND','作品不存在');return w; }
+function workJSON(w:Row) { return {id:w.id,authorId:w.author_id,authorName:w.author_name,authorAvatarUrl:w.author_avatar_url||'',name:w.name,desc:w.description,source:w.source,versionId:w.current_version_id,version:w.version,metadataId:w.current_metadata_id||null,coverUrl:w.cover_key?`/media/${w.current_metadata_id||w.current_version_id}`:'',...(w.url?{url:w.url}:{}),...(w.provenance_json?{build:JSON.parse(w.provenance_json)}:{}),createdAt:w.created_at,revision:w.revision,updatedAt:w.updated_at||w.created_at,archivedAt:w.archived_at||null,discovery:discoveryJSON(w)}; }
+async function getWork(id:unknown):Promise<Row> { if(typeof id!=='string'||id.length>128)throw new ApiError(404,'WORK_NOT_FOUND','作品不存在');const w=await first(WORK_QUERY+' WHERE w.id=?',id);if(!w)throw new ApiError(404,'WORK_NOT_FOUND','作品不存在');const profile=await first('SELECT * FROM ft_profiles WHERE id=?',w.author_id);return {...w,author_name:profile?.name||w.author_name,author_avatar_url:profile?.avatar_url||''}; }
 async function ownWork(id:unknown,user:User) {const w=await getWork(id);if(w.author_id!==user.id)throw new ApiError(403,'NOT_OWNER','只能访问自己的作品数据');return w;}
-async function userProfile(user:User) {const p=await first('SELECT name,bio,signature,headline,website,back_style FROM ft_profiles WHERE id=?',user.id);return {id:user.id,name:p?.name||user.name,bio:p?.bio||'',signature:p?.signature||'',headline:p?.headline||'',website:p?.website||'',backStyle:p?.back_style||'ink'};}
+async function userProfile(user:User) {return creators.me(user);}
 async function withWorkStats(works:Row[],user:User) {
   if(!works.length)return [];
   // Keep each statement below D1's bound-parameter limit, including a full
   // 200-work discovery response. Counts are live data, not card snapshot data.
   const batches:Row[][]=[];for(let at=0;at<works.length;at+=80)batches.push(works.slice(at,at+80));
-  const [counts,commentCounts]=await Promise.all([
+  const [counts,commentCounts,profiles]=await Promise.all([
     Promise.all(batches.map(batch=>rows(`SELECT work_id,COUNT(*) n,MAX(CASE WHEN actor_id=? THEN 1 ELSE 0 END) liked FROM ft_work_likes WHERE work_id IN (${batch.map(()=>'?').join(',')}) GROUP BY work_id`,user.id,...batch.map(w=>w.id)))).then(groups=>groups.flat()),
     Promise.all(batches.map(batch=>rows(`SELECT work_id,COUNT(*) n FROM ft_comments WHERE work_id IN (${batch.map(()=>'?').join(',')}) GROUP BY work_id`,...batch.map(w=>w.id)))).then(groups=>groups.flat()),
+    Promise.all(batches.map(batch=>rows(`SELECT * FROM ft_profiles WHERE id IN (${batch.map(()=>'?').join(',')})`,...batch.map(w=>w.authorId)))).then(groups=>groups.flat()),
   ]);
   const byId=new Map(counts.map(row=>[row.work_id,row]));
   const commentsById=new Map(commentCounts.map(row=>[row.work_id,row.n]));
-  return works.map(work=>({...work,likesCount:Number(byId.get(work.id)?.n||0),likedByMe:Boolean(byId.get(work.id)?.liked),commentsCount:Number(commentsById.get(work.id)||0)}));
+  const profilesById=new Map(profiles.map(row=>[row.id,row]));
+  return works.map(work=>({...work,authorName:profilesById.get(work.authorId)?.name||work.authorName,authorAvatarUrl:profilesById.get(work.authorId)?.avatar_url||'',likesCount:Number(byId.get(work.id)?.n||0),likedByMe:Boolean(byId.get(work.id)?.liked),commentsCount:Number(commentsById.get(work.id)||0)}));
 }
 function likeJSON(workId:string,row:Row) {return {workId,liked:Boolean(row.liked),likesCount:Number(row.n||0)};}
 async function discover(url:URL,user:User,mine=false) {
   const params=new URLSearchParams(url.searchParams);if(mine)params.set('author',user.id);
   const state=mine?mineWorkState(params.get('state')):'active';
-  const query=discoverQuery(params),cursor=decodeDiscoverCursor(params.get('cursor'),query),scope=mine?'mine:'+user.id+':'+state:'public',asOf=cursor?.asOf||iso();
+  const query=discoverQuery(params),cursor=decodeDiscoverCursor(params.get('cursor'),query),scope=mine?'mine:'+user.id+':'+state:query.following?'following:'+user.id:'public',asOf=cursor?.asOf||iso();
   if(cursor&&(cursor.scope||'public')!==scope)fail(400,'INVALID_CURSOR','分页游标与当前列表不符，请重新加载');
   // Capture all high-water marks in one SQLite read snapshot. A write that
   // started before asOf but commits after this read cannot reshape page two.
@@ -76,6 +80,7 @@ async function discover(url:URL,user:User,mine=false) {
   if(snapshot){conditions.push('w.rowid<=?');values.push(snapshot.works);}
   if(query.source!=='all'){conditions.push('w.source=?');values.push(query.source);}
   if(query.author){conditions.push('w.author_id=?');values.push(query.author);}
+  if(query.following){conditions.push('EXISTS(SELECT 1 FROM ft_creator_follows f WHERE f.follower_id=? AND f.creator_id=w.author_id AND f.created_at<=?)');values.push(user.id,asOf);}
   // instr treats '%' and '_' literally instead of expanding them as SQL LIKE wildcards.
   if(query.q){conditions.push("instr(lower(w.name||char(10)||w.description||char(10)||w.author_name),lower(?))>0");values.push(query.q);}
   const where=conditions.join(' AND ');
@@ -90,7 +95,7 @@ async function discover(url:URL,user:User,mine=false) {
     sql('SELECT COUNT(*) n FROM ft_works w'+DISCOVERY_JOIN+' WHERE '+where,...values),
   ]);
   const page=results[0].results.slice(0,query.limit),last=page[page.length-1];
-  const nextCursor=results[0].results.length>query.limit?encodeDiscoverCursor({v:1,scope,filters:{q:query.q,source:query.source,sort:query.sort,author:query.author},asOf,...(snapshot?{snapshot}:{}),last:{rank:Number(last.feed_rank),createdAt:last.created_at,id:last.id}}):null;
+  const nextCursor=results[0].results.length>query.limit?encodeDiscoverCursor({v:1,scope,filters:{q:query.q,source:query.source,sort:query.sort,author:query.author,...query.following?{following:true}:{}},asOf,...(snapshot?{snapshot}:{}),last:{rank:Number(last.feed_rank),createdAt:last.created_at,id:last.id}}):null;
   // Presentation counts and the viewer's liked state stay live. Ranking uses
   // asOf to prevent new works/comments/likes from changing this traversal.
   // Recommended reads append-only impressions, starts and credits below the
@@ -123,6 +128,7 @@ const recommendations=createRecommendationService({db,bodyJSON});
 const handleDiscoveryAPI=createDiscoveryService({db,ownWork,getWork,workJSON,bodyJSON});
 const handleArchiveAPI=createArchiveService({db,ownWork,workJSON,bodyJSON});
 const publicSharing=createPublicSharingService({db,bucket,origin:()=>(env as unknown as {APP_ORIGIN?:string}).APP_ORIGIN||''});
+const creators=createCreatorService({db,bucket,bodyJSON,readForm:readPublicationForm,json});
 const handleWorkEditAPI=createWorkEditService({db,bucket,ownWork,workJSON,hash,readForm:readPublicationForm});
 const handleVersionAPI=createVersionService({db,bucket,ownWork,workJSON,hash,readForm:readPublicationForm,readArtifact,bodyJSON,onPublished:(workId:string,versionId:string,ownerId:string)=>autoCovers.enqueue(workId,versionId,ownerId)});
 
@@ -241,11 +247,13 @@ async function addFeedback(request:Request,user:User) {
 // These queries deliberately never read ft_feedback. Legacy private messages
 // retain their owner-only inbox and are not part of the work's public discussion.
 const COMMENT_COLUMNS=`c.*,w.name AS work_name,w.author_id AS creator_id,
+  (SELECT name FROM ft_profiles WHERE id=c.author_id) live_author_name,
+  (SELECT avatar_url FROM ft_profiles WHERE id=c.author_id) author_avatar_url,
   (SELECT COUNT(*) FROM ft_comment_likes l WHERE l.comment_id=c.id) AS likes_count,
   EXISTS(SELECT 1 FROM ft_comment_likes l WHERE l.comment_id=c.id AND l.actor_id=?) AS liked_by_me,
   (SELECT COUNT(*) FROM ft_comments r WHERE r.parent_id=c.id) AS reply_count`;
 const COMMENT_QUERY=`SELECT ${COMMENT_COLUMNS} FROM ft_comments c JOIN ft_works w ON w.id=c.work_id`;
-function commentJSON(c:Row) {return {id:c.id,workId:c.work_id,workName:c.work_name,authorId:c.author_id,authorName:c.author_name,isCreator:c.author_id===c.creator_id,body:c.body,parentId:c.parent_id,createdAt:c.created_at,likesCount:Number(c.likes_count||0),likedByMe:Boolean(c.liked_by_me),replyCount:Number(c.reply_count||0)};}
+function commentJSON(c:Row) {return {id:c.id,workId:c.work_id,workName:c.work_name,authorId:c.author_id,authorName:c.live_author_name||c.author_name,authorAvatarUrl:c.author_avatar_url||'',isCreator:c.author_id===c.creator_id,body:c.body,parentId:c.parent_id,createdAt:c.created_at,likesCount:Number(c.likes_count||0),likedByMe:Boolean(c.liked_by_me),replyCount:Number(c.reply_count||0)};}
 async function getComment(id:unknown,user:User) {
   if(typeof id!=='string'||id.length>128)throw new ApiError(404,'COMMENT_NOT_FOUND','评论不存在');
   const comment=await first(COMMENT_QUERY+' WHERE c.id=?',user.id,id);
@@ -327,13 +335,20 @@ async function createCard(request:Request,user:User) {
   const input=await bodyJSON(request),name=requiredText(input.name,'名片名称',80),bio=requiredText(input.bio??'','简介',500,0);
   const details=cardDetails(input);
   cardTemplate(input.template);
+  const pinnedAvatar=Object.hasOwn(input,'avatarUrl');let avatarUrl='';
+  if(pinnedAvatar){
+    if(typeof input.avatarUrl!=='string')fail(422,'INVALID_CARD_AVATAR','名片头像无效，请重新生成预览');
+    avatarUrl=safeAvatarURL(input.avatarUrl);
+    if(input.avatarUrl&&!avatarUrl)fail(422,'INVALID_CARD_AVATAR','名片头像无效，请重新生成预览');
+    if(avatarUrl.startsWith('/api/public/avatars/')&&!await first('SELECT id FROM ft_profile_avatars WHERE id=? AND owner_id=?',avatarUrl.split('/').at(-1),user.id))fail(422,'INVALID_CARD_AVATAR','名片头像不属于当前账号，请重新生成预览');
+  }
   if(!Array.isArray(input.workIds)||input.workIds.length<1||input.workIds.length>30||input.workIds.some((id:unknown)=>typeof id!=='string')||new Set(input.workIds).size!==input.workIds.length)throw new ApiError(422,'INVALID_WORK_SELECTION','请选择 1–30 个不同的作品');
   const workRefs=cardWorkRefs(input.workIds,input.workRefs);
   const keyHeader=request.headers.get('idempotency-key'),key=keyHeader?eventId(keyHeader):null;
-  const requestHash=await hash(JSON.stringify({name,bio,template:input.template,workIds:input.workIds,...(workRefs?{workRefs}:{}),...details}));
+  const requestHash=await hash(JSON.stringify({name,bio,template:input.template,workIds:input.workIds,...(workRefs?{workRefs}:{}),...details,...pinnedAvatar?{avatarUrl}:{}}));
   // A pre-upgrade request without the new details can still replay its original
   // immutable snapshot. New detail values must never reuse that old request key.
-  const legacyHash=!workRefs&&!details.signature&&!details.headline&&!details.website&&details.backStyle==='ink'?await hash(JSON.stringify({name,bio,template:input.template,workIds:input.workIds})):null;
+  const legacyHash=!pinnedAvatar&&!workRefs&&!details.signature&&!details.headline&&!details.website&&details.backStyle==='ink'?await hash(JSON.stringify({name,bio,template:input.template,workIds:input.workIds})):null;
   async function replay(){if(!key)return null;const row=await first('SELECT * FROM ft_cards WHERE author_id=? AND idempotency_key=?',user.id,key);if(!row)return null;if(row.deleted_at)throw new ApiError(409,'CARD_DELETED','这张名片已删除，请重新生成预览后保存。');if(row.request_hash!==requestHash&&row.request_hash!==legacyHash)throw new ApiError(409,'IDEMPOTENCY_CONFLICT','名片提交内容已变化，请使用新的提交标识');return json({card:cardSnapshot(JSON.parse(row.snapshot_json))});}
   const prior=await replay();if(prior)return prior;
   const works=[];for(let i=0;i<input.workIds.length;i++){
@@ -343,11 +358,11 @@ async function createCard(request:Request,user:User) {
       if(workRefs[i].metadataId){const m=await first('SELECT * FROM ft_work_metadata WHERE id=? AND work_id=?',workRefs[i].metadataId,w.id);if(!m)throw new ApiError(422,'INVALID_METADATA','名片预览信息不属于该作品');Object.assign(w,{current_metadata_id:m.id,name:m.name,description:m.description,cover_key:m.cover_key,cover_mime:m.cover_mime});}}
     works.push({...workJSON(w),authorName:name});
   }
-  const card={id:uuid(),authorId:user.id,name,bio,...details,template:input.template,workIds:input.workIds,works,createdAt:iso()};
+  const card={id:uuid(),authorId:user.id,name,bio,...details,avatarUrl:pinnedAvatar?avatarUrl:(await userProfile(user)).avatarUrl,template:input.template,workIds:input.workIds,works,createdAt:iso()};
   try{await db().batch([
     sql('INSERT INTO ft_cards (id,author_id,snapshot_json,created_at,idempotency_key,request_hash) VALUES (?,?,?,?,?,?)',card.id,user.id,JSON.stringify(card),card.createdAt,key,requestHash),
-    sql('INSERT INTO ft_profiles (id,name,bio,signature,headline,website,back_style) VALUES (?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,bio=excluded.bio,signature=excluded.signature,headline=excluded.headline,website=excluded.website,back_style=excluded.back_style',user.id,name,bio,details.signature,details.headline,details.website,details.backStyle),
-    sql('UPDATE ft_works SET author_name=? WHERE author_id=?',name,user.id),
+    sql('INSERT INTO ft_profiles (id,name,bio,signature,headline,website,back_style) VALUES (?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING',user.id,name,bio,details.signature,details.headline,details.website,details.backStyle),
+    sql('UPDATE ft_works SET author_name=(SELECT name FROM ft_profiles WHERE id=?) WHERE author_id=?',user.id,user.id),
   ]);}catch(e){const found=await replay();if(found)return found;if(archiveConstraint(e))fail(409,'WORK_ARCHIVED','选中的作品已归档，请返回重新选择作品。');throw e;}
   return json({card},201);
 }
@@ -363,8 +378,10 @@ export async function handleAPI(request:Request) {
     if(request.method==='GET'&&new URL(request.url).pathname==='/api/auth/config')return json({provider:'sites',configured:true,signInPath:'/signin-with-chatgpt',signOutPath:'/signout-with-chatgpt'});
     const workerResponse=await handleBuildWorker(request);if(workerResponse)return workerResponse;
     const publicResponse=await publicSharing.api(request);if(publicResponse)return publicResponse;
+    const avatarResponse=await creators.publicAvatar(request);if(avatarResponse)return avatarResponse;
     const user=authenticate(request.headers),url=new URL(request.url),parts=url.pathname.replace(/^\/api\/?/,'').split('/').filter(Boolean);
     if(['POST','PATCH'].includes(request.method))verifyWrite(request);
+    const creatorResponse=await creators.handle(request,user);if(creatorResponse)return creatorResponse;
     const autoCoverResponse=await autoCovers.handle(request,user);if(autoCoverResponse)return autoCoverResponse;
     const archiveResponse=await handleArchiveAPI(request,user);if(archiveResponse)return archiveResponse;
     const discoveryResponse=await handleDiscoveryAPI(request,user);if(discoveryResponse)return discoveryResponse;

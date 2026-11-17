@@ -1,11 +1,19 @@
-import { sqliteTable, text, integer, index, uniqueIndex, primaryKey, type AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, index, uniqueIndex, primaryKey, check, type AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 
 export const profiles = sqliteTable('ft_profiles', {
   id: text('id').primaryKey(), name: text('name').notNull(), bio: text('bio').notNull().default(''),
   signature: text('signature').notNull().default(''), headline: text('headline').notNull().default(''),
   website: text('website').notNull().default(''), backStyle: text('back_style').notNull().default('ink'),
+  avatarUrl: text('avatar_url').notNull().default(''),
 });
+export const creatorFollows = sqliteTable('ft_creator_follows', {
+  followerId: text('follower_id').notNull(), creatorId: text('creator_id').notNull(), createdAt: text('created_at').notNull(),
+}, t=>[primaryKey({columns:[t.followerId,t.creatorId]}),check('ft_creator_follows_not_self',sql`${t.followerId} <> ${t.creatorId}`),index('ft_creator_follows_creator').on(t.creatorId,t.createdAt,t.followerId),index('ft_creator_follows_follower').on(t.followerId,t.createdAt,t.creatorId)]);
+export const profileAvatars = sqliteTable('ft_profile_avatars', {
+  id: text('id').primaryKey(), ownerId: text('owner_id').notNull(), objectKey: text('object_key').notNull(), mime: text('mime').notNull(),
+  byteSize: integer('byte_size').notNull(), createdAt: text('created_at').notNull(),
+}, t=>[index('ft_profile_avatars_owner').on(t.ownerId,t.createdAt)]);
 export const works = sqliteTable('ft_works', {
   id: text('id').primaryKey(), authorId: text('author_id').notNull(), authorName: text('author_name').notNull(),
   name: text('name').notNull(), description: text('description').notNull(), source: text('source').notNull(),

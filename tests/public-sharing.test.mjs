@@ -18,7 +18,7 @@ test('anonymous reads project each saved template without exposing account, mode
     const saved=await save(f,work,template,{signature:'Keep making',headline:'Game maker',website:'https://example.test/about',backStyle:'cobalt'});assert.equal(saved.status,201);
     const path=publicPath(saved.card),result=await get(path);assert.equal(result.status,200);
     const card=result.data.card;
-    assert.deepEqual(Object.keys(card).sort(),['id','template','name','bio','headline','signature','website','backStyle','createdAt','works'].sort());
+    assert.deepEqual(Object.keys(card).sort(),['id','template','name','bio','headline','signature','website','backStyle','createdAt','avatarUrl','works'].sort());
     assert.equal(card.template,template);assert.equal(card.name,'Creator');assert.equal(card.signature,'Keep making');
     assert.deepEqual(Object.keys(card.works[0]).sort(),['id','name','desc','authorName','source','version','versionId','coverUrl'].sort());
     assert.equal(card.works[0].versionId,work.versionId);assert.equal(card.works[0].coverUrl,path+'/works/'+work.id+'/cover');
@@ -54,9 +54,9 @@ test('legacy version covers work, but a card cannot expose a cover belonging to 
   const malformed=structuredClone(legacy);malformed.id=randomUUID();malformed.works[0].metadataId=other.metadataId;malformed.works[0].coverUrl='/media/'+other.metadataId;
   f.database.prepare('INSERT INTO ft_cards(id,author_id,snapshot_json,created_at) VALUES(?,?,?,?)').run(malformed.id,OWNER,JSON.stringify(malformed),card.createdAt);
   const forbidden=await get(publicPath(malformed)+'/works/'+work.id+'/cover');assert.equal(forbidden.status,404);
-  const external=structuredClone(legacy);external.id=randomUUID();external.works[0].coverUrl='https://evil.test/track.png';external.website='javascript:alert(1)';external.email='private@example.test';external.works[0].url='https://unselected.test/game';
+  const external=structuredClone(legacy);external.id=randomUUID();external.works[0].coverUrl='https://evil.test/track.png';external.avatarUrl='https://evil.test/avatar.svg';external.website='javascript:alert(1)';external.email='private@example.test';external.works[0].url='https://unselected.test/game';
   f.database.prepare('INSERT INTO ft_cards(id,author_id,snapshot_json,created_at) VALUES(?,?,?,?)').run(external.id,OWNER,JSON.stringify(external),card.createdAt);
-  const projected=(await get(publicPath(external))).data.card;assert.equal(projected.website,'');assert.equal(projected.works[0].coverUrl,'');assert(!JSON.stringify(projected).includes('private@example'));assert(!Object.hasOwn(projected.works[0],'url'));
+  const projected=(await get(publicPath(external))).data.card;assert.equal(projected.website,'');assert.equal(projected.avatarUrl,'');assert.equal(projected.works[0].coverUrl,'');assert(!JSON.stringify(projected).includes('private@example'));assert(!Object.hasOwn(projected.works[0],'url'));
 });
 
 test('public sharing opens no games, sessions, events, account data, lists or mutations',async t=>{

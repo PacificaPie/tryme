@@ -2,9 +2,11 @@
 
 更新日期：2026-11-17。本文面向接手代码的合作者；部署是否已经完成，以对应环境的实际验收记录为准。
 
+最新创作者主页、关注与头像已部署到 staging：[方案与验收](creator-home-2026-11-17.md)，迁移 `0013`、426 项测试，部署版本 `b818779f-2f62-45d1-87d8-648be26aba0a`。名片保存与实时个人资料已分离；后续开发请保留快照、头像所有权与账号/路由隔离约定。
+
 后续界面修整已部署到 staging：菜单浮层、名片删除/分享与动效见 [创作者操作验收](creator-actions-2026-11-17.md)，含迁移 `0012`、365 项测试及当前部署 ID。以下封面与协作记录保留其原有提交与验收时间。
 
-当前应用代码提交为 [`b7adba1`](https://github.com/PacificaPie/funtrack/commit/b7adba1)，staging 部署为 `13c9a469`；359 项自动测试通过，[GitHub CI 44028978849](https://github.com/PacificaPie/funtrack/actions/runs/44028978849) 已成功。既有作品补封面与新 HTML 无封面发布均已由云端生成真实开屏，见 [验收记录](interface-validation-2026-11-17.md)。
+此前封面验收的应用代码提交为 [`b7adba1`](https://github.com/PacificaPie/funtrack/commit/b7adba1)，staging 部署为 `13c9a469`；359 项自动测试通过，[GitHub CI 44028978849](https://github.com/PacificaPie/funtrack/actions/runs/44028978849) 已成功。既有作品补封面与新 HTML 无封面发布均已由云端生成真实开屏，见 [验收记录](interface-validation-2026-11-17.md)。
 
 ## 先打开哪里
 

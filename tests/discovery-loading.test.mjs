@@ -2,13 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mountDiscovery,clearDiscovery} from '../public/discovery.js';
 
-// Minimal nodes for the real loading/empty/error branches. No masonry, network
-// or fake production APIs are needed to exercise request races and teardown.
+// Minimal nodes for request races and page composition. Layout has zero width,
+// so these tests use the real loading/rendering code without simulating pixels.
 class Element {
-  attributes=new Map();dataset={};listeners=new Map();nodes=[];textContent='';value='';hidden=false;disabled=false;isConnected=true;_html='';
+  attributes=new Map();dataset={};listeners=new Map();nodes=[];textContent='';value='';hidden=false;disabled=false;isConnected=true;_html='';style={setProperty(){}};
   constructor(tag='div',attributes=''){
     this.tag=tag;this.classes=new Set();
-    this.classList={toggle:(name,enabled)=>enabled?this.classes.add(name):this.classes.delete(name)};
+    this.classList={toggle:(name,enabled)=>enabled?this.classes.add(name):this.classes.delete(name),add:name=>this.classes.add(name)};
     for(const match of attributes.matchAll(/([^\s=/>]+)(?:\s*=\s*"([^"]*)"|\s*=\s*'([^']*)')?/g))this.setAttribute(match[1],match[2]??match[3]??'');
     this.hidden=this.attributes.has('hidden');this.disabled=this.attributes.has('disabled');this.value=this.attributes.get('value')||'';
   }
@@ -17,6 +17,10 @@ class Element {
   getAttribute(name){return this.attributes.get(name)??null;}
   set innerHTML(value){this._html=value;this.nodes=this.parse(value);}
   get innerHTML(){return this._html;}
+  get children(){return this.nodes;}
+  get content(){return {firstElementChild:this.nodes[0]||null};}
+  insertBefore(node,before){node.remove();const index=this.nodes.indexOf(before);this.nodes.splice(index<0?this.nodes.length:index,0,node);node.parentNode=this;}
+  remove(){if(this.parentNode){const nodes=this.parentNode.nodes;nodes.splice(nodes.indexOf(this),1);this.parentNode=null;}}
   parse(html){return [...html.matchAll(/<([a-z][\w:-]*)(\s[^>]*|)>/gi)].map(match=>new Element(match[1],match[2]));}
   insertAdjacentHTML(_position,html){this._html+=html;this.nodes.push(...this.parse(html));}
   matches(selector){return selector[0]==='#'?this.attributes.get('id')===selector.slice(1):selector[0]==='.'?this.classes.has(selector.slice(1)):selector[0]==='['?this.attributes.has(selector.slice(1,-1)):this.tag===selector;}
@@ -31,15 +35,20 @@ const empty=()=>({works:[],nextCursor:null,total:0});
 function fixture(t){
   clearDiscovery();
   const originalSet=globalThis.setTimeout,originalClear=globalThis.clearTimeout;
-  let now=0,sequence=0;const timers=new Map(),calls=[],queries=[],social=[],root=new Element();
+  const originalDOM=Object.fromEntries(['document','window','requestAnimationFrame','cancelAnimationFrame'].map(key=>[key,Object.getOwnPropertyDescriptor(globalThis,key)]));
+  let now=0,sequence=0;const timers=new Map(),frames=new Map(),calls=[],queries=[],social=[],panels=[],root=new Element();
+  globalThis.document={createElement:tag=>new Element(tag)};
+  globalThis.window={addEventListener(){},removeEventListener(){}};
+  globalThis.requestAnimationFrame=callback=>{const id=++sequence;frames.set(id,callback);return id;};
+  globalThis.cancelAnimationFrame=id=>frames.delete(id);
   globalThis.setTimeout=(callback,delay)=>{const id=++sequence;timers.set(id,{callback,at:now+delay});return id;};
   globalThis.clearTimeout=id=>timers.delete(id);
-  t.after(()=>{globalThis.setTimeout=originalSet;globalThis.clearTimeout=originalClear;clearDiscovery();});
+  t.after(()=>{panels.forEach(panel=>panel.dispose());globalThis.setTimeout=originalSet;globalThis.clearTimeout=originalClear;for(const [key,descriptor]of Object.entries(originalDOM)){if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key];}clearDiscovery();});
   function tick(ms){now+=ms;for(const [id,timer] of [...timers])if(timer.at<=now){timers.delete(id);timer.callback();}}
   const api=(url,options)=>new Promise((resolve,reject)=>calls.push({url,signal:options.signal,resolve,reject}));
-  const mount=()=>mountDiscovery(root,{api,esc:String,workTile:()=>{throw Error('These tests only render empty results');},syncSocial:work=>social.push(work),userId:'loading-test',onQuery:query=>queries.push({...query}),restoreScroll(){}});
+  const mount=async(options={},target=root)=>{const panel=await mountDiscovery(target,{api,esc:String,workTile:work=>`<article data-rendered-work="${work.id}"></article>`,syncSocial:work=>social.push(work),userId:'loading-test',onQuery:query=>queries.push({...query}),restoreScroll(){},...options});panels.push(panel);return panel;};
   const results=()=>root.querySelector('#discovery-results'),status=()=>root.querySelector('.feed-status'),retry=()=>results().querySelector('[data-retry]'),refresh=()=>root.querySelector('.feed-refresh');
-  return{root,calls,queries,social,timers,tick,mount,results,status,retry,refresh};
+  return{root,calls,queries,social,timers,frames,tick,mount,results,status,retry,refresh};
 }
 
 test('first request does not delay disposal; disposing aborts it and ignores its late rejection and timeout',async t=>{
@@ -104,4 +113,73 @@ test('sort selection updates its label and URL once, retains filters, and ignore
   const count=f.calls.length;sort.fire('click');assert.equal(f.calls.length,count);
   current.resolve(empty());await settle();const html=f.results().innerHTML;
   previous.reject(new Error('Late obsolete sorting error'));await settle();assert.equal(f.results().innerHTML,html);assert.equal(f.status().textContent,'');
+});
+
+test('switching Feed scope retains search/type/sort, cancels debounced search, and ignores the old scope response',async t=>{
+  const f=fixture(t);await f.mount({initial:{q:'old',source:'html',sort:'comments'}});
+  const old=f.calls[0],search=f.root.querySelector('#work-search');search.value=' rain ';search.fire('input');
+  const scopes=f.root.querySelectorAll('[data-feed-scope]'),followed=scopes.find(button=>button.dataset.feedScope==='1');
+  followed.fire('click');
+  const params=new URL(f.calls[1].url,'https://funtrack.test').searchParams;
+  assert.deepEqual(Object.fromEntries(params),{q:'rain',source:'html',sort:'comments',following:'1',limit:'12'});
+  assert.equal(old.signal.aborted,true);assert.deepEqual(f.queries.at(-1),{q:'rain',source:'html',sort:'comments',following:'1'});
+  assert.equal(followed.getAttribute('aria-pressed'),'true');assert.equal(scopes.filter(button=>button.getAttribute('aria-pressed')==='true').length,1);
+  followed.fire('click');f.tick(250);assert.equal(f.calls.length,2,'A pending search or reselected scope must not issue another request');
+  f.calls[1].resolve(empty());await settle();const html=f.results().innerHTML;
+  old.resolve({works:[{id:'unfollowed-author-work'}],total:1,nextCursor:null});await settle();
+  assert.equal(f.results().innerHTML,html);assert.equal(f.social.length,0,'Stale discovery results must not enter following state');
+});
+
+test('following empty state leads to creators; clearing filters retains following and the chosen order',async t=>{
+  const f=fixture(t);await f.mount({initial:{following:'1',q:'rain',source:'url',sort:'likes'}});
+  f.calls[0].resolve(empty());await settle();
+  assert.match(f.results().innerHTML,/没有找到作品/);assert.doesNotMatch(f.results().innerHTML,/href="#\/publish"/);
+  f.results().fire('click',f.results().querySelector('[data-clear]'));
+  const params=new URL(f.calls[1].url,'https://funtrack.test').searchParams;
+  assert.equal(params.get('following'),'1');assert.equal(params.get('q'),'');assert.equal(params.get('source'),'all');assert.equal(params.get('sort'),'likes');
+  assert.equal(f.root.querySelector('#work-search').value,'');
+  f.calls[1].resolve(empty());await settle();
+  assert.match(f.results().innerHTML,/关注的人还没有公开作品/);assert.match(f.results().innerHTML,/href="#\/cards"/);assert.match(f.results().innerHTML,/发现创作者/);
+  assert.doesNotMatch(f.results().innerHTML,/href="#\/publish"/);
+  f.root.querySelectorAll('[data-sort]').find(button=>button.dataset.sort==='newest').fire('click');
+  f.root.querySelectorAll('[data-filter]').find(button=>button.dataset.filter==='html').fire('click');
+  const changed=new URL(f.calls.at(-1).url,'https://funtrack.test').searchParams;
+  assert.equal(changed.get('following'),'1');assert.equal(changed.get('sort'),'newest');assert.equal(changed.get('source'),'html');
+});
+
+test('Feed visit cache separates public/following scope and user identity, then restores the matching view',async t=>{
+  const f=fixture(t);const publicPanel=await f.mount();
+  f.calls[0].resolve(empty());await settle();publicPanel.dispose();
+  const followingRoot=new Element(),followingPanel=await f.mount({initial:{following:'1'}},followingRoot);
+  assert.equal(f.calls.length,2,'The public visit cannot populate a followed Feed');
+  f.calls[1].resolve(empty());await settle();followingPanel.dispose();
+  const otherRoot=new Element(),otherPanel=await f.mount({initial:{following:'1'},userId:'another-user'},otherRoot);
+  assert.equal(f.calls.length,3,'Followed Feed cache is private to its user');otherPanel.dispose();
+  let restores=0;const restoredRoot=new Element();await f.mount({initial:{following:'1'},restoreScroll:()=>restores++},restoredRoot);
+  assert.equal(f.calls.length,3);assert.match(restoredRoot.querySelector('#discovery-results').innerHTML,/关注的人还没有公开作品/);
+  for(const callback of f.frames.values())callback();assert.equal(restores,1);
+});
+
+test('worksOnly renders complete author results and cached results without Feed controls or duplicate creator heading',async t=>{
+  const f=fixture(t),options={authorId:'creator one',worksOnly:true,initial:{following:'1'}};
+  const panel=await f.mount(options);
+  const params=new URL(f.calls[0].url,'https://funtrack.test').searchParams;
+  assert.equal(params.get('author'),'creator one');assert.equal(params.get('following'),'0');assert.equal(params.get('sort'),'newest');
+  for(const selector of ['#author-name','.author-heading','.feed-heading','.feed-scope','#work-search','[data-sort]','[data-filter]'])assert.equal(f.root.querySelector(selector),null,selector);
+  const works=[{id:'first',authorName:'Saved creator'},{id:'not-featured-on-card',authorName:'Saved creator'}];
+  f.calls[0].resolve({works,total:2,nextCursor:null});await settle();
+  assert.equal(f.status().textContent,'');assert.deepEqual(f.social,works);
+  assert.match(f.results().innerHTML,/全部作品/);assert.deepEqual(f.root.querySelector('.feed-grid').children.map(tile=>tile.dataset.workId),works.map(work=>work.id));
+  assert.equal(f.root.querySelector('.feed-grid').children[1].getAttribute('aria-setsize'),'2');
+  panel.dispose();const restoredRoot=new Element();await f.mount(options,restoredRoot);
+  assert.equal(f.calls.length,1,'Returning to the creator restores the complete author query');
+  assert.equal(restoredRoot.querySelector('.feed-status').textContent,'');assert.equal(restoredRoot.querySelector('#author-name'),null);
+  assert.deepEqual(restoredRoot.querySelector('.feed-grid').children.map(tile=>tile.dataset.workId),['first','not-featured-on-card']);
+});
+
+test('empty worksOnly author view remains a clean public portfolio empty state',async t=>{
+  const f=fixture(t);await f.mount({authorId:'empty-creator',worksOnly:true,initial:{following:'1'}});
+  f.calls[0].resolve(empty());await settle();
+  assert.match(f.results().innerHTML,/还没有公开作品/);assert.doesNotMatch(f.results().innerHTML,/发布作品|发现创作者|关注的人/);
+  assert.equal(f.root.querySelector('#load-works').hidden,true);assert.equal(f.results().getAttribute('aria-busy'),'false');
 });
