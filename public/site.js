@@ -2,6 +2,7 @@ import { t, getLocale, setLocale } from './i18n.js';
 import {discoveryPath,discoveryState,changeVisibility,renderDiscoverySettings,disposePublicationControls,hasPendingPublicationControl,publicationFailureMessage,publicationFailureActions} from './publication-controls.js';
 import './site.messages.js';
 import { emptyState, pageSkeleton } from './empty-state.js';
+import { signInState } from './sign-in-state.js';
 import { syncNavigation } from './navigation.js';
 import { mountDiscussion } from './discussion.js';
 import { createPlayClock } from './play-clock.js';
@@ -71,7 +72,7 @@ function empty(title,description,action=''){const path=route().path;return empty
 function studio(content,tab){return `<div class="page"><div class="studio"><nav class="studio-nav" aria-label="${t("创作中心")}">${[['works',t("我的作品")],['data',t("数据")],['feedback',t("互动")]].map(([id,name])=>`<a href="#/studio/${id}" class="${tab===id?'active':''}">${name}</a>`).join('')}</nav><div class="studio-main">${content}</div></div></div>`;}
 function cardsPage(content,tab='mine'){return `<div class="page cards-page"><nav class="cards-nav" aria-label="${t("名片")}"><a href="#/cards" class="${tab==='browse'?'active':''}">${t("浏览名片")}</a><a href="#/cards/me" class="${tab==='mine'?'active':''}">${t("我的名片")}</a></nav>${content}</div>`;}
 function cardProfile(card){return {signature:typeof card.signature==='string'?card.signature:'',headline:typeof card.headline==='string'?card.headline:'',website:safeExternal(card.website),backStyle:['ink','ivory','cobalt'].includes(card.backStyle)?card.backStyle:'ink'};}
-function pageError(error){if(error.status===401){me=null;identity();const standalone=getAuthConfig().provider==='clerk';return `<div class="page narrow">${empty(t("登录后继续"),t(standalone?"使用邮箱或已连接账号继续。":"使用 ChatGPT 账号访问作品和创作中心。"),signinLink(t(standalone?"登录":"使用 ChatGPT 登录")))}</div>`;}return `<div class="page narrow"><section class="error-state"><h2>${t("暂时没能加载")}</h2><p>${esc(t(error.message))}</p><button class="button" data-action="reload">${t("重试")}</button></section></div>`;}
+function pageError(error){if(error.status===401){me=null;identity();const standalone=getAuthConfig().provider==='clerk';return signInState(signinLink(t(standalone?"登录 / 注册":"使用 ChatGPT 登录")));}return `<div class="page narrow"><section class="error-state"><h2>${t("暂时没能加载")}</h2><p>${esc(t(error.message))}</p><button class="button" data-action="reload">${t("重试")}</button></section></div>`;}
 function head(title,subtitle='',action=''){return `<div class="page-head"><div><h1>${esc(title)}</h1>${subtitle?`<p>${esc(subtitle)}</p>`:''}</div>${action}</div>`;}
 function saveCardDraft(){write(storage.card,cardDraft);}
 function savePublish(){write(storage.publish,publishDraft);}
