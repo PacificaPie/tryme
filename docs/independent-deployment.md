@@ -1,6 +1,6 @@
-# 独立 Cloudflare 部署准备
+# 独立 Cloudflare 部署
 
-这个目标使用 Cloudflare Worker + D1 + R2，以及 Clerk 登录。访问者不需要 ChatGPT 账户。当前只准备代码和本地构建入口：尚未创建域名、Clerk 实例或独立云资源，也没有完成真实 Clerk 注册/登录、跨页面会话及公网部署验收。
+这个目标使用 Cloudflare Worker + D1 + R2，以及 Clerk 登录。访问者不需要 ChatGPT 账户。2026-11-16 已发布 `workers.dev` 临时公网测试站，使用独立 staging D1/R2 和 Clerk development 实例，公开配置在 `wrangler.standalone.staging.jsonc`。实际资源、验收与限制见 [本次部署记录](./cloud-deployment-2026-11-16.md)。正式域名与 Clerk production 实例尚未配置。
 
 默认 `npm run dev` / `npm run build` 仍是 Sites 目标。独立目标必须显式选择 `FUNTRACK_TARGET=standalone`，使用 `worker/standalone.ts`，关闭 Sites mock 登录与连接器预览。它不读取 `.openai/hosting.json`，也不会复制 Sites 的云资源描述。
 
@@ -9,11 +9,12 @@
 | 用途 | 路径 |
 | --- | --- |
 | 可本地构建的配置模板 | `wrangler.standalone.jsonc` |
+| 临时公网测试配置 | `wrangler.standalone.staging.jsonc` |
 | 独立前端与 Worker 产物 | `dist-standalone/client/`、`dist-standalone/server/` |
 | 产物部署配置 | `dist-standalone/server/wrangler.json` |
 | 独立本地 D1/R2 状态 | `.preview/standalone-state/` |
 | 独立 Vite 缓存 | `node_modules/.vite-funtrack-standalone/` |
-| 生产准备检查 | `scripts/standalone-deploy.mjs`，只检查和输出步骤，不部署 |
+| 产物准备检查 | `scripts/standalone-deploy.mjs`，默认 production，staging 须显式 `--mode staging`；只检查，不部署 |
 
 模板的全零 D1 ID 仅用于本地模拟，不是一个生产数据库。模板没有公网路由，且 `workers_dev:false`；它不能直接作为可访问的正式站点发布。
 
@@ -33,15 +34,50 @@ npm run dev:standalone
 
 没有 Clerk 配置时，静态页面和 `/api/auth/config` 可打开；配置返回 `configured:false`，受保护 API 返回 `503 AUTH_NOT_CONFIGURED`。这不是一个模拟登录账户，也不会接受浏览器伪造的 `oai-authenticated-*` 头。
 
-以后建立 Clerk 测试实例后，将测试 Publishable Key 写到本地配置的 `vars.CLERK_PUBLISHABLE_KEY`。Secret Key 放在本机未纳入版本控制的 `.dev.vars`，或通过安全方式供给进程环境；不要放进 `vars`、前端代码、命令行参数或聊天。配置的 `secrets.required` 仅允许加载列出的秘密名称。测试密钥只用于本地；远端测试实例必须明确设置 `CLERK_TEST_MODE=1`，本项目的正式发布检查会拒绝这种模式。
+本地使用 Clerk 测试实例时，将测试 Publishable Key 写到本地配置的 `vars.CLERK_PUBLISHABLE_KEY`。Secret Key 放在本机未纳入版本控制的 `.dev.vars`，或通过安全方式供给进程环境；不要放进 `vars`、前端代码、命令行参数或聊天。配置的 `secrets.required` 仅允许加载列出的秘密名称。远端测试实例必须明确设置 `CLERK_TEST_MODE=1`；下面的 staging 检查接受这种模式，正式发布检查仍拒绝它。
 
 这些秘密加载规则遵循 [Cloudflare 的本地 Secret 配置](https://developers.cloudflare.com/workers/configuration/secrets/)。Vite 的配置路径与独立持久目录使用官方的 [`configPath` / `persistState`](https://developers.cloudflare.com/workers/vite-plugin/reference/api/) 选项。
+
+## 临时公网测试：staging
+
+测试站地址：`https://funtrack-staging.zhayizha-pacificapie.workers.dev/site`，已完成 Worker 发布。配置中的公开资源如下：
+
+| 资源 | staging 配置 |
+| --- | --- |
+| Worker / R2 bucket | `funtrack-staging` |
+| D1 database | `funtrack-staging`，ID `69196d4d-4dac-4cf4-b2b2-a04a7f22f078` |
+| Clerk application | `app_3MDOOvzzTsVju7zWvc0C1rRU9og` |
+| Clerk development instance | `ins_3MDOOs6bu4DAkAP7qGOSVbYazA1` |
+
+staging 要求 `workers_dev:true`、`preview_urls:false`、无额外自定义路由；`APP_ORIGIN` 必须精确匹配 Worker 名称和账户子域，不接受路径、尾斜线或另一个站点。仅接受 `CLERK_TEST_MODE:"1"`、`pk_test` 与私下提供的 `sk_test`，并复用 Worker 的密钥解析器检查合法 Base64 和实例类型。DB/R2/Worker 名称都必须有独立 `staging` 段。预检拒绝已知的 production D1 ID，即使将它的名称改成 staging；若存在 `wrangler.standalone.production.jsonc`，还会排除其中的 D1 ID 和 R2 名称。
+
+Clerk 的 development 实例适合公开预览，但不是正式生产实例；其用户数和迁移限制参见 [Clerk 环境说明](https://clerk.com/docs/guides/development/managing-environments)。暂不将测试账号、统计或作品当成正式数据。已在实际地址用 Clerk 保留测试邮箱完成验证码注册、会话刷新和游戏 iframe 验收；真实邮箱投递与 Google OAuth 仍需测试者使用自己的账号确认。
+
+通过隐藏输入或 CI 秘密存储给当前进程提供 `CLERK_SECRET_KEY`，然后执行以下步骤。检查不读取 `.env` 文件，也不输出秘密；密钥有效性最终由真实 Clerk 请求验证。
+
+```sh
+node scripts/standalone.mjs validate --mode staging --config wrangler.standalone.staging.jsonc
+node scripts/standalone.mjs build --config wrangler.standalone.staging.jsonc
+node scripts/standalone-deploy.mjs --mode staging
+```
+
+同一 `dist-standalone` 目录每次只代表最近构建的独立配置；产物检查会重新核对其资源、origin 和密钥模式。不能跳过重新构建而部署先前的 local/production 产物。
+
+迁移采用下一节的 Wrangler 流程，将 `--config` 改为 `wrangler.standalone.staging.jsonc`，先 `list` 核对迁移账。将 secret 通过 stdin 写入对应 Worker 后，执行 dry-run 与发布：
+
+```sh
+printf '%s' "$CLERK_SECRET_KEY" | node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js secret put CLERK_SECRET_KEY --config wrangler.standalone.staging.jsonc
+node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js deploy --dry-run --config dist-standalone/server/wrangler.json
+node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js deploy --config dist-standalone/server/wrangler.json
+```
+
+不要启用 shell 的 `set -x`；命令完成后清除当前 shell 的临时秘密变量。这里的脚本不会自动创建资源、执行迁移或发布；上述 Wrangler 命令才执行对应云端操作。
 
 ## 准备真实生产配置
 
 1. 确认独立 Cloudflare 账户、受控域名及域名所在 Zone。先确定唯一站点 origin，例如自己的 `https://play.<真实域名>`；不能有路径或末尾斜线。
 2. 建立 Clerk 生产实例，在 Clerk 控制台完成其域名/DNS和应用设置，将登录与登出后返回地址设为同一站点。测试实例不等于生产实例。
-3. 配置就绪后创建独立 D1、R2 和 Worker。本轮按“先准备”的范围，且尚无真实配置，因此没有执行云端创建或部署。不要借用 Sites 配置里的资源名称或 ID。
+3. 配置就绪后使用独立 production D1、R2 和 Worker。production 与 staging 均不得借用 Sites 资源，也不能互用各自的数据库或 bucket。当前已单独创建 production D1，尚不代表正式环境已可发布。
 4. 复制模板为根目录下的 `wrangler.standalone.production.jsonc`，填写真实 Worker 名称、D1 名称与 ID、R2 名称，以及 `vars.APP_ORIGIN` 和生产 `vars.CLERK_PUBLISHABLE_KEY`。Secret Key 不写入这个文件。
 5. 增加与 `APP_ORIGIN` 完全匹配的 Custom Domain 路由，例如以下结构中的占位符必须替换成实际受控域名：
 
@@ -55,7 +91,7 @@ npm run dev:standalone
 }
 ```
 
-正式检查要求这条域名路由；仅填写 `APP_ORIGIN` 不会自动提供可访问地址。配置域名使用 Cloudflare [Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/) 的机制。没有域名时，继续使用本地预览；公网 `workers.dev` 测试及测试实例的完整登录验证应另行准备，不能作为本脚本通过的正式部署。
+正式检查要求这条域名路由；仅填写 `APP_ORIGIN` 不会自动提供可访问地址。配置域名使用 Cloudflare [Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/) 的机制。没有域名时可使用上面的 staging 流程；它通过的是测试环境检查，不等于正式生产部署。
 
 公开配置可以存入仓库；真正的 Secret Key、Cloudflare API Token、`.dev.vars*` 等必须留在安全的本地或 CI 秘密存储中。不要将秘密发到聊天中。`CLERK_PUBLISHABLE_KEY` 是公开配置，`CLERK_SECRET_KEY` 是服务端秘密，两者用途不同。
 
@@ -77,7 +113,7 @@ node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1
 node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 migrations apply DB --remote --config wrangler.standalone.production.jsonc
 ```
 
-以上步骤在配置就绪后执行，本轮未运行。对已经有表但没有 `d1_migrations` 历史的数据库，不要直接 apply、伪造已执行记录或清空表；先核对 schema 和现有迁移来源，再制定受控 baseline。官方机制见 [D1 migrations](https://developers.cloudflare.com/d1/reference/migrations/)。
+以上步骤针对所选配置执行，以目标数据库的迁移账为准。对已经有表但没有 `d1_migrations` 历史的数据库，不要直接 apply、伪造已执行记录或清空表；先核对 schema 和现有迁移来源，再制定受控 baseline。官方机制见 [D1 migrations](https://developers.cloudflare.com/d1/reference/migrations/)。
 
 ## 秘密配置、构建与发布检查
 
@@ -97,7 +133,7 @@ node scripts/standalone-deploy.mjs
 printf '%s' "$CLERK_SECRET_KEY" | node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js secret put CLERK_SECRET_KEY --config wrangler.standalone.production.jsonc
 ```
 
-这一步是云端秘密写入，本轮未执行。Wrangler 提示创建 Worker 时，使用配置中指定的独立 Worker 名称和目标账户。也可在目标 Worker 的控制台中设置同名 Secret。完成后从当前 shell 清除临时变量。
+这一步是云端秘密写入。Wrangler 提示创建 Worker 时，使用配置中指定的独立 Worker 名称和目标账户。也可在目标 Worker 的控制台中设置同名 Secret。完成后从当前 shell 清除临时变量。
 
 接下来执行 dry-run，检查产物与资源绑定：
 
@@ -105,7 +141,7 @@ printf '%s' "$CLERK_SECRET_KEY" | node --import ./scripts/sites-env.mjs ./node_m
 node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js deploy --dry-run --config dist-standalone/server/wrangler.json
 ```
 
-配置和检查就绪后，执行不带 `--dry-run` 的同一命令完成发布。所有部署命令都指向独立产物，不能指向 Sites 的 `dist/server/wrangler.json`。本轮没有调用任何真实部署命令，也没有启用收费服务。
+配置和检查就绪后，执行不带 `--dry-run` 的同一命令完成发布。所有部署命令都指向独立产物，不能指向 Sites 的 `dist/server/wrangler.json`。Cloudflare 与 Clerk 的实际额度和费用由对应账户管理；配置预检不验证账单设置。
 
 ## Sites 数据不会自动迁移
 
@@ -115,11 +151,11 @@ node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js de
 
 新身份是 `clerk:user_…`，与 Sites 用户 ID 不同。旧作品 owner 不能凭同名或同邮箱自动绑定；迁移需使用可核验的旧身份→新身份映射，保存旧 ID、目标 ID、归属依据和回滚记录。历史互动的 actor、作者显示名和统计归因需分别考虑，不能把所有旧记录都改成一个新用户。本轮没有执行任何 owner 重写或数据复制。
 
-## 公开上线前仍未完成的验收
+## 正式生产上线前仍未完成的验收
 
 - 真实 Clerk 生产实例的注册、邮箱验证、登录、退出、刷新、会话过期，以及 iframe `/game` 和 `/media` 的会话链路。
-- 真实域名和 DNS、D1/R2 权限与费用设置、备份/恢复，以及受保护请求遇到 Clerk 暂不可用时的体验。
-- 上传、版本更新、回滚、封面、名片快照和统计在独立公网 origin 上的回归；本地验证不能代替这些检查。
-- 公开前重新执行 `npm audit --omit=dev` 并评估实际调用路径。2026-11-16 的报告 `.preview/production-dependency-audit.json` 有 6 项，包括既有 Next.js critical 项；Vinext 替代执行层不等于已证明不可达。不要用一键 `audit fix` 代替兼容性评估。
+- 真实域名和 DNS、正式资源的权限与备份/恢复，以及受保护请求遇到 Clerk 暂不可用时的体验。R2 已由用户开通，staging 的 D1/R2 已真实读写验证。
+- 上传、版本更新、回滚、封面、名片快照和统计已在 staging 公网 origin 验收；切换 production 密钥和域名后仍需复核对应流程。
+- 本轮定向修补后，生产依赖 audit 为 0，全量依赖无 high/critical，仍有 9 项构建/开发工具及未调用 OG 链路告警。正式发布前按新代码重新审计实际调用路径；不要用一键 `audit fix` 代替兼容性评估。
 
 GitHub 仓库构建仍需要单独运行受隔离的 build runner；Workers 本身不会安装 npm 依赖或替用户构建仓库。本轮没有创建常驻 builder。缺少 runner 时仍应显示离线状态，不能把准备好的部署入口描述为已可持续提供公开构建服务。

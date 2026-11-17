@@ -2,16 +2,18 @@ import { readFile, writeFile, unlink, mkdir, access } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { configureToolEnvironment } from './tool-environment.mjs';
-import { standaloneRoot, standaloneConfigPath, standaloneOutput, standaloneState, readStandaloneConfig, isLoopbackOrigin, validateStandaloneProduction } from './standalone-config.mjs';
+import { standaloneRoot, standaloneConfigPath, standaloneOutput, standaloneState, readStandaloneConfig, isLoopbackOrigin, validateStandalone } from './standalone-config.mjs';
 
 const [command, ...args] = process.argv.slice(2);
-if (!['dev', 'build', 'validate', 'migrate-local'].includes(command)) throw new Error('Usage: node scripts/standalone.mjs dev|build|validate|migrate-local [--config PATH] [--port 8787]');
-let port = 8787;
+if (!['dev', 'build', 'validate', 'migrate-local'].includes(command)) throw new Error('Usage: node scripts/standalone.mjs dev|build|validate|migrate-local [--config PATH] [dev --port 8787] [validate --mode production|staging]');
+let port = 8787, mode = 'production';
 for (let index = 0; index < args.length; index++) {
   if (args[index] === '--config' && args[index + 1]) process.env.FUNTRACK_STANDALONE_CONFIG = path.resolve(args[++index]);
   else if (args[index] === '--port' && args[index + 1] && command === 'dev') port = Number(args[++index]);
-  else throw new Error('Only --config PATH and dev --port PORT are supported; remote/host/deploy flags are not accepted.');
+  else if (args[index] === '--mode' && args[index + 1] && command === 'validate') mode = args[++index];
+  else throw new Error('Only --config PATH, dev --port PORT and validate --mode production|staging are supported; remote/host/deploy flags are not accepted.');
 }
+if (!['production', 'staging'].includes(mode)) throw new Error('Standalone validation mode must be production or staging.');
 if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('The local preview port must be an integer from 1024 to 65535.');
 process.chdir(standaloneRoot);
 process.env.FUNTRACK_TARGET = 'standalone';
@@ -20,9 +22,9 @@ configureToolEnvironment(standaloneRoot);
 const configPath = standaloneConfigPath(), config = readStandaloneConfig(configPath);
 
 if (command === 'validate') {
-  const errors = validateStandaloneProduction(config, process.env.CLERK_SECRET_KEY);
-  if (errors.length) { console.error('Standalone production preparation is incomplete:\n' + errors.map(message => '- ' + message).join('\n')); process.exitCode = 1; }
-  else console.log('Offline production configuration checks passed. No cloud request, resource creation, migration or deployment was performed.');
+  const errors = validateStandalone(config, process.env.CLERK_SECRET_KEY, mode);
+  if (errors.length) { console.error(`Standalone ${mode} preparation is incomplete:\n` + errors.map(message => '- ' + message).join('\n')); process.exitCode = 1; }
+  else console.log(`Offline ${mode} configuration checks passed. No cloud request, resource creation, migration or deployment was performed.`);
 } else if (command === 'migrate-local') {
   if (!isLoopbackOrigin(config.vars?.APP_ORIGIN)) throw new Error('migrate-local requires a local APP_ORIGIN configuration. It never accepts --remote.');
   const result = spawnSync(process.execPath, ['--import', './scripts/sites-env.mjs', './node_modules/wrangler/bin/wrangler.js', 'd1', 'migrations', 'apply', 'DB', '--local', '--config', configPath, '--persist-to', standaloneState], { cwd: standaloneRoot, stdio: 'inherit' });

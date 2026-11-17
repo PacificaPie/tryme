@@ -1,0 +1,28 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "funtrack-staging",
+  "account_id": "26ecbb83a9773e88121606953aeca69f",
+  "main": "./worker/standalone.ts",
+  "compatibility_date": "2026-05-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": {
+    "APP_ORIGIN": "https://funtrack-staging.zhayizha-pacificapie.workers.dev",
+    "CLERK_TEST_MODE": "1",
+    "CLERK_PUBLISHABLE_KEY": "pk_test_cHJlbWl1bS1ncmlmZm9uLTk3NzEuY2xlcmsuYWNjb3VudHMuZGV2JA"
+  },
+  "secrets": { "required": ["CLERK_SECRET_KEY"] },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "funtrack-staging",
+      "database_id": "69196d4d-4dac-4cf4-b2b2-a04a7f22f078",
+      "migrations_dir": "drizzle",
+      "migrations_table": "d1_migrations"
+    }
+  ],
+  "r2_buckets": [
+    { "binding": "BUCKET", "bucket_name": "funtrack-staging" }
+  ]
+}

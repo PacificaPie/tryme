@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
@@ -9,6 +9,9 @@ export const standaloneRoot = fileURLToPath(new URL('../', import.meta.url));
 export const standaloneOutput = path.join(standaloneRoot, 'dist-standalone');
 export const standaloneState = path.join(standaloneRoot, '.preview/standalone-state');
 export const placeholderDatabaseId = '00000000-0000-4000-8000-000000000000';
+// Public resource identifiers, never credentials. A staging name cannot disguise
+// a production binding; also include the selected production config when present.
+export const productionDatabaseIds = Object.freeze(['106c5ea7-2c17-44ea-93f5-5383168365c0']);
 export const standaloneConfigPath = () => path.resolve(standaloneRoot, process.env.FUNTRACK_STANDALONE_CONFIG || 'wrangler.standalone.jsonc');
 
 export function readStandaloneConfig(filename = standaloneConfigPath()) {
@@ -18,6 +21,53 @@ export function readStandaloneConfig(filename = standaloneConfigPath()) {
 }
 export function isLoopbackOrigin(value) {
   try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) && url.origin === value; } catch { return false; }
+}
+
+export function productionResources() {
+  const filename = path.join(standaloneRoot, 'wrangler.standalone.production.jsonc');
+  const config = existsSync(filename) ? readStandaloneConfig(filename) : {};
+  return {
+    databaseIds: [...productionDatabaseIds, ...(config.d1_databases || []).map(database => database.database_id)],
+    bucketNames: ['funtrack-production', ...(config.r2_buckets || []).map(bucket => bucket.bucket_name)],
+  };
+}
+
+export function validateStandaloneStaging(config, secretKey, protectedResources = { databaseIds: [], bucketNames: [] }) {
+  const errors = [], vars = config.vars || {};
+  let origin;
+  try { origin = new URL(vars.APP_ORIGIN); } catch {}
+  const labels = origin?.hostname.split('.') || [];
+  const dnsLabel = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+  if (!origin || origin.origin !== vars.APP_ORIGIN || origin.protocol !== 'https:' || origin.port ||
+      labels.length !== 4 || labels[2] !== 'workers' || labels[3] !== 'dev' ||
+      !dnsLabel.test(labels[0]) || !dnsLabel.test(labels[1]) || labels[0] !== config.name ||
+      /^(?:example|placeholder|replace|your-account|your-subdomain)$/.test(labels[1])) {
+    errors.push('Staging APP_ORIGIN must be the exact HTTPS <worker-name>.<account-subdomain>.workers.dev origin, matching the Worker name.');
+  }
+  if (config.workers_dev !== true || config.preview_urls !== false || (config.routes?.length ?? 0) !== 0 || config.route) errors.push('Staging requires workers_dev:true, preview_urls:false and no custom routes.');
+  if (vars.CLERK_TEST_MODE !== '1') errors.push('Staging requires explicit CLERK_TEST_MODE:"1".');
+  if (typeof vars.CLERK_PUBLISHABLE_KEY !== 'string' || !vars.CLERK_PUBLISHABLE_KEY.startsWith('pk_test_')) errors.push('Staging requires a Clerk pk_test publishable key.');
+  if (typeof secretKey !== 'string' || !/^sk_test_[A-Za-z0-9_-]+$/.test(secretKey)) errors.push('Staging requires a Clerk sk_test secret key supplied privately to this process.');
+  const auth = standaloneAuthConfig({ ...vars, CLERK_SECRET_KEY: secretKey });
+  if (!auth.configured || auth.environment !== 'test') errors.push('Clerk settings must pass the same test configuration validation as the Worker.');
+  if (Object.keys(vars).some(name => /SECRET|TOKEN|PASSWORD|PRIVATE_KEY/i.test(name))) errors.push('Secret material must use encrypted Worker secrets, never config.vars.');
+  const databases = config.d1_databases || [], buckets = config.r2_buckets || [];
+  const database = databases.find(value => value.binding === 'DB'), bucket = buckets.find(value => value.binding === 'BUCKET');
+  const stagingName = value => typeof value === 'string' && /(?:^|[-_])staging(?:[-_]|$)/.test(value) && !/(?:^|[-_])(?:prod|production|local|placeholder|replace|site-creator)(?:[-_]|$)/i.test(value);
+  if (!stagingName(config.name)) errors.push('The staging Worker name must contain a separate staging segment.');
+  if (databases.length !== 1 || !database || !/^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(database.database_id || '') || database.database_id === placeholderDatabaseId || /^0+-/.test(database.database_id || '') || !stagingName(database.database_name)) errors.push('Staging DB must identify one real D1 database with a separate staging name.');
+  const forbiddenDatabases = [...productionDatabaseIds, ...(protectedResources.databaseIds || [])].map(value => String(value).toLowerCase());
+  if (forbiddenDatabases.includes(String(database?.database_id).toLowerCase())) errors.push('Staging cannot use a production D1 database ID, even under a staging name.');
+  if (buckets.length !== 1 || !bucket || !stagingName(bucket.bucket_name) || ['funtrack-production', ...(protectedResources.bucketNames || [])].includes(bucket.bucket_name)) errors.push('Staging BUCKET must identify one separate staging R2 bucket, never a production bucket.');
+  if (config.services?.some(value => value.binding === 'CONNECTORS') || config.main?.includes('worker/index.ts')) errors.push('A standalone deployment cannot use the Sites worker or CONNECTORS binding.');
+  if (!config.secrets?.required?.includes('CLERK_SECRET_KEY')) errors.push('Declare CLERK_SECRET_KEY in secrets.required; never place its value in the config.');
+  return errors;
+}
+
+export function validateStandalone(config, secretKey, mode = 'production') {
+  if (mode === 'production') return validateStandaloneProduction(config, secretKey);
+  if (mode === 'staging') return validateStandaloneStaging(config, secretKey, productionResources());
+  throw new Error('Standalone validation mode must be production or staging.');
 }
 
 // Offline validation only. Values are never printed; the secret is used only
