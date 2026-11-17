@@ -41,6 +41,11 @@ test('revision and cursor inputs stay bounded and card references match preview 
   assert.equal(expectedRevision('12'),12);for(const value of [undefined,null,0,-1,'1.0','01',Number.MAX_SAFE_INTEGER])assert.throws(()=>expectedRevision(value));
   assert.deepEqual(cardWorkRefs(['work-a'],[{workId:'work-a',versionId:'version-a'}]),[{workId:'work-a',versionId:'version-a'}]);
   assert.throws(()=>cardWorkRefs(['work-a'],[{workId:'work-b',versionId:'version-a'}]));
+  assert.deepEqual(cardWorkRefs(['work-a'],[{workId:'work-a',versionId:'version-a',metadataId:'metadata-one'}]),[{workId:'work-a',versionId:'version-a',metadataId:'metadata-one'}]);
+  assert.deepEqual(cardWorkRefs(['work-a'],[{workId:'work-a',versionId:'version-a',metadataId:null}]),[{workId:'work-a',versionId:'version-a'}]);
+  assert.throws(()=>cardWorkRefs(['work-a'],[{workId:'work-a',versionId:'version-a',metadataId:12}]));
+  assert.deepEqual(cardWorkRefs(['work-a'],[{workId:'work-a',versionId:'version-a',expectedRevision:2}]),[{workId:'work-a',versionId:'version-a',expectedRevision:2}]);
+  assert.throws(()=>cardWorkRefs(['work-a'],[{workId:'work-a',versionId:'version-a',expectedRevision:0}]));
   assert.deepEqual(versionPage(new URLSearchParams({cursor:versionCursor('work-a',8)}),'work-a'),{limit:20,before:8});
   assert.throws(()=>versionPage(new URLSearchParams({cursor:versionCursor('work-b',8)}),'work-a'));
 });

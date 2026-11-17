@@ -4,6 +4,8 @@ import { handleBuildAPI, handleBuildWorker, getBuildArtifact } from './build-ser
 import { resolveGithubHTML } from './github-import.mjs';
 import { publicationArtifact } from './publication-artifact.mjs';
 import { createVersionService } from './version-service.mjs';
+import { createWorkEditService } from './work-edit-service.mjs';
+import { metadataId } from './work-metadata.mjs';
 import { cardWorkRefs } from './version-rules.mjs';
 import { analyticsResponse } from './analytics';
 import { ApiError, fail, authenticate, verifyWrite, requiredText, eventId, safeURL, coverType, htmlSource, sessionEvents, GAME_CSP, gameDocument, likedState, cardDetails, cardSnapshot, cardTemplate, commentInput, validateCommentParent, commentPageLimit, encodeCommentCursor, decodeCommentCursor, discoverQuery, encodeDiscoverCursor, decodeDiscoverCursor } from './rules.mjs';
@@ -31,8 +33,8 @@ async function bodyJSON(request:Request):Promise<Row> {
   if(!request.headers.get('content-type')?.toLowerCase().startsWith('application/json'))throw new ApiError(415,'JSON_REQUIRED','请使用 JSON 请求');
   try {const body=JSON.parse(new TextDecoder().decode(await limitedBody(request,65536)));if(!body||typeof body!=='object'||Array.isArray(body))throw new Error();return body;}catch(e){if(e instanceof ApiError)throw e;throw new ApiError(400,'INVALID_JSON','JSON 格式无效');}
 }
-const WORK_QUERY=`SELECT w.*,v.version,v.game_key,v.cover_key,v.cover_mime,v.provenance_json FROM ft_works w JOIN ft_work_versions v ON v.id=w.current_version_id`;
-function workJSON(w:Row) { return {id:w.id,authorId:w.author_id,authorName:w.author_name,name:w.name,desc:w.description,source:w.source,versionId:w.current_version_id,version:w.version,coverUrl:w.cover_key?`/media/${w.current_version_id}`:'',...(w.url?{url:w.url}:{}),...(w.provenance_json?{build:JSON.parse(w.provenance_json)}:{}),createdAt:w.created_at,revision:w.revision,updatedAt:w.updated_at||w.created_at}; }
+const WORK_QUERY=`SELECT w.*,v.version,v.game_key,CASE WHEN m.id IS NOT NULL THEN m.cover_key ELSE v.cover_key END cover_key,CASE WHEN m.id IS NOT NULL THEN m.cover_mime ELSE v.cover_mime END cover_mime,v.provenance_json FROM ft_works w JOIN ft_work_versions v ON v.id=w.current_version_id LEFT JOIN ft_work_metadata m ON m.id=w.current_metadata_id AND m.work_id=w.id`;
+function workJSON(w:Row) { return {id:w.id,authorId:w.author_id,authorName:w.author_name,name:w.name,desc:w.description,source:w.source,versionId:w.current_version_id,version:w.version,metadataId:w.current_metadata_id||null,coverUrl:w.cover_key?`/media/${w.current_metadata_id||w.current_version_id}`:'',...(w.url?{url:w.url}:{}),...(w.provenance_json?{build:JSON.parse(w.provenance_json)}:{}),createdAt:w.created_at,revision:w.revision,updatedAt:w.updated_at||w.created_at}; }
 async function getWork(id:unknown) { if(typeof id!=='string'||id.length>128)throw new ApiError(404,'WORK_NOT_FOUND','作品不存在');const w=await first(WORK_QUERY+' WHERE w.id=?',id);if(!w)throw new ApiError(404,'WORK_NOT_FOUND','作品不存在');return w; }
 async function ownWork(id:unknown,user:User) {const w=await getWork(id);if(w.author_id!==user.id)throw new ApiError(403,'NOT_OWNER','只能访问自己的作品数据');return w;}
 async function userProfile(user:User) {const p=await first('SELECT name,bio,signature,headline,website,back_style FROM ft_profiles WHERE id=?',user.id);return {id:user.id,name:p?.name||user.name,bio:p?.bio||'',signature:p?.signature||'',headline:p?.headline||'',website:p?.website||'',backStyle:p?.back_style||'ink'};}
@@ -60,7 +62,7 @@ async function discover(url:URL,user:User) {
   const where=conditions.join(' AND ');
   const rank=query.sort==='likes'?`(SELECT COUNT(*) FROM ft_work_likes l WHERE l.work_id=w.id AND l.created_at<=?)`:query.sort==='comments'?`(SELECT COUNT(*) FROM ft_comments c WHERE c.work_id=w.id AND c.created_at<=?)`:'0';
   const rankValues=query.sort==='newest'?[]:[asOf];
-  const selection=`WITH ranked AS (SELECT w.*,v.version,v.game_key,v.cover_key,v.cover_mime,v.provenance_json,${rank} AS feed_rank FROM ft_works w JOIN ft_work_versions v ON v.id=w.current_version_id WHERE ${where}) SELECT * FROM ranked`;
+  const selection=`WITH ranked AS (SELECT w.*,v.version,v.game_key,CASE WHEN m.id IS NOT NULL THEN m.cover_key ELSE v.cover_key END cover_key,CASE WHEN m.id IS NOT NULL THEN m.cover_mime ELSE v.cover_mime END cover_mime,v.provenance_json,${rank} AS feed_rank FROM ft_works w JOIN ft_work_versions v ON v.id=w.current_version_id LEFT JOIN ft_work_metadata m ON m.id=w.current_metadata_id AND m.work_id=w.id WHERE ${where}) SELECT * FROM ranked`;
   const after=cursor?' WHERE (feed_rank<? OR (feed_rank=? AND (created_at<? OR (created_at=? AND id<?))))':'';
   const afterValues=cursor?[cursor.last.rank,cursor.last.rank,cursor.last.createdAt,cursor.last.createdAt,cursor.last.id]:[];
   const results=await db().batch<Row>([
@@ -89,11 +91,12 @@ async function rateLimit(user:User,table:'ft_events'|'ft_play_sessions'|'ft_feed
 }
 function receipt(row:Row) { return {id:row.id,clientEventId:row.client_event_id,type:row.event_type,...(row.work_id?{workId:row.work_id}:{}),...(row.version_id?{versionId:row.version_id}:{}),...(row.card_id?{cardId:row.card_id}:{}),receivedAt:row.received_at}; }
 
-async function readPublicationForm(request:Request){
+async function readPublicationForm(request:Request,max=PUBLICATION_MAX_BYTES){
   const ct=request.headers.get('content-type')||'';if(!ct.startsWith('multipart/form-data;'))throw new ApiError(415,'FORM_REQUIRED','请使用文件上传表单');
-  try{return await new Response(await limitedBody(request,PUBLICATION_MAX_BYTES),{headers:{'Content-Type':ct}}).formData();}catch(e){if(e instanceof ApiError)throw e;throw new ApiError(400,'INVALID_FORM','上传表单无效');}
+  try{return await new Response(await limitedBody(request,max),{headers:{'Content-Type':ct}}).formData();}catch(e){if(e instanceof ApiError)throw e;throw new ApiError(400,'INVALID_FORM','上传表单无效');}
 }
 const readArtifact=(form:FormData,source:string,owner:string)=>publicationArtifact(form,source,owner,getBuildArtifact);
+const handleWorkEditAPI=createWorkEditService({db,bucket,ownWork,workJSON,hash,readForm:readPublicationForm});
 const handleVersionAPI=createVersionService({db,bucket,ownWork,workJSON,hash,readForm:readPublicationForm,readArtifact,bodyJSON});
 
 async function publish(request:Request,user:User) {
@@ -104,17 +107,18 @@ async function publish(request:Request,user:User) {
   const url=source==='url'?safeURL(form.get('url')):null;
   const {gameBytes,coverBytes,coverMime,provenanceJSON,buildId}=await readArtifact(form,source,user.id);
   const requestHash=await hash(JSON.stringify({name,description,source,url,...(buildId?{buildId}:{}),game:gameBytes?await hash(gameBytes):null,cover:coverBytes?await hash(coverBytes):null,coverMime}));
-  const initialQuery=`SELECT w.*,v.id initial_version_id,v.version,v.game_key,v.cover_key,v.cover_mime,v.provenance_json FROM ft_works w JOIN ft_work_versions v ON v.work_id=w.id AND v.ordinal=1`;
-  function initialResponse(found:Row,status=200){if(found.request_hash!==requestHash)throw new ApiError(409,'IDEMPOTENCY_CONFLICT','同一次提交的内容已变化，请创建新的提交标识');return json({work:workJSON({...found,current_version_id:found.initial_version_id,revision:1,updated_at:found.created_at}),current:{versionId:found.current_version_id,revision:found.revision}},status);}
+  const initialQuery=`SELECT w.*,v.id initial_version_id,v.version,v.game_key,v.cover_key,v.cover_mime,v.provenance_json,i.name initial_name,i.description initial_description FROM ft_works w JOIN ft_work_versions v ON v.work_id=w.id AND v.ordinal=1 LEFT JOIN ft_work_metadata i ON i.id=w.initial_metadata_id AND i.work_id=w.id`;
+  function initialResponse(found:Row,status=200){if(found.request_hash!==requestHash)throw new ApiError(409,'IDEMPOTENCY_CONFLICT','同一次提交的内容已变化，请创建新的提交标识');return json({work:workJSON({...found,name:found.initial_name??found.name,description:found.initial_description??found.description,current_metadata_id:found.initial_metadata_id,current_version_id:found.initial_version_id,revision:1,updated_at:found.created_at}),current:{versionId:found.current_version_id,revision:found.revision}},status);}
   async function replay(){const found=await first(initialQuery+' WHERE w.author_id=? AND w.idempotency_key=?',user.id,key);return found?initialResponse(found):null;}
   const prior=await replay();if(prior)return prior;
-  const id=uuid(),versionId=uuid(),createdAt=iso();const gameKey=gameBytes?`games/${versionId}.html`:null,coverKey=coverBytes?`covers/${versionId}`:null;const written:string[]=[];
+  const id=uuid(),versionId=uuid(),initialMetadataId=metadataId(),createdAt=iso();const gameKey=gameBytes?`games/${versionId}.html`:null,coverKey=coverBytes?`covers/${versionId}`:null;const written:string[]=[];
   try {
     if(gameKey&&gameBytes){await bucket().put(gameKey,gameBytes,{httpMetadata:{contentType:'text/html'}});written.push(gameKey);}
     if(coverKey&&coverBytes){await bucket().put(coverKey,coverBytes,{httpMetadata:{contentType:coverMime!}});written.push(coverKey);}
     await db().batch([
-      sql('INSERT INTO ft_works (id,author_id,author_name,name,description,source,current_version_id,url,created_at,idempotency_key,request_hash,revision,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,1,?)',id,user.id,(await userProfile(user)).name,name,description,source,versionId,url,createdAt,key,requestHash,createdAt),
+      sql('INSERT INTO ft_works (id,author_id,author_name,name,description,source,current_version_id,url,created_at,idempotency_key,request_hash,revision,updated_at,current_metadata_id,initial_metadata_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,1,?,?,?)',id,user.id,(await userProfile(user)).name,name,description,source,versionId,url,createdAt,key,requestHash,createdAt,initialMetadataId,initialMetadataId),
       sql('INSERT INTO ft_work_versions (id,work_id,version,game_key,cover_key,cover_mime,created_at,provenance_json,ordinal,content_hash,created_by) VALUES (?,?,?,?,?,?,?,?,1,?,?)',versionId,id,'v1',gameKey,coverKey,coverMime,createdAt,provenanceJSON,gameBytes?await hash(gameBytes):null,user.id),
+      sql('INSERT INTO ft_work_metadata(id,work_id,name,description,cover_key,cover_mime,created_at,created_by) VALUES(?,?,?,?,?,?,?,?)',initialMetadataId,id,name,description,coverKey,coverMime,createdAt,user.id),
     ]);
   } catch(e) {
     // A database commit can succeed even if its response is lost. Confirm the
@@ -296,7 +300,9 @@ async function createCard(request:Request,user:User) {
   const prior=await replay();if(prior)return prior;
   const works=[];for(let i=0;i<input.workIds.length;i++){
     const w=await ownWork(input.workIds[i],user);
-    if(workRefs){const v=await first('SELECT * FROM ft_work_versions WHERE id=? AND work_id=?',workRefs[i].versionId,w.id);if(!v)throw new ApiError(422,'INVALID_VERSION','名片预览版本不属于该作品');Object.assign(w,{current_version_id:v.id,version:v.version,game_key:v.game_key,cover_key:v.cover_key,cover_mime:v.cover_mime,provenance_json:v.provenance_json});}
+    if(workRefs&&!workRefs[i].metadataId&&workRefs[i].expectedRevision!==undefined&&workRefs[i].expectedRevision!==w.revision){const error=new ApiError(409,'WORK_CONFLICT','名片预览信息已变化，请重新生成预览');(error as ApiError&{current:unknown}).current={versionId:w.current_version_id,revision:w.revision,metadataId:w.current_metadata_id||null};throw error;}
+    if(workRefs){const v=await first('SELECT * FROM ft_work_versions WHERE id=? AND work_id=?',workRefs[i].versionId,w.id);if(!v)throw new ApiError(422,'INVALID_VERSION','名片预览版本不属于该作品');Object.assign(w,{current_version_id:v.id,current_metadata_id:null,version:v.version,game_key:v.game_key,cover_key:v.cover_key,cover_mime:v.cover_mime,provenance_json:v.provenance_json});
+      if(workRefs[i].metadataId){const m=await first('SELECT * FROM ft_work_metadata WHERE id=? AND work_id=?',workRefs[i].metadataId,w.id);if(!m)throw new ApiError(422,'INVALID_METADATA','名片预览信息不属于该作品');Object.assign(w,{current_metadata_id:m.id,name:m.name,description:m.description,cover_key:m.cover_key,cover_mime:m.cover_mime});}}
     works.push({...workJSON(w),authorName:name});
   }
   const card={id:uuid(),authorId:user.id,name,bio,...details,template:input.template,workIds:input.workIds,works,createdAt:iso()};
@@ -316,7 +322,8 @@ export async function handleAPI(request:Request) {
   try {
     const workerResponse=await handleBuildWorker(request);if(workerResponse)return workerResponse;
     const user=authenticate(request.headers),url=new URL(request.url),parts=url.pathname.replace(/^\/api\/?/,'').split('/').filter(Boolean);
-    if(request.method==='POST')verifyWrite(request);
+    if(['POST','PATCH'].includes(request.method))verifyWrite(request);
+    const editResponse=await handleWorkEditAPI(request,user);if(editResponse)return editResponse;
     const buildResponse=await handleBuildAPI(request,user);if(buildResponse)return buildResponse;
     const versionResponse=await handleVersionAPI(request,user);if(versionResponse)return versionResponse;
     if(request.method==='GET') {
@@ -352,7 +359,7 @@ export async function handleAPI(request:Request) {
 }
 
 export async function mediaResponse(request:Request,id:string) {
-  try{authenticate(request.headers);const v=await first('SELECT cover_key,cover_mime FROM ft_work_versions WHERE id=?',id);if(!v?.cover_key)throw new ApiError(404,'MEDIA_NOT_FOUND','封面不存在');const object=await bucket().get(v.cover_key);if(!object)throw new ApiError(404,'MEDIA_NOT_FOUND','封面文件不存在');return new Response(object.body as unknown as BodyInit,{headers:{'Content-Type':v.cover_mime,'Cache-Control':'private, max-age=3600','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'}});}catch(e){return errorResponse(e);}
+  try{authenticate(request.headers);const v=await first('SELECT cover_key,cover_mime FROM ft_work_versions WHERE id=? UNION ALL SELECT cover_key,cover_mime FROM ft_work_metadata WHERE id=? LIMIT 1',id,id);if(!v?.cover_key)throw new ApiError(404,'MEDIA_NOT_FOUND','封面不存在');const object=await bucket().get(v.cover_key);if(!object)throw new ApiError(404,'MEDIA_NOT_FOUND','封面文件不存在');return new Response(object.body as unknown as BodyInit,{headers:{'Content-Type':v.cover_mime,'Cache-Control':'private, max-age=3600','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'}});}catch(e){return errorResponse(e);}
 }
 export async function gameResponse(request:Request,id:string) {
   try{authenticate(request.headers);const v=await first('SELECT game_key FROM ft_work_versions WHERE id=?',id);if(!v?.game_key)throw new ApiError(404,'GAME_NOT_FOUND','游戏不存在');const object=await bucket().get(v.game_key);if(!object)throw new ApiError(404,'GAME_NOT_FOUND','游戏文件不存在');return new Response(gameDocument(await object.text(),new URL(request.url).origin),{headers:{'Content-Type':'text/html; charset=utf-8','Content-Security-Policy':GAME_CSP,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'}});}catch(e){return errorResponse(e);}

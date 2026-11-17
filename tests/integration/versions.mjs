@@ -146,7 +146,7 @@ try {
     assert.deepEqual(ok(await request('/api/cards/' + cardV1.id)).card, cardV1);
     const cardInput = { name: 'Version fixture creator', bio: '', template: 'fold', workIds: [v1.id], workRefs: [{ workId: v1.id, versionId: v1.versionId }] }, key = randomUUID();
     const saved = ok(await request('/api/cards', { method: 'POST', json: cardInput, headers: { 'Idempotency-Key': key } }), 201).card;
-    assert.equal(saved.works[0].versionId, v1.versionId); assert.equal(saved.works[0].coverUrl, v1.coverUrl);
+    assert.equal(saved.works[0].versionId, v1.versionId); assert.equal(digest(await image(saved.works[0].coverUrl)), digest(initialImage));
     assert.deepEqual(ok(await request('/api/cards', { method: 'POST', json: cardInput, headers: { 'Idempotency-Key': key } })).card, saved);
     rejected(await request('/api/cards', { method: 'POST', json: { ...cardInput, workRefs: [{ workId: v1.id, versionId: v2.version.id }] }, headers: { 'Idempotency-Key': key } }), [409]);
     rejected(await request('/api/cards', { method: 'POST', json: { ...cardInput, workRefs: [{ workId: v1.id, versionId: second.versionId }] } }), [404, 422]);
@@ -157,7 +157,7 @@ try {
     const rollback = ok(await activate(v1.id, v1.versionId, 2)); assert.equal(rollback.operation.changed, true); assert.equal(rollback.operation.revision, 3);
     const rolled = await current(v1.id); assert.equal(rolled.versionId, v1.versionId); assert.equal(rolled.revision, 3); assert.equal(rolled.createdAt, v1.createdAt);
     assert.equal(await game(rolled.versionId, versions[0].marker), initialGame); assert.equal(digest(await image(rolled.coverUrl)), digest(initialImage));
-    const conflict = rejected(await publish(v1.id, 1, { html: gameHTML('STALE_ABA') }), [409], 'VERSION_CONFLICT'); assert.deepEqual(conflict.error.current, { versionId: v1.versionId, revision: 3 });
+    const conflict = rejected(await publish(v1.id, 1, { html: gameHTML('STALE_ABA') }), [409], 'VERSION_CONFLICT'); assert.deepEqual(conflict.error.current, { versionId: v1.versionId, revision: 3, metadataId: rolled.metadataId });
     rejected(await activate(v1.id, v2.version.id, 1), [409], 'VERSION_CONFLICT');
     const replay = ok(await publish(v1.id, 1, v2Input, keyV2)); assert.deepEqual(replay.operation, v2.operation); assert.deepEqual(replay.version, v2.version); assert.equal((await current(v1.id)).versionId, v1.versionId);
     assert.equal((await history(v1.id)).versions.length, 2);

@@ -31,6 +31,7 @@ registerMessages({
   "制作我的名片": "Make my card",
   "这件作品不在该名片中。": "This work isn't part of this card.",
   "预览已失效，请返回名片重新生成。": "This preview has expired. Return to your card to generate it again.",
+  "名片预览信息已变化，请重新生成预览": "The work details in this preview changed. Generate the preview again.",
   "打开作品 ↗": "Open work ↗",
   "开始试玩": "Play",
   "← 返回": "← Back",

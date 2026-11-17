@@ -17,10 +17,28 @@ test('editing and retrying a draft keep its original concurrency baseline until 
   assert.equal(rebased.releaseNotes,'a new ending');assert.equal(rebased.attempted,false);
 });
 test('a historical local version cannot inherit the current GitHub origin or cover',()=>{
-  const current={id:'work',versionId:'v2-id',version:'v2',coverUrl:'/media/v2-id',build:{commitSha:'new'}};
+  const current={id:'work',versionId:'v2-id',version:'v2',coverUrl:'/media/v2-id',metadataId:'new-metadata',build:{commitSha:'new'}};
   const old=versionWork(current,{id:'v1-id',version:'v1',coverUrl:'/media/v1-id'});
-  assert.equal(old.versionId,'v1-id');assert.equal(old.coverUrl,'/media/v1-id');assert.equal(old.build,undefined);
+  assert.equal(old.versionId,'v1-id');assert.equal(old.coverUrl,'/media/v1-id');assert.equal(old.build,undefined);assert.equal(old.metadataId,undefined);
   assert.equal(current.versionId,'v2-id');assert.equal(current.build.commitSha,'new');
+});
+test('new card previews pin metadata while schema2 retries retain their exact legacy references and key',()=>{
+  const works=[{id:'work',versionId:'v1',metadataId:'metadata-original',revision:2},{id:'unseeded',versionId:'v1',metadataId:null,revision:4}];
+  const legacy={payloadSchema:2,fingerprint:'same-content',saveKey:'already-saved',works:structuredClone(works)};
+  assert.equal(isPinnedPreview(legacy),true);
+  assert.deepEqual(previewReferences(legacy),[{workId:'work',versionId:'v1'},{workId:'unseeded',versionId:'v1'}]);
+  assert.equal(legacy.saveKey,'already-saved');
+  const next=prepareCardPreview(legacy,{fingerprint:'same-content',works:structuredClone(works)},'explicit-regeneration');
+  assert.equal(next.payloadSchema,3);assert.equal(next.saveKey,'explicit-regeneration');
+  works[0].metadataId='later-metadata';works[1].revision=5;
+  assert.deepEqual(previewReferences(next),[{workId:'work',versionId:'v1',metadataId:'metadata-original'},{workId:'unseeded',versionId:'v1',expectedRevision:4}]);
+  assert.equal(next.saveKey,'explicit-regeneration');
+  assert.equal(legacy.payloadSchema,2);assert.equal(legacy.saveKey,'already-saved');
+});
+test('schema3 cannot silently submit an unpinned legacy work when its preview revision is missing',()=>{
+  const works=[{id:'unseeded',versionId:'v1',metadataId:null}];
+  assert.throws(()=>previewReferences({payloadSchema:3,works}),/重新生成预览/);
+  assert.deepEqual(previewReferences({payloadSchema:2,works}),[{workId:'unseeded',versionId:'v1'}]);
 });
 test('card saving references previewed versions and event retries retain their original version',()=>{
   const work={id:'work',versionId:'v1-id'};

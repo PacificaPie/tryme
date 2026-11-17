@@ -9,10 +9,22 @@ export const works = sqliteTable('ft_works', {
   id: text('id').primaryKey(), authorId: text('author_id').notNull(), authorName: text('author_name').notNull(),
   name: text('name').notNull(), description: text('description').notNull(), source: text('source').notNull(),
   currentVersionId: text('current_version_id').notNull(), url: text('url'), createdAt: text('created_at').notNull(),
+  currentMetadataId: text('current_metadata_id'), initialMetadataId: text('initial_metadata_id'),
   revision: integer('revision').notNull().default(1), updatedAt: text('updated_at').notNull().default(''),
   idempotencyKey: text('idempotency_key').notNull(), requestHash: text('request_hash').notNull(),
 }, t => [uniqueIndex('ft_works_owner_key').on(t.authorId, t.idempotencyKey), index('ft_works_owner_created').on(t.authorId,t.createdAt,t.id),
   index('ft_works_created_id').on(t.createdAt,t.id),index('ft_works_source_created').on(t.source,t.createdAt,t.id)]);
+export const workMetadata = sqliteTable('ft_work_metadata', {
+  id: text('id').primaryKey(), workId: text('work_id').notNull().references(()=>works.id),
+  name: text('name').notNull(), description: text('description').notNull(), coverKey: text('cover_key'), coverMime: text('cover_mime'),
+  createdAt: text('created_at').notNull(), createdBy: text('created_by').notNull(),
+}, t=>[index('ft_work_metadata_work').on(t.workId)]);
+export const workEditOperations = sqliteTable('ft_work_edit_operations', {
+  id: text('id').primaryKey(), ownerId: text('owner_id').notNull(), workId: text('work_id').notNull().references(()=>works.id),
+  idempotencyKey: text('idempotency_key').notNull(), requestHash: text('request_hash').notNull(), metadataId: text('metadata_id'),
+  previousRevision: integer('previous_revision').notNull(), revision: integer('revision').notNull(), changed: integer('changed').notNull(),
+  responseJson: text('response_json').notNull(), createdAt: text('created_at').notNull(),
+}, t=>[uniqueIndex('ft_work_edits_owner_key').on(t.ownerId,t.idempotencyKey),index('ft_work_edits_work').on(t.workId,t.createdAt)]);
 export const workLikes = sqliteTable('ft_work_likes', {
   workId: text('work_id').notNull().references(()=>works.id), actorId: text('actor_id').notNull(), createdAt: text('created_at').notNull(),
 }, t => [primaryKey({columns:[t.workId,t.actorId]}),index('ft_work_likes_work_created').on(t.workId,t.createdAt)]);
