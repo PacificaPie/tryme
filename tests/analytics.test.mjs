@@ -77,3 +77,30 @@ test('foreign work and cross-work version cannot access analytics; an empty owne
   const db={prepare(query){return {query,args:[],bind(...args){this.args=args;return this;},async first(){return f.sqlite.prepare(query).get(...this.args)||null;}};},async batch(statements){return statements.map(s=>({results:f.sqlite.prepare(s.query).all(...s.args)}));}};
   const empty=await readAnalytics(new URL('https://site.test/api/analytics?days=7'),{id:'new-owner'},db,{now:NOW});assert.equal(empty.summary.pv,0);assert.equal(empty.summary.avgActiveMs,null);assert.equal(empty.byWork.length,0);assert.equal(empty.series.length,7);assert.equal(empty.receipts.length,0);f.sqlite.close();
 });
+
+test('Feed exposure analytics use daily dedup facts and period-distinct viewers with owner and version boundaries',async()=>{
+  const f=fixture();
+  try{
+    const insert=f.sqlite.prepare('INSERT INTO ft_feed_impressions(id,client_event_id,actor_id,work_id,sort,exposure_day,received_at) VALUES(?,?,?,?,?,?,?)');
+    for(const [work,actor,date] of [
+      ['work-a','alice','2026-11-09'],['work-a','alice','2026-11-10'],['work-b','alice','2026-11-09'],
+      ['work-a','bob','2026-11-11'],['work-a',owner,'2026-11-11'],['work-link','eve','2026-11-12'],
+      ['work-a','alice','2026-11-02'],['work-foreign','intruder','2026-11-09'],
+    ])insert.run(randomUUID(),randomUUID(),actor,work,'recommended',date,stamp(date));
+    const all=await f.query();
+    assert.equal(all.summary.feedImpressions,6);assert.equal(all.summary.feedViewers,4);
+    assert.equal(all.previous.feedImpressions,1);assert.equal(all.previous.feedViewers,1);
+    assert.equal(all.series.find(row=>row.date==='2026-11-09').feedImpressions,2);
+    assert.equal(all.series.find(row=>row.date==='2026-11-09').feedViewers,1);
+    assert.equal(all.byWork.find(row=>row.workId==='work-a').feedViewers,3);
+    assert.equal(all.byWork.find(row=>row.workId==='work-empty').feedImpressions,0);
+    const outside=await f.query({excludeSelf:'1',granularity:'week'});
+    assert.equal(outside.summary.feedImpressions,5);assert.equal(outside.summary.feedViewers,3);
+    assert.equal(outside.series[0].feedViewers,3);
+    const external=await f.query({work:'work-link'});assert.equal(external.summary.feedViewers,1);assert.equal(external.summary.players,null);
+    const version=await f.query({work:'work-a',version:'work-a-v1'});
+    assert.equal(version.summary.feedImpressions,null);assert.equal(version.summary.feedViewers,null);
+    assert(version.series.every(row=>row.feedViewers===null));
+    await assert.rejects(f.query({work:'work-foreign'}),error=>error.code==='NOT_OWNER');
+  }finally{f.sqlite.close();}
+});

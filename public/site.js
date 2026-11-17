@@ -5,6 +5,7 @@ import { emptyState, pageSkeleton } from './empty-state.js';
 import { syncNavigation } from './navigation.js';
 import { mountDiscussion } from './discussion.js';
 import { createPlayClock } from './play-clock.js';
+import { waitForPendingPlayStart } from './play-start-order.js';
 import { mountGameDisplay } from './game-display.js';
 import { authHeaders, authURL, getAuthConfig } from './auth-client.js';
 import { mountAnalytics } from './analytics.js';
@@ -22,7 +23,7 @@ const read = (key, fallback) => { try { return JSON.parse(sessionStorage.getItem
 const write = (key,value) => { try { sessionStorage.setItem(key,JSON.stringify(value)); } catch {} };
 const storage = {publish:'funtrack.real.publish',card:'funtrack.real.card',preview:'funtrack.real.preview',feedback:'funtrack.real.feedback',views:'funtrack.real.gallery'};
 const storageBase={...storage};let draftOwner=null,fileScope='';
-let startPending=false, analyticsPanel=null, visitRecorded=false, publishAvailability=null;
+let startPending=false, analyticsPanel=null, discoveryPanel=null, visitRecorded=false, publishAvailability=null;
 let publishFailure=null,publishRelatedWorks=[];
 let me=null, authChecked=false, routeNumber=0, currentRoute='', noticeTimer, currentGallery=null, activeSession=null;
 const scrolls=new Map();
@@ -101,7 +102,7 @@ async function loadMe(){try{const data=await api('/api/me');me=data.user;}catch(
 function applyHTML(html,number){if(number!==routeNumber)return false;main.innerHTML=html;syncNavigation();const key=route().raw;requestAnimationFrame(()=>{if(number===routeNumber)window.scrollTo(0,scrolls.get(key)||0);});return true;}
 async function renderRoute(options={}){
   if(!options.localeOnly)visitRecorded=false;
-  const r=route(),number=++routeNumber;stopBuildPolling();publishAvailability?.dispose();publishAvailability=null;disposeVersioning();disposeWorkEdit();disposePublicationControls();analyticsPanel?.dispose();analyticsPanel=null;
+  const r=route(),number=++routeNumber;stopBuildPolling();publishAvailability?.dispose();publishAvailability=null;disposeVersioning();disposeWorkEdit();disposePublicationControls();analyticsPanel?.dispose();analyticsPanel=null;discoveryPanel?.dispose();discoveryPanel=null;
   if(currentRoute&&currentRoute!==r.raw)scrolls.set(currentRoute,window.scrollY);
   endSession('exit');currentGallery=null;currentRoute=r.raw;
   $$('.site-header nav a').forEach(a=>a.classList.toggle('active',a.dataset.nav===(r.path.startsWith('/cards')||r.path.startsWith('/card/')||r.path.startsWith('/author')?'cards':r.path.startsWith('/studio')||r.path==='/publish'?'studio':'feed')));
@@ -129,10 +130,12 @@ async function renderDiscover(r,number){
   const authorId=r.path.startsWith('/author/')?decodeURIComponent(r.path.split('/')[2]):'';
   let authorCard=null;if(authorId){try{authorCard=(await api('/api/cards')).cards.find(c=>c.authorId===authorId)||null;}catch{}}
   if(!applyHTML('<div class="page discovery-page"></div>',number))return;
-  await mountDiscovery($('.discovery-page'),{api,esc,workTile,syncSocial,userId:me.id,authorId,authorCard,initial:{q:r.params.get('q'),source:r.params.get('source'),sort:r.params.get('sort')},onQuery:query=>{
-    const params=new URLSearchParams();if(query.q)params.set('q',query.q);if(query.source!=='all')params.set('source',query.source);if(query.sort!=='newest')params.set('sort',query.sort);
+  const panel=await mountDiscovery($('.discovery-page'),{api,esc,workTile,syncSocial,userId:me.id,authorId,authorCard,initial:{q:r.params.get('q'),source:r.params.get('source'),sort:r.params.get('sort')},onQuery:query=>{
+    if(number!==routeNumber)return;
+    const params=new URLSearchParams();if(query.q)params.set('q',query.q);if(query.source!=='all')params.set('source',query.source);if(query.sort!==(authorId?'newest':'recommended'))params.set('sort',query.sort);
     const next=r.path+(params.size?'?'+params:'');history.replaceState(null,'','#'+next);currentRoute=next;
   },restoreScroll:()=>window.scrollTo(0,scrolls.get(route().raw)||0)});
+  if(number===routeNumber)discoveryPanel=panel;else panel?.dispose();
 }
 
 async function renderCreators(number){
@@ -152,7 +155,8 @@ async function renderWork(r,number,countView=true,autoPlay=true){
   if(countView){postAction('work_view',{workId:id,versionId:work.versionId});visitRecorded=true;}
   $$('[data-action="start-game"]').forEach(b=>b.addEventListener('click',()=>startGame(work)));
   $('[data-action="discussion"]').addEventListener('click',()=>{$('#discussion').scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});$('#comment-input')?.focus({preventScroll:true});});
-  mountDiscussion($('#discussion'),{work,user:me,api,esc,notify,focusId:r.params.get('comment')||'',onCount:count=>{updateDiscoveryWork(work.id,{commentsCount:count});const label=$('.discussion-jump span');if(label)label.textContent=count?t("讨论 ")+n(count):t("讨论");}});
+  const discussionOwner=me.id;
+  mountDiscussion($('#discussion'),{work,user:me,api,esc,notify,beforeRootSubmit:async()=>{await waitForPendingPlayStart(sessionQueues,{workId:work.id,ownerId:discussionOwner,flush:flushSession});if(draftOwner!==discussionOwner)throw new ApiError(t('请重新登录后重试。'),401,'AUTH_SESSION_CHANGED');},focusId:r.params.get('comment')||'',onCount:count=>{updateDiscoveryWork(work.id,{commentsCount:count});const label=$('.discussion-jump span');if(label)label.textContent=count?t("讨论 ")+n(count):t("讨论");}});
   api('/api/discover?author='+encodeURIComponent(work.authorId)+'&limit=4').then(({works})=>{if(number!==routeNumber)return;const others=works.filter(w=>w.authorId===work.authorId&&w.id!==id).slice(0,3);if(others.length)$('#related-works').innerHTML=`<h2>${t("作者的其他作品")}</h2>${others.map(w=>`<a class="related-work" href="${esc(workHref(w,from))}">${workImage(w)}<div><strong>${esc(w.name)}</strong><p>${esc(w.desc)}</p></div></a>`).join('')}`;}).catch(()=>{});
   if(autoPlay&&r.params.get('play')==='1'&&work.source==='html')startGame(work);
   if(r.params.get('discussion')==='1')requestAnimationFrame(()=>{if(number===routeNumber)$('#discussion')?.scrollIntoView({block:'start'});});
@@ -408,7 +412,7 @@ function acceptLike(id,response){if(response.workId!==id||typeof response.liked!
 async function toggleLike(id){
   if(likePending.has(id))return;
   const account=draftOwner,desired=likeRetry.has(id)?likeRetry.get(id):!socialState.get(id)?.liked;likePending.add(id);refreshSocial(id);
-  try{const response=await api('/api/works/'+encodeURIComponent(id)+'/like',{method:'POST',body:{liked:desired}});if(account!==draftOwner)return;acceptLike(id,response);likeRetry.delete(id);}
+  try{if(desired)await waitForPendingPlayStart(sessionQueues,{workId:id,ownerId:account,flush:flushSession});if(account!==draftOwner)return;const response=await api('/api/works/'+encodeURIComponent(id)+'/like',{method:'POST',body:{liked:desired}});if(account!==draftOwner)return;acceptLike(id,response);likeRetry.delete(id);}
   catch(error){
     if(account!==draftOwner)return;let confirmed=false;
     try{const actual=await api('/api/works/'+encodeURIComponent(id)+'/like');if(account!==draftOwner)return;acceptLike(id,actual);confirmed=actual.liked===desired;}catch{}
@@ -440,14 +444,16 @@ function shareLink(title,url){return manualShare(url,title);}
 function postAction(type,fields){const item=frozenAction(uid(),type,fields);actionQueue.set(item.eventId,{body:item,attempts:0,timer:null});flushAction(item.eventId);}
 async function flushAction(id){const item=actionQueue.get(id);if(!item||item.sending)return;item.sending=true;try{const result=await api('/api/events',{method:'POST',body:item.body,keepalive:true});if(result.receipt?.clientEventId===id||result.duplicate)actionQueue.delete(id);else throw new Error('Missing receipt');}catch(error){if([400,403,404,422].includes(error.status)){actionQueue.delete(id);return;}item.attempts++;clearTimeout(item.timer);item.timer=setTimeout(()=>flushAction(id),Math.min(30000,700*2**Math.min(item.attempts,6)));}finally{item.sending=false;}}
 
-function makeQueue(session){const queue={id:session.id,token:session.token,pending:[],sending:false,timer:null,seq:0,attempts:0,startedAt:performance.now(),expiresAt:Date.parse(session.expiresAt)||Date.now()+3600000};sessionQueues.add(queue);return queue;}
+function makeQueue(session,workId,ownerId){const queue={id:session.id,token:session.token,workId,ownerId,pending:[],sending:false,inFlight:null,timer:null,seq:0,attempts:0,startedAt:performance.now(),expiresAt:Date.parse(session.expiresAt)||Date.now()+3600000};sessionQueues.add(queue);return queue;}
 function enqueueSession(queue,type,result){const event={id:uid(),type,seq:++queue.seq,elapsedMs:Math.min(3600000,Math.max(0,Math.round(performance.now()-queue.startedAt)))};if(result)event.result=result;queue.pending.push(event);flushSession(queue);return event.id;}
-async function flushSession(queue){
-  if(queue.sending||!queue.pending.length)return;if(Date.now()>queue.expiresAt){clearTimeout(queue.timer);sessionQueues.delete(queue);return;}
+function flushSession(queue){
+  if(queue.inFlight)return queue.inFlight;if(!queue.pending.length)return Promise.resolve();if(Date.now()>queue.expiresAt){clearTimeout(queue.timer);sessionQueues.delete(queue);return Promise.resolve();}
   queue.sending=true;clearTimeout(queue.timer);const batch=queue.pending.slice(0,20);
-  try{const response=await api('/api/sessions/'+encodeURIComponent(queue.id)+'/events',{method:'POST',body:{token:queue.token,events:batch},keepalive:true});const acknowledged=new Set([...(response.accepted||[]).map(e=>e.clientEventId),...(response.duplicates||[])]);queue.pending=queue.pending.filter(e=>!acknowledged.has(e.id));if(!acknowledged.size)throw new Error('Missing acknowledgment');queue.attempts=0;}
-  catch(error){if([400,403,404,410,422].includes(error.status)){queue.pending=[];sessionQueues.delete(queue);}else queue.attempts++;}
-  finally{queue.sending=false;if(queue.pending.length)queue.timer=setTimeout(()=>flushSession(queue),queue.attempts?Math.min(30000,500*2**Math.min(queue.attempts,6)):0);else if(queue.closed)sessionQueues.delete(queue);}
+  queue.inFlight=(async()=>{
+    try{const response=await api('/api/sessions/'+encodeURIComponent(queue.id)+'/events',{method:'POST',body:{token:queue.token,events:batch},keepalive:true});const acknowledged=new Set([...(response.accepted||[]).map(e=>e.clientEventId),...(response.duplicates||[])]);queue.pending=queue.pending.filter(e=>!acknowledged.has(e.id));if(!acknowledged.size)throw new Error('Missing acknowledgment');queue.attempts=0;}
+    catch(error){if([400,403,404,410,422].includes(error.status)){queue.pending=[];sessionQueues.delete(queue);}else queue.attempts++;}
+    finally{queue.sending=false;queue.inFlight=null;if(queue.pending.length)queue.timer=setTimeout(()=>flushSession(queue),queue.attempts?Math.min(30000,500*2**Math.min(queue.attempts,6)):0);else if(queue.closed)sessionQueues.delete(queue);}
+  })();return queue.inFlight;
 }
 function endSession(reason='exit'){
   const session=activeSession;if(!session)return;activeSession=null;
@@ -482,10 +488,10 @@ function gameLoadReady(session){
   session.display=mountGameDisplay(session.shell,{button,labels:{enter:t("全屏"),exitNative:t("退出全屏"),exitExpanded:t("退出大屏")}});
 }
 async function startGame(work){
-  if(startPending)return;const previousCover=activeSession?.coverHTML;endSession('exit');startPending=true;const originRoute=routeNumber;
+  if(startPending)return;const previousCover=activeSession?.coverHTML;endSession('exit');startPending=true;const originRoute=routeNumber,ownerId=draftOwner;
   const buttons=$$('[data-action="start-game"]');buttons.forEach(b=>{b.disabled=true;b.textContent=t("正在打开…");});
   try{
-    const session=await api('/api/sessions',{method:'POST',body:{workId:work.id,versionId:work.versionId}}),queue=makeQueue(session);
+    const session=await api('/api/sessions',{method:'POST',body:{workId:work.id,versionId:work.versionId}}),queue=makeQueue(session,work.id,ownerId);
     if(originRoute!==routeNumber){queue.closed=true;enqueueSession(queue,'session_end',{label:'exit'});return;}
     const gameUrl=new URL(session.gameUrl,location.origin);if(gameUrl.origin!==location.origin)throw new Error(t("作品地址不正确，请重试。"));
     const bridge=uid();gameUrl.hash='bridge='+encodeURIComponent(bridge);

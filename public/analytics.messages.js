@@ -1,6 +1,8 @@
 import { registerMessages } from './i18n.js';
 
 registerMessages({
+  'Feed 曝光': 'Feed impressions', 'Feed 触达人数': 'Feed viewers',
+  '卡片在前台至少一半可见并持续 1 秒才记曝光。同一账号、作品、UTC 日期只计一次；触达人数在所选期间跨作品去重。仅从本次上线开始采集，不补算历史；曝光没有版本归属，按版本筛选显示 —。它不表示点击、试玩或经过认证的真人数。': 'An impression requires at least half of a card to remain visible for 1 second in a foreground tab. Each account and work counts once per UTC day; viewers are deduplicated across works over the selected period. Collection starts with this release, with no historical backfill. Impressions are not version-specific and show — when filtering by version. They do not represent clicks, plays, or verified people.',
   '数据': 'Analytics', '作品': 'Works', '全部作品': 'All works', '← 全部作品': '← All works',
   '版本': 'Version', '所有版本': 'All versions', '当前': 'Current', '所选作品': 'Selected work', '所选版本': 'Selected version', '作品数据': 'Work analytics',
   '访问次数': 'Page views', '访问人数': 'Visitors', '试玩人数': 'Players', '平均试玩时长': 'Avg. play time', '总试玩时长': 'Total play time',

@@ -1,4 +1,5 @@
 import { sqliteTable, text, integer, index, uniqueIndex, primaryKey, type AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm';
 
 export const profiles = sqliteTable('ft_profiles', {
   id: text('id').primaryKey(), name: text('name').notNull(), bio: text('bio').notNull().default(''),
@@ -72,12 +73,31 @@ export const events = sqliteTable('ft_events', {
   cardId: text('card_id').references(()=>cards.id), sessionId: text('session_id').references(()=>sessions.id),
   type: text('event_type').notNull(), seq: integer('seq'), elapsedMs: integer('elapsed_ms'), resultJson: text('result_json'), receivedAt: text('received_at').notNull(),
 }, t => [uniqueIndex('ft_events_actor_client').on(t.actorId,t.clientEventId), uniqueIndex('ft_events_session_seq').on(t.sessionId,t.seq),
-  uniqueIndex('ft_events_session_type').on(t.sessionId,t.type),index('ft_events_work_received').on(t.workId,t.receivedAt),index('ft_events_actor_received').on(t.actorId,t.receivedAt)]);
+  uniqueIndex('ft_events_session_type').on(t.sessionId,t.type),index('ft_events_work_received').on(t.workId,t.receivedAt),index('ft_events_actor_received').on(t.actorId,t.receivedAt),
+  index('ft_events_play_work_received').on(t.workId,t.receivedAt,t.actorId).where(sql`${t.type} = 'play_start'`),
+  index('ft_events_play_actor_work_received').on(t.actorId,t.workId,t.receivedAt).where(sql`${t.type} = 'play_start'`)]);
 export const feedback = sqliteTable('ft_feedback', {
   id: text('id').primaryKey(), clientEventId: text('client_event_id').notNull(), workId: text('work_id').notNull().references(()=>works.id),
   versionId: text('version_id').notNull().references(()=>versions.id), authorId: text('author_id').notNull(), authorName: text('author_name').notNull(),
   text: text('text').notNull(), type: text('type').notNull(), createdAt: text('created_at').notNull(),
 }, t=>[uniqueIndex('ft_feedback_author_client').on(t.authorId,t.clientEventId),index('ft_feedback_work_created').on(t.workId,t.createdAt)]);
+
+// Feed exposure counts one authenticated viewer per work per UTC day. Self
+// exposure remains inspectable but is excluded from recommendation ranking.
+export const feedImpressions = sqliteTable('ft_feed_impressions', {
+  id: text('id').primaryKey(), clientEventId: text('client_event_id').notNull(), actorId: text('actor_id').notNull(),
+  workId: text('work_id').notNull().references(()=>works.id), sort: text('sort').notNull(),
+  exposureDay: text('exposure_day').notNull(), receivedAt: text('received_at').notNull(),
+}, t=>[uniqueIndex('ft_feed_impressions_actor_client').on(t.actorId,t.clientEventId),uniqueIndex('ft_feed_impressions_actor_work_day').on(t.actorId,t.workId,t.exposureDay),
+  index('ft_feed_impressions_work_received').on(t.workId,t.receivedAt,t.actorId),index('ft_feed_impressions_actor_received').on(t.actorId,t.receivedAt)]);
+// These are immutable participation receipts, not spendable points. One work
+// can qualify once across all versions, with additional per-author/day caps.
+export const contributionCredits = sqliteTable('ft_contribution_credits', {
+  actorId: text('actor_id').notNull(), targetWorkId: text('target_work_id').notNull().references(()=>works.id),
+  targetAuthorId: text('target_author_id').notNull(), sourceKind: text('source_kind').notNull(), sourceId: text('source_id').notNull(),
+  earnedDay: text('earned_day').notNull(), createdAt: text('created_at').notNull(),
+}, t=>[primaryKey({columns:[t.actorId,t.targetWorkId]}),uniqueIndex('ft_contribution_credits_actor_author_day').on(t.actorId,t.targetAuthorId,t.earnedDay),
+  index('ft_contribution_credits_actor_day').on(t.actorId,t.earnedDay),index('ft_contribution_credits_actor_created').on(t.actorId,t.createdAt)]);
 
 // Public-to-the-site discussion is separate from legacy private feedback.
 // The monotonic sequence gives stable root/reply pagination even within one ms.

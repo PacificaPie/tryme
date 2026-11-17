@@ -22,11 +22,13 @@ Response:
             durationCoverage,versionSocialMetricsAvailable,funnelHostedOnly:true},
   receipts:[...], byDay:[...]
 }
-Metrics={pv,uv,opens,players,starts,completions,totalActiveMs,avgActiveMs,
+Metrics={feedImpressions,feedViewers,pv,uv,opens,players,starts,completions,totalActiveMs,avgActiveMs,
          durationSamples,endedStarts,comments,likes,outboundClicks,returningPlayers}
 ```
 
 `meta` dates and `series.date` are date strings, not timestamps. Weekly `date` is its Monday and can precede `meta.from`. The previous period is the immediately preceding equal number of calendar days. Today is partial, and previous comparisons must label that limitation. Series includes every intersecting bucket, even empty ones. UV/player measures are distinct within each bucket; weekly/overall figures are not sums of daily UV. `byWork` includes all owned works even with zero activity, or only the selected work. Fetch work selector options from the existing owned-work/discover API; `versions` is the selected work's actual versions, newest ordinal first, or[] when no work is selected.
+
+`feedImpressions` counts stored account/work/UTC-day exposure facts; `feedViewers` deduplicates accounts across works and days in the selected period/bucket. Self filtering and owner scope apply. Exposure is not tied to a game version, so both fields are null under a version filter. External works still have measurable Feed exposure. Collection begins with the recommendation release: old activity is not backfilled. These metrics are separate from detail-page PV/UV; they are not a measured click-through rate or an attributable play funnel. The UI exposes them in trends, work comparison (viewers) and secondary interaction metrics.
 
 PV/UV count `work_view` by server `received_at`; outboundClicks use outbound events. UV deduplicates the same actor across works. `opens` counts sessions created in the period; `starts` counts those sessions having play_start; `players` deduplicates their actors. Completion and ending measures use the same session-created cohort, including a later accepted completion/end. Completion means client-reported completion, **not verified winning**. `returningPlayers` means cohort actors with play_start on at least two distinct UTC days within the period, not next-day retention.
 
@@ -40,4 +42,4 @@ Compatibility fields retained for existing clients: summary/byWork views=pv, fee
 
 Invalid ranges/filter values return422. An unknown work returns404 WORK_NOT_FOUND; a foreign work returns403 NOT_OWNER; version without work returns422 WORK_REQUIRED; unknown/cross-work versions return422 INVALID_VERSION. The query uses parameterized SQL aggregates and one read batch; no migration or raw-event export is required.
 
-Implementation verification: nine SQLite service tests cover distinct counts, cohorts, time samples, filters, ranges and authorization. This D1 runtime accepts at most five terms in an individual compound SELECT (five succeeded, six/seven failed in direct read-only probes). Facts are therefore split into materialized groups of two/four terms, then combined in two terms; period/series/work expansion has three terms. The final query returned200 with real local D1 data after this fix. Node SQLite alone does not reproduce D1's lower limit; the local HTTP integration harness remains required before release.
+Implementation verification: ten SQLite service tests cover distinct counts, cohorts, time samples, filters, ranges and authorization. This D1 runtime accepts at most five terms in an individual compound SELECT (five succeeded, six/seven failed in direct read-only probes). Facts are therefore split into materialized groups of three/four terms, then combined in two terms; period/series/work expansion has three terms. The final query returned200 with real local D1 data after this fix. Node SQLite alone does not reproduce D1's lower limit; the local HTTP integration harness remains required before release.

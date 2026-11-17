@@ -1,4 +1,5 @@
 import { mountFeedLayout } from './feed-layout.js';
+import { mountFeedImpressions } from './feed-impressions.js';
 import { emptyState } from './empty-state.js';
 import { t, getLocale } from './i18n.js';
 import './discovery-messages.js';
@@ -9,17 +10,17 @@ export function clearDiscovery(){ visits.clear(); }
 export function updateDiscoveryWork(id,patch){for(const visit of visits.values())visit.works=visit.works.map(work=>work.id===id?{...work,...patch}:work);}
 export async function mountDiscovery(root, options) {
   const { api, esc, workTile, syncSocial, userId, authorId = '', authorCard = null, initial = {}, onQuery, restoreScroll } = options;
-  let query={q:initial.q||'',source:['html','url'].includes(initial.source)?initial.source:'all',sort:['likes','comments'].includes(initial.sort)?initial.sort:'newest'};
+  let query={q:initial.q||'',source:['html','url'].includes(initial.source)?initial.source:'all',sort:['recommended','newest','likes','comments'].includes(initial.sort)?initial.sort:authorId?'newest':'recommended'};
   let works=[],cursor=null,total=0,pending=false,loaded=false,error='',request=0,timer,composing=false,disposed=false;
-  let grid=null,layout=null,tileState=new Map();
+  let grid=null,layout=null,impressions=null,tileState=new Map();
   const alive=()=>!disposed&&root.isConnected;
   const cacheKey=()=>JSON.stringify([userId,authorId,query]);
   const authorName=authorCard?.name||t('创作者');
   const searchIcon='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg>';
-  root.innerHTML=authorId?`<a class="back" href="#/cards">${t('← 名片')}</a><div class="author-heading"><span class="large-avatar" aria-hidden="true">${esc([...authorName][0])}</span><div><h1 id="author-name">${esc(authorName)}</h1>${authorCard?.bio?`<p>${esc(authorCard.bio)}</p>`:''}</div>${authorCard?`<a class="button" href="#/card/${encodeURIComponent(authorCard.id)}">${t('查看名片')}</a>`:''}</div>`:`<div class="feed-heading"><h1>${t('发现作品')}</h1><label class="feed-search">${searchIcon}<input id="work-search" type="search" maxlength="100" placeholder="${esc(t('搜索作品或创作者'))}" aria-label="${esc(t('搜索作品或创作者'))}" value="${esc(query.q)}"></label></div><div class="feed-controls"><div class="filters" aria-label="${esc(t('作品类型'))}">${[['all','全部'],['html','网页游戏'],['url','外链作品']].map(([id,label])=>`<button class="filter ${query.source===id?'active':''}" data-filter="${id}" aria-pressed="${query.source===id}">${t(label)}</button>`).join('')}</div><div class="feed-sort"><select id="work-sort" aria-label="${esc(t('作品排序'))}">${[['newest','最新发布'],['likes','最多点赞'],['comments','最多讨论']].map(([id,label])=>`<option value="${id}" ${query.sort===id?'selected':''}>${t(label)}</option>`).join('')}</select><button class="feed-refresh" aria-label="${esc(t('刷新作品'))}" title="${esc(t('刷新作品'))}">↻</button></div></div>`;
+  root.innerHTML=authorId?`<a class="back" href="#/cards">${t('← 名片')}</a><div class="author-heading"><span class="large-avatar" aria-hidden="true">${esc([...authorName][0])}</span><div><h1 id="author-name">${esc(authorName)}</h1>${authorCard?.bio?`<p>${esc(authorCard.bio)}</p>`:''}</div>${authorCard?`<a class="button" href="#/card/${encodeURIComponent(authorCard.id)}">${t('查看名片')}</a>`:''}</div>`:`<div class="feed-heading"><h1>${t('发现作品')}</h1><label class="feed-search">${searchIcon}<input id="work-search" type="search" maxlength="100" placeholder="${esc(t('搜索作品或创作者'))}" aria-label="${esc(t('搜索作品或创作者'))}" value="${esc(query.q)}"></label></div><div class="feed-controls"><div class="filters" aria-label="${esc(t('作品类型'))}">${[['all','全部'],['html','网页游戏'],['url','外链作品']].map(([id,label])=>`<button class="filter ${query.source===id?'active':''}" data-filter="${id}" aria-pressed="${query.source===id}">${t(label)}</button>`).join('')}</div><div class="feed-sort"><select id="work-sort" aria-label="${esc(t('作品排序'))}">${[['recommended','推荐'],['newest','最新发布'],['likes','最多点赞'],['comments','最多讨论']].map(([id,label])=>`<option value="${id}" ${query.sort===id?'selected':''}>${t(label)}</option>`).join('')}</select><button class="feed-refresh" aria-label="${esc(t('刷新作品'))}" title="${esc(t('刷新作品'))}">↻</button></div></div>`;
   root.insertAdjacentHTML('beforeend',`<div id="discovery-results"></div><p class="feed-status" role="status" aria-live="polite"></p><div class="feed-pagination"><button class="button" id="load-works" hidden>${t('加载更多')}</button></div>`);
   const results=root.querySelector('#discovery-results'),status=root.querySelector('.feed-status'),more=root.querySelector('#load-works');
-  function resetLayout(){layout?.dispose();layout=null;grid=null;tileState.clear();}
+  function resetLayout(){impressions?.dispose();impressions=null;layout?.dispose();layout=null;grid=null;tileState.clear();}
   function createTile(work,index){
     const template=document.createElement('template');template.innerHTML=workTile(work,{social:true}).trim();
     const tile=template.content.firstElementChild;tile.dataset.workId=work.id;tile.setAttribute('role','listitem');tile.setAttribute('aria-posinset',String(index+1));tile.setAttribute('aria-setsize',String(total));return tile;
@@ -58,6 +59,7 @@ export async function mountDiscovery(root, options) {
       if(grid.children[index]!==tile){grid.insertBefore(tile,grid.children[index]||null);changed=true;}
     });
     if(!layout)layout=mountFeedLayout(grid,{host:root});else if(changed)layout.refresh();
+    if(!authorId){if(!impressions)impressions=mountFeedImpressions(grid,{api,userId,sort:query.sort,host:root});else impressions.refresh();}
     more.hidden=!cursor;more.disabled=pending;more.textContent=t(pending?'正在加载…':error?'重试加载':'加载更多');
   }
   async function load(append=false){

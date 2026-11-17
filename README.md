@@ -1,5 +1,7 @@
 # Funtrack
 
+最新独立测试站与推荐实验状态见 [2026-11-16 推荐实验验收](docs/recommendation-experiment-2026-11-16.md)。下文早期验收数字与 owner-only 描述是原 Sites 阶段记录；独立部署配置见 [部署文档](docs/independent-deployment.md)。
+
 发现作品、上传并试玩小游戏、留下反馈，以及用自己的作品制作可分享名片。当前应用入口是 `/site.html#/`，已经连接服务端 API、D1 和 R2；`/wireframe.html` 及早期前端演示仅保留作设计参考，其中的身份和统计不属于当前应用数据。
 
 ## 本地运行

@@ -26,7 +26,7 @@ function appendReplies(root,replies){
   root.localReplies=(root.localReplies||[]).filter(reply=>!seen.has(reply.id));
 }
 
-export function mountDiscussion(element,{work,user,api,esc,onCount=()=>{},notify=()=>{},focusId=''}){
+export function mountDiscussion(element,{work,user,api,esc,onCount=()=>{},notify=()=>{},beforeRootSubmit=()=>{},focusId=''}){
   const key=keyFor(user,work),draft=draftFor(key),state=discussionFor(key);
   element.innerHTML=`<div class="discussion-head"><h2>${t('讨论')} <span id="discussion-count"></span></h2></div><form class="comment-composer"><span class="comment-avatar" aria-hidden="true">${esc([...(user.name||t('我'))][0])}</span><div class="composer-main"><div class="reply-target" hidden><span></span><button type="button" aria-label="${t('取消回复')}">×</button></div><label class="skip-label" for="comment-input">${t('写评论')}</label><textarea id="comment-input" rows="1" maxlength="1000" placeholder="${t('说点什么…')}" required>${esc(draft.text)}</textarea><div class="composer-footer"><span class="composer-visibility">${t('公开评论')}</span><button type="submit" class="button primary small">${t('发布')}</button></div></div></form><p class="comment-status" role="status" aria-live="polite"></p><div class="comment-list"></div><button type="button" class="comments-more" hidden>${t('查看更多评论')}</button>`;
   const form=element.querySelector('form'),input=element.querySelector('textarea'),submit=form.querySelector('[type=submit]'),list=element.querySelector('.comment-list'),more=element.querySelector('.comments-more'),status=element.querySelector('.comment-status'),target=element.querySelector('.reply-target'),cancel=target.querySelector('button');
@@ -99,6 +99,7 @@ export function mountDiscussion(element,{work,user,api,esc,onCount=()=>{},notify
     event.preventDefault();if(!alive()||state.pending||!state.loaded||!input.value.trim())return;
     const body=input.value.trim(),parentId=draft.parentId,submittedKey=draft.key;state.pending=true;state.status='';persist(key,draft);refresh();
     try{
+      if(!parentId){await beforeRootSubmit();if(!alive())return;}
       const result=await api('/api/works/'+encodeURIComponent(work.id)+'/comments',{method:'POST',headers:{'Idempotency-Key':submittedKey},body:{body,parentId}}),c=result.comment;
       if(!c||typeof c.id!=='string'||c.workId!==work.id||c.authorId!==user.id||c.parentId!==parentId||c.body!==body||!Number.isInteger(result.commentsCount)||result.commentsCount<0)throw new Error('暂时没有收到评论保存结果，请重试。');
       syncSocial(c,performance.now());

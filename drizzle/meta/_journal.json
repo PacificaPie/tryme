@@ -64,6 +64,13 @@
       "when": 1794889306108,
       "tag": "0008_direct_feed_publication",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1794894000000,
+      "tag": "0009_feed_recommendations",
+      "breakpoints": true
     }
   ]
 }

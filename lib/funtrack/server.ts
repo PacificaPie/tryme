@@ -7,6 +7,7 @@ import { createVersionService } from './version-service.mjs';
 import { createWorkEditService } from './work-edit-service.mjs';
 import { createDuplicateService } from './duplicate-service.mjs';
 import { createDiscoveryService,discoveryJSON,initialDiscovery,DISCOVERY_COLUMNS,DISCOVERY_JOIN,DISCOVERY_ELIGIBLE } from './discovery-service.mjs';
+import { createRecommendationService,recommendationRank,RECOMMENDATION_VERSION } from './recommendation-service.mjs';
 import { metadataId } from './work-metadata.mjs';
 import { cardWorkRefs } from './version-rules.mjs';
 import { analyticsResponse } from './analytics';
@@ -58,14 +59,23 @@ async function discover(url:URL,user:User,mine=false) {
   const params=new URLSearchParams(url.searchParams);if(mine)params.set('author',user.id);
   const query=discoverQuery(params),cursor=decodeDiscoverCursor(params.get('cursor'),query),scope=mine?'mine:'+user.id:'public',asOf=cursor?.asOf||iso();
   if(cursor&&(cursor.scope||'public')!==scope)fail(400,'INVALID_CURSOR','分页游标与当前列表不符，请重新加载');
+  // Capture all high-water marks in one SQLite read snapshot. A write that
+  // started before asOf but commits after this read cannot reshape page two.
+  const snapshot=query.sort==='recommended'?(cursor?.snapshot||await first(`SELECT
+    (SELECT COALESCE(MAX(rowid),0) FROM ft_works) works,
+    (SELECT COALESCE(MAX(rowid),0) FROM ft_events) events,
+    (SELECT COALESCE(MAX(rowid),0) FROM ft_feed_impressions) impressions,
+    (SELECT COALESCE(MAX(rowid),0) FROM ft_contribution_credits) credits`)):null;
   const conditions=['w.created_at<=?',...mine?[]:[DISCOVERY_ELIGIBLE]],values:any[]=[asOf];
+  if(snapshot){conditions.push('w.rowid<=?');values.push(snapshot.works);}
   if(query.source!=='all'){conditions.push('w.source=?');values.push(query.source);}
   if(query.author){conditions.push('w.author_id=?');values.push(query.author);}
   // instr treats '%' and '_' literally instead of expanding them as SQL LIKE wildcards.
   if(query.q){conditions.push("instr(lower(w.name||char(10)||w.description||char(10)||w.author_name),lower(?))>0");values.push(query.q);}
   const where=conditions.join(' AND ');
-  const rank=query.sort==='likes'?`(SELECT COUNT(*) FROM ft_work_likes l WHERE l.work_id=w.id AND l.created_at<=?)`:query.sort==='comments'?`(SELECT COUNT(*) FROM ft_comments c WHERE c.work_id=w.id AND c.created_at<=?)`:'0';
-  const rankValues=query.sort==='newest'?[]:[asOf];
+  const recommended=snapshot?recommendationRank(asOf,snapshot):null;
+  const rank=recommended?.sql||(query.sort==='likes'?`(SELECT COUNT(*) FROM ft_work_likes l WHERE l.work_id=w.id AND l.created_at<=?)`:query.sort==='comments'?`(SELECT COUNT(*) FROM ft_comments c WHERE c.work_id=w.id AND c.created_at<=?)`:'0');
+  const rankValues=recommended?.values||(query.sort==='newest'?[]:[asOf]);
   const selection='WITH ranked AS ('+WORK_QUERY.replace('SELECT ','SELECT '+rank+' AS feed_rank,')+' WHERE '+where+') SELECT * FROM ranked';
   const after=cursor?' WHERE (feed_rank<? OR (feed_rank=? AND (created_at<? OR (created_at=? AND id<?))))':'';
   const afterValues=cursor?[cursor.last.rank,cursor.last.rank,cursor.last.createdAt,cursor.last.createdAt,cursor.last.id]:[];
@@ -74,11 +84,13 @@ async function discover(url:URL,user:User,mine=false) {
     sql('SELECT COUNT(*) n FROM ft_works w'+DISCOVERY_JOIN+' WHERE '+where,...values),
   ]);
   const page=results[0].results.slice(0,query.limit),last=page[page.length-1];
-  const nextCursor=results[0].results.length>query.limit?encodeDiscoverCursor({v:1,scope,filters:{q:query.q,source:query.source,sort:query.sort,author:query.author},asOf,last:{rank:Number(last.feed_rank),createdAt:last.created_at,id:last.id}}):null;
+  const nextCursor=results[0].results.length>query.limit?encodeDiscoverCursor({v:1,scope,filters:{q:query.q,source:query.source,sort:query.sort,author:query.author},asOf,...(snapshot?{snapshot}:{}),last:{rank:Number(last.feed_rank),createdAt:last.created_at,id:last.id}}):null;
   // Presentation counts and the viewer's liked state stay live. Ranking uses
   // asOf to prevent new works/comments/likes from changing this traversal.
+  // Recommended reads append-only impressions, starts and credits below the
+  // snapshot high-water marks. Scores remain fixed; visibility remains live.
   // Unlike removes historical rows, so likes ordering is not a strict snapshot.
-  return json({works:await withWorkStats(page.map(workJSON),user),nextCursor,total:Number(results[1].results[0]?.n||0),sort:query.sort,asOf});
+  return json({works:await withWorkStats(page.map(workJSON),user),nextCursor,total:Number(results[1].results[0]?.n||0),sort:query.sort,asOf,...(recommended?{rankingVersion:RECOMMENDATION_VERSION}:{})});
 }
 async function workLike(request:Request,user:User,workId:string) {
   await getWork(workId);
@@ -86,8 +98,8 @@ async function workLike(request:Request,user:User,workId:string) {
   if(request.method==='GET'){const count=await countQuery.first<Row>();return json(likeJSON(workId,count!));}
   const liked=likedState((await bodyJSON(request)).liked);
   const mutation=liked?sql('INSERT OR IGNORE INTO ft_work_likes (work_id,actor_id,created_at) VALUES (?,?,?)',workId,user.id,iso()):sql('DELETE FROM ft_work_likes WHERE work_id=? AND actor_id=?',workId,user.id);
-  const results=await db().batch<Row>([mutation,countQuery]);
-  return json(likeJSON(workId,results[1].results[0]));
+  const results=await db().batch<Row>([mutation,...liked?[recommendations.creditStatement(user.id,workId,'like')]:[],countQuery]);
+  return json(likeJSON(workId,results[results.length-1].results[0]));
 }
 async function rateLimit(user:User,table:'ft_events'|'ft_play_sessions'|'ft_feedback'|'ft_comments',column:'received_at'|'created_at',limit:number) {
   const actor=table==='ft_feedback'||table==='ft_comments'?'author_id':'actor_id';const result=await first(`SELECT COUNT(*) AS n FROM ${table} WHERE ${actor}=? AND ${column}>=?`,user.id,new Date(Date.now()-60000).toISOString());
@@ -101,6 +113,7 @@ async function readPublicationForm(request:Request,max=PUBLICATION_MAX_BYTES){
 }
 const readArtifact=(form:FormData,source:string,owner:string)=>publicationArtifact(form,source,owner,getBuildArtifact);
 const duplicates=createDuplicateService({db});
+const recommendations=createRecommendationService({db,bodyJSON});
 const handleDiscoveryAPI=createDiscoveryService({db,ownWork,getWork,workJSON,bodyJSON});
 const handleWorkEditAPI=createWorkEditService({db,bucket,ownWork,workJSON,hash,readForm:readPublicationForm});
 const handleVersionAPI=createVersionService({db,bucket,ownWork,workJSON,hash,readForm:readPublicationForm,readArtifact,bodyJSON});
@@ -210,7 +223,10 @@ async function addFeedback(request:Request,user:User) {
   function response(f:Row,status:number){if(f.work_id!==w.id||(input.versionId!==undefined&&f.version_id!==versionId)||f.text!==text||f.type!==input.type)throw new ApiError(409,'EVENT_CONFLICT','反馈标识已用于不同内容');return json({feedback:feedbackJSON({...f,work_name:w.name}),receipt:{id:f.id,clientEventId:f.client_event_id,type:'feedback',workId:f.work_id,versionId:f.version_id,receivedAt:f.created_at}},status);}
   if(prior)return response(prior,200);
   await rateLimit(user,'ft_feedback','created_at',30);
-  const id=uuid();await sql('INSERT OR IGNORE INTO ft_feedback (id,client_event_id,work_id,version_id,author_id,author_name,text,type,created_at) VALUES (?,?,?,?,?,?,?,?,?)',id,clientId,w.id,versionId,user.id,(await userProfile(user)).name,text,input.type,iso()).run();
+  const id=uuid();await db().batch([
+    sql('INSERT OR IGNORE INTO ft_feedback (id,client_event_id,work_id,version_id,author_id,author_name,text,type,created_at) VALUES (?,?,?,?,?,?,?,?,?)',id,clientId,w.id,versionId,user.id,(await userProfile(user)).name,text,input.type,iso()),
+    recommendations.creditStatement(user.id,w.id,'feedback',id),
+  ]);
   const f=await first('SELECT * FROM ft_feedback WHERE author_id=? AND client_event_id=?',user.id,clientId);if(!f)throw new Error('Feedback insertion failed');return response(f,f.id===id?201:200);
 }
 
@@ -281,8 +297,11 @@ async function addComment(request:Request,user:User,workId:string) {
   if(input.parentId){const parent=await first('SELECT id,work_id,parent_id FROM ft_comments WHERE id=?',input.parentId);validateCommentParent(parent,workId);}
   await rateLimit(user,'ft_comments','created_at',30);
   const id=uuid();
-  await sql(`INSERT INTO ft_comments (id,work_id,author_id,author_name,body,parent_id,created_at,idempotency_key,request_hash)
-    VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(author_id,idempotency_key) DO NOTHING`,id,w.id,user.id,(await userProfile(user)).name,input.body,input.parentId,iso(),key,requestHash).run();
+  await db().batch([
+    sql(`INSERT INTO ft_comments (id,work_id,author_id,author_name,body,parent_id,created_at,idempotency_key,request_hash)
+      VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(author_id,idempotency_key) DO NOTHING`,id,w.id,user.id,(await userProfile(user)).name,input.body,input.parentId,iso(),key,requestHash),
+    ...input.parentId?[]:[recommendations.creditStatement(user.id,w.id,'comment',id)],
+  ]);
   const comment=await first(COMMENT_QUERY+' WHERE c.author_id=? AND c.idempotency_key=?',user.id,user.id,key);if(!comment)throw new Error('Comment insertion failed');
   return response(comment,comment.id!==id);
 }
@@ -358,6 +377,7 @@ export async function handleAPI(request:Request) {
       if(parts[0]==='media'&&parts.length===2)return mediaResponse(request,parts[1]);
     }
     if(request.method==='POST') {
+      if(parts[0]==='feed'&&parts.length===2&&parts[1]==='impressions')return await recommendations.impressions(request,user);
       if(parts[0]==='imports'&&parts.length===2&&parts[1]==='github')return json(await resolveGithubHTML((await bodyJSON(request)).url));
       if(parts[0]==='works'&&parts.length===1)return await publish(request,user);
       if(parts[0]==='works'&&parts.length===3&&parts[2]==='like')return await workLike(request,user,parts[1]);
