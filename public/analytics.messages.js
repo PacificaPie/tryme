@@ -1,6 +1,12 @@
 import { registerMessages } from './i18n.js';
 
 registerMessages({
+  '数据概览': 'Overview', '筛选': 'Filters', '不计入我的活动': 'Exclude my activity',
+  '只过滤你的访问、试玩和互动，作品仍保留。': 'Exclude your own visits, plays and interactions. Your works remain included.',
+  '作品比较': 'Compare works', '站内作品': 'Hosted works', '外链未接入': 'External data unavailable',
+  '{count} 局样本': '{count} samples', '时长待采集': 'No duration samples',
+  '另有 {count} 局尚未结束': '{count} more sessions have not ended',
+  '数据还在加载，可以继续等待或重试。': 'Analytics are still loading. You can keep waiting or retry.',
   'Feed 曝光': 'Feed impressions', 'Feed 触达人数': 'Feed viewers',
   '卡片在前台至少一半可见并持续 1 秒才记曝光。同一账号、作品、UTC 日期只计一次；触达人数在所选期间跨作品去重。仅从本次上线开始采集，不补算历史；曝光没有版本归属，按版本筛选显示 —。它不表示点击、试玩或经过认证的真人数。': 'An impression requires at least half of a card to remain visible for 1 second in a foreground tab. Each account and work counts once per UTC day; viewers are deduplicated across works over the selected period. Collection starts with this release, with no historical backfill. Impressions are not version-specific and show — when filtering by version. They do not represent clicks, plays, or verified people.',
   '数据': 'Analytics', '作品': 'Works', '全部作品': 'All works', '← 全部作品': '← All works',

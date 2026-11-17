@@ -1,8 +1,9 @@
 import { mountFeedLayout } from './feed-layout.js';
 import { mountFeedImpressions } from './feed-impressions.js';
-import { emptyState } from './empty-state.js';
+import { emptyState, loadingMark } from './empty-state.js';
 import { t, getLocale } from './i18n.js';
 import './discovery-messages.js';
+import './experience.messages.js';
 
 // Page-sized server queries; keep the current visit when returning from a work.
 const visits = new Map();
@@ -11,8 +12,8 @@ export function updateDiscoveryWork(id,patch){for(const visit of visits.values()
 export async function mountDiscovery(root, options) {
   const { api, esc, workTile, syncSocial, userId, authorId = '', authorCard = null, initial = {}, onQuery, restoreScroll } = options;
   let query={q:initial.q||'',source:['html','url'].includes(initial.source)?initial.source:'all',sort:['recommended','newest','likes','comments'].includes(initial.sort)?initial.sort:authorId?'newest':'recommended'};
-  let works=[],cursor=null,total=0,pending=false,loaded=false,error='',request=0,timer,composing=false,disposed=false;
-  let grid=null,layout=null,impressions=null,tileState=new Map();
+  let works=[],cursor=null,total=0,pending=false,loaded=false,error='',request=0,timer,slowTimer,slow=false,controller=null,composing=false,disposed=false;
+  let grid=null,layout=null,impressions=null,tileState=new Map(),restored=false;
   const alive=()=>!disposed&&root.isConnected;
   const cacheKey=()=>JSON.stringify([userId,authorId,query]);
   const authorName=authorCard?.name||t('创作者');
@@ -23,17 +24,25 @@ export async function mountDiscovery(root, options) {
   function resetLayout(){impressions?.dispose();impressions=null;layout?.dispose();layout=null;grid=null;tileState.clear();}
   function createTile(work,index){
     const template=document.createElement('template');template.innerHTML=workTile(work,{social:true}).trim();
-    const tile=template.content.firstElementChild;tile.dataset.workId=work.id;tile.setAttribute('role','listitem');tile.setAttribute('aria-posinset',String(index+1));tile.setAttribute('aria-setsize',String(total));return tile;
+    const tile=template.content.firstElementChild;tile.dataset.workId=work.id;tile.setAttribute('role','listitem');tile.setAttribute('aria-posinset',String(index+1));tile.setAttribute('aria-setsize',String(total));
+    if(!restored&&!tileState.has(work.id)){tile.classList.add('feed-arriving');tile.style.setProperty('--enter-index',Math.min(index%12,5));}
+    return tile;
   }
   function draw(){
     if(!alive())return;
     results.setAttribute('aria-busy',String(pending));
-    status.textContent=error||(pending?t('正在加载作品…'):'');
+    const refresh=root.querySelector('.feed-refresh');if(refresh){refresh.disabled=pending&&!slow;refresh.setAttribute('aria-busy',String(pending&&!slow));}
+    more.setAttribute('aria-busy',String(pending));
+    status.textContent=error||(pending?t(slow?'还在加载，请稍候或重试。':'正在加载作品…'):'');
     status.classList.toggle('skip-label',!error);
     if(!loaded){
       resetLayout();
       if(error)results.innerHTML=`<div class="empty-state"><h2>${t('暂时没能加载作品')}</h2><button class="button" data-retry>${t('重试')}</button></div>`;
-      else if(!results.querySelector('.feed-skeleton'))results.innerHTML=`<div class="store-grid feed-skeleton" aria-hidden="true">${Array.from({length:8},()=>'<div class="skeleton-work"><div></div><span></span></div>').join('')}</div>`;
+      else {
+        if(!results.querySelector('.feed-skeleton'))results.innerHTML=`<div class="feed-loading-caption">${loadingMark()}<span class="feed-wait-text"></span><button class="button quiet small" data-retry hidden>${t('重试')}</button></div><div class="store-grid feed-skeleton" aria-hidden="true">${Array.from({length:8},()=>'<div class="skeleton-work"><div></div><span></span></div>').join('')}</div>`;
+        results.querySelector('.feed-wait-text').textContent=t(slow?'还在加载，请稍候或重试。':'正在加载作品…');
+        results.querySelector('[data-retry]').hidden=!slow;
+      }
       more.hidden=true;return;
     }
     if(!works.length){
@@ -64,20 +73,22 @@ export async function mountDiscovery(root, options) {
   }
   async function load(append=false){
     if(append&&(pending||!cursor))return;
-    const version=++request,requestedAt=performance.now(),key=cacheKey();pending=true;error='';draw();
+    controller?.abort();controller=new AbortController();clearTimeout(slowTimer);
+    const version=++request,requestedAt=performance.now(),key=cacheKey();pending=true;slow=false;error='';draw();
+    slowTimer=setTimeout(()=>{if(alive()&&version===request&&pending){slow=true;draw();}},6500);
     const params=new URLSearchParams({...query,limit:'12'});if(authorId)params.set('author',authorId);if(append)params.set('cursor',cursor);
     try{
-      const data=await api('/api/discover?'+params);if(!alive()||version!==request)return;
+      const data=await api('/api/discover?'+params,{signal:controller.signal});if(!alive()||version!==request)return;
       data.works.forEach(work=>syncSocial(work,requestedAt));
       if(append){const ids=new Set(works.map(work=>work.id));works.push(...data.works.filter(work=>!ids.has(work.id)));}else works=data.works;
       cursor=data.nextCursor;total=data.total;loaded=true;
       if(authorId&&!authorCard&&works[0]){root.querySelector('#author-name').textContent=works[0].authorName;root.querySelector('.large-avatar').textContent=[...(works[0].authorName||t('创作者'))][0];}
       visits.delete(key);visits.set(key,{works:[...works],cursor,total,at:Date.now()});while(visits.size>8)visits.delete(visits.keys().next().value);
-    }catch(e){if(alive()&&version===request)error=e.message;}
-    finally{if(alive()&&version===request){pending=false;draw();}}
+    }catch(e){if(alive()&&version===request)error=t(e.message);}
+    finally{if(alive()&&version===request){clearTimeout(slowTimer);pending=false;slow=false;draw();}}
   }
   function change(next){
-    clearTimeout(timer);query={...query,...(search?{q:search.value}:{}),...next};query.q=query.q.trim();onQuery(query);request++;loaded=false;works=[];cursor=null;total=0;pending=false;
+    clearTimeout(timer);restored=false;query={...query,...(search?{q:search.value}:{}),...next};query.q=query.q.trim();onQuery(query);request++;loaded=false;works=[];cursor=null;total=0;pending=false;
     root.querySelectorAll('[data-filter]').forEach(button=>{const selected=button.dataset.filter===query.source;button.classList.toggle('active',selected);button.setAttribute('aria-pressed',String(selected));});load();
   }
   const search=root.querySelector('#work-search');
@@ -89,7 +100,8 @@ export async function mountDiscovery(root, options) {
   results.addEventListener('click',event=>{if(event.target.closest('[data-retry]'))load();if(event.target.closest('[data-clear]')){if(search)search.value='';change({q:'',source:'all'});}});
   more.addEventListener('click',()=>load(true));
   const cached=visits.get(cacheKey());
-  if(cached){works=[...cached.works];cursor=cached.cursor;total=cached.total;loaded=true;if(authorId&&!authorCard&&works[0]){root.querySelector('#author-name').textContent=works[0].authorName;root.querySelector('.large-avatar').textContent=[...(works[0].authorName||t('创作者'))][0];}draw();requestAnimationFrame(()=>{if(alive())restoreScroll();});}
-  else await load();
-  return {dispose(){disposed=true;request++;clearTimeout(timer);resetLayout();}};
+  if(cached){restored=true;works=[...cached.works];cursor=cached.cursor;total=cached.total;loaded=true;if(authorId&&!authorCard&&works[0]){root.querySelector('#author-name').textContent=works[0].authorName;root.querySelector('.large-avatar').textContent=[...(works[0].authorName||t('创作者'))][0];}draw();requestAnimationFrame(()=>{if(alive())restoreScroll();});}
+  // Return disposal immediately, including while the first request is pending.
+  else void load();
+  return {dispose(){disposed=true;request++;controller?.abort();clearTimeout(timer);clearTimeout(slowTimer);resetLayout();}};
 }

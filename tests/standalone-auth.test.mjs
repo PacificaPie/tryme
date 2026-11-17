@@ -99,6 +99,18 @@ test('static pages and independently authenticated build-worker routes pass thro
   assert.equal(calls.client.length, 0);
 });
 
+test('public card allowlist bypasses Clerk only for scoped read routes and still strips forged identities',async()=>{
+  const {handler,calls}=fixture({state:signedOut()}),id='00000000-0000-4000-8000-000000000001';
+  for(const path of ['/c/'+id,'/api/public/cards/'+id,'/api/public/cards/'+id+'/works/work-1234/cover'])for(const method of ['GET','HEAD']){
+    const res=await handler(request(path,{method,headers:{'oai-authenticated-user-id':'forged-owner','oai-authenticated-user-email':'secret@example.test','x-clerk-auth-user-id':'user_forged'}}),{});
+    assert.equal(res.status,200,path);const passed=calls.app.at(-1).request;
+    assert.equal(passed.headers.get('oai-authenticated-user-id'),null);assert.equal(passed.headers.get('x-clerk-auth-user-id'),null);
+  }
+  assert.equal(calls.client.length,0);
+  for(const path of ['/api/public/cards','/api/public/cards/me','/api/public/cards/'+id+'/works/work-1234/game','/api/public/cards/'+id+'/sessions','/api/public/cards/'+id+'/events','/api/public/cards/'+id+'/works/work-1234/cover/extra','/api/analytics','/api/cards/me','/game/version'])await errorCode(await handler(request(path),env),401,'AUTH_REQUIRED');
+  for(const method of ['POST','PATCH','DELETE'])await errorCode(await handler(request('/api/public/cards/'+id,{method}),env),401,'AUTH_REQUIRED');
+});
+
 test('verified cookie or Bearer identities are subject-prefixed, request-scoped, and preserve upload bodies', async () => {
   for (const headers of [{ Authorization: 'Bearer session-fixture' }, { Cookie: '__session=session-fixture; __client_uat=1' }]) {
     const { handler, calls } = fixture();

@@ -1,5 +1,6 @@
 import { registerMessages } from './i18n.js';
 registerMessages({
+  "移除":"Remove", "移除游戏文件":"Remove game file", "移除封面":"Remove cover",
   "全屏":"Full screen",
   "退出全屏":"Exit full screen",
   "退出大屏":"Exit expanded view",

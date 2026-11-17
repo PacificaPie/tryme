@@ -9,6 +9,15 @@ export function emptyState({ kind = 'works', title, description = '', action = '
   const illustration = drawings[kind] || drawings.works;
   return `<section class="empty-state illustrated-empty" data-empty-kind="${Object.hasOwn(drawings,kind)?kind:'works'}"><svg class="empty-art" viewBox="0 0 190 136" aria-hidden="true" focusable="false">${illustration}</svg><h2>${escape(title)}</h2>${description?`<p>${escape(description)}</p>`:''}${action?`<div class="empty-action">${action}</div>`:''}</section>`;
 }
-export function pageSkeleton(label) {
-  return `<div class="page route-loading" role="status" aria-label="${escape(label)}"><span class="skip-label">${escape(label)}</span><div class="route-skeleton" aria-hidden="true"><i class="skeleton-title"></i><div class="skeleton-rule"></div><div class="skeleton-cards">${Array.from({length:3},()=>'<div><i class="skeleton-picture"></i><i class="skeleton-line"></i><i class="skeleton-line short"></i></div>').join('')}</div></div>`;
+export function loadingMark() {
+  return '<span class="loading-play" aria-hidden="true"><i></i><i></i><i></i></span>';
+}
+export function pageSkeleton(label, path = '') {
+  const kind = path.startsWith('/work/') ? 'work' : path.includes('/data') ? 'data' : path.startsWith('/studio') ? 'studio' : 'cards';
+  const tile = '<div><i class="skeleton-picture"></i><i class="skeleton-line"></i><i class="skeleton-line short"></i></div>';
+  const body = kind === 'work' ? '<div class="skeleton-detail"><i class="skeleton-picture"></i><div><i class="skeleton-title"></i><i class="skeleton-line"></i><i class="skeleton-line short"></i><i class="skeleton-button"></i></div></div>'
+    : kind === 'data' ? '<div class="skeleton-metrics">'+Array.from({length:4},()=>'<i></i>').join('')+'</div><i class="skeleton-chart"></i>'
+    : kind === 'studio' ? '<div class="skeleton-studio"><div><i class="skeleton-line"></i><i class="skeleton-line"></i><i class="skeleton-line"></i></div><div>'+Array.from({length:4},()=>'<div class="skeleton-row"><i class="skeleton-picture"></i><i class="skeleton-line"></i></div>').join('')+'</div></div>'
+    : '<div class="skeleton-cards">'+Array.from({length:3},()=>tile).join('')+'</div>';
+  return `<div class="page route-loading" role="status" aria-label="${escape(label)}"><div class="loading-caption">${loadingMark()}<span class="loading-status">${escape(label)}</span><button class="button quiet small" data-action="reload" data-loading-retry hidden></button></div><div class="route-skeleton skeleton-${kind}" aria-hidden="true">${body}</div></div>`;
 }

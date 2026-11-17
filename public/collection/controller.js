@@ -62,7 +62,7 @@ function rebuild(){
   try{SP.loadCollectionMedia(currentWorks(),function(){if(desk){desk.refresh();requestRender();}});desk=SP.createDesk(core);canvas.hidden=false;$('fallback').hidden=true;stage.dataset.state='ready';relayout();core.resetTrail();requestRender();}
   catch{releaseDesk();fallback();}
 }
-function initialize(payload){applyGalleryLocale('collection',payload?.locale);var next=clean(payload);if(!next){fallback(t('这张名片的作品资料不完整，请返回后重试。'));return;}var nextKey=JSON.stringify({locale:getLocale(),data:next}),oldPage=page;data=next;syncState(payload);if(nextKey!==key||page!==oldPage||!desk){key=nextKey;rebuild();}else{updateList();requestRender();}state();}
+function initialize(payload){applyGalleryLocale('collection',payload?.locale);var next=clean(payload);if(!next){fallback(t('这张名片的作品资料不完整，请返回后重试。'));return false;}var nextKey=JSON.stringify({locale:getLocale(),data:next}),oldPage=page;data=next;syncState(payload);if(nextKey!==key||page!==oldPage||!desk){key=nextKey;rebuild();}else{updateList();requestRender();}state();return true;}
 function changePage(next){if(!data||next<0||next>=Math.ceil(data.works.length/PAGE_SIZE))return;page=next;focusWorkId=data.works[page*PAGE_SIZE]?.id||null;rebuild();state();}
 function selectIndex(index){if(!data?.works.length)return;index=Math.max(0,Math.min(data.works.length-1,index));var nextPage=Math.floor(index/PAGE_SIZE);focusWorkId=data.works[index].id;if(nextPage!==page){page=nextPage;rebuild();}requestRender();state();$('status').textContent=data.works[index].name;}
 function requestRender(){if(!disposed&&!document.hidden&&core&&desk&&!raf)raf=requestAnimationFrame(frame);}
@@ -81,7 +81,15 @@ function move(event){
   if(event.pointerType==='touch'||!core||!desk)return;var ray=rayAt(event),point=new core.T.Vector3();if(ray.ray.intersectPlane(new core.T.Plane(new core.T.Vector3(0,1,0),0),point)){lightTarget.x=Math.max(-layout.width/2-1,Math.min(layout.width/2+1,point.x));lightTarget.z=Math.max(-layout.depth/2-1,Math.min(layout.depth/2+1,point.z));}
   hoverIndex=hit(event);canvas.style.cursor=hoverIndex>=0?'pointer':'default';var tip=$('hover-title');tip.hidden=hoverIndex<0;if(hoverIndex>=0){tip.textContent=currentWorks()[hoverIndex].name;var rect=canvas.getBoundingClientRect();tip.style.left=Math.max(8,Math.min(rect.width-tip.offsetWidth-8,event.clientX-rect.left+12))+'px';tip.style.top=Math.max(8,Math.min(rect.height-35,event.clientY-rect.top-34))+'px';}requestRender();
 }
-listen(window,'message',function(event){if(event.source!==parent||event.origin!==location.origin)return;if(event.data?.type==='funtrack:gallery:init')initialize(event.data.payload);});
+var documentId=crypto.randomUUID(),initializedRequestId=null;
+listen(window,'message',function(event){
+  if(event.source!==parent||event.origin!==location.origin)return;
+  var message=event.data;
+  if(message?.type==='funtrack:gallery:init'){
+    if(message.requestId!==initializedRequestId||initializedRequestId===null){if(!initialize(message.payload))return;initializedRequestId=message.requestId;}
+    send({type:'funtrack:gallery:initialized',requestId:message.requestId,state:failed?'fallback':data.works.length?'rendered':'empty'});
+  }
+});
 listen($('prev'),'click',function(){changePage(page-1);});listen($('next'),'click',function(){changePage(page+1);});
 listen(canvas,'pointermove',move);
 listen(canvas,'pointerleave',function(){hoverIndex=-1;$('hover-title').hidden=true;requestRender();});
@@ -96,5 +104,5 @@ if(motion.addEventListener)listen(motion,'change',requestRender);
 if(window.ResizeObserver){stageObserver=new ResizeObserver(relayout);stageObserver.observe(stage);heightObserver=new ResizeObserver(reportHeight);heightObserver.observe($('shell'));}else listen(window,'resize',function(){relayout();reportHeight();});
 function destroy(){if(disposed)return;disposed=true;cancelAnimationFrame(raf);listeners.forEach(function(off){off();});if(stageObserver)stageObserver.disconnect();if(heightObserver)heightObserver.disconnect();releaseDesk();if(core){core.dispose();core=null;}}
 listen(window,'pagehide',function(event){if(!event.persisted)destroy();else{cancelAnimationFrame(raf);raf=0;}});listen(window,'pageshow',function(event){if(event.persisted){lastTime=0;requestRender();}});
-send({type:'funtrack:gallery:ready'});reportHeight();
+send({type:'funtrack:gallery:ready',documentId:documentId});reportHeight();
 })();

@@ -14,6 +14,7 @@ var pointer=null,resizeObserver=null,heightObserver=null,lastHeight=0;
 var focusWorkId=null,roomEye=null,roomLook=null,roomFov=66,roomFrom=null,roomMove=1,exitPose=null;
 var motion=window.matchMedia('(prefers-reduced-motion: reduce)');
 var listeners=[];
+var documentId=crypto.randomUUID(),initializedRequestId=null;
 function listen(target,type,fn,options){target.addEventListener(type,fn,options);listeners.push(function(){target.removeEventListener(type,fn,options);});}
 function send(message){if(parent!==window)parent.postMessage(message,location.origin);}
 function reportHeight(){var height=Math.ceil($('shell').getBoundingClientRect().height);if(height>0&&height!==lastHeight){lastHeight=height;send({type:'funtrack:gallery:resize',height:height});}}
@@ -131,7 +132,7 @@ function rebuild(){
 }
 function initialize(payload){
   applyGalleryLocale('gallery',payload?.locale);
-  var next=cleanPayload(payload);if(!next)return;
+  var next=cleanPayload(payload);if(!next)return false;
   var key=JSON.stringify({locale:getLocale(),author:next.author,works:next.works});
   targetOpen=next.open&&next.works.length>0;targetFace=targetOpen?'front':next.face;
   progress=targetOpen?1:0;faceProgress=targetFace==='back'?1:0;
@@ -143,7 +144,7 @@ function initialize(payload){
   roomEye=roomLook=roomFrom=exitPose=null;roomMove=1;
   mustRebuild=mustRebuild||oldPage!==page;
   if(mustRebuild)rebuild();else{updateUI();requestRender();}
-  sendState();
+  sendState();return true;
 }
 function setOpen(open){
   if(!popup||failed)return;targetOpen=!!open;if(targetOpen)targetFace='front';else inside=false;
@@ -253,7 +254,12 @@ function pick(event){
 }
 listen(window,'message',function(event){
   if(event.source!==parent||event.origin!==location.origin)return;
-  if(event.data&&event.data.type==='funtrack:gallery:init')initialize(event.data.payload);
+  var message=event.data;
+  if(message&&message.type==='funtrack:gallery:init'){
+    // Retransmission acknowledges the same scene without resetting its camera.
+    if(message.requestId!==initializedRequestId||initializedRequestId===null){if(!initialize(message.payload))return;initializedRequestId=message.requestId;}
+    send({type:'funtrack:gallery:initialized',requestId:message.requestId,state:failed?'fallback':hasWorks()?'rendered':'empty'});
+  }
 });
 listen(toggle,'click',function(){setOpen(!targetOpen);});listen(flip,'click',flipCard);
 listen(enter,'click',function(){enterRoom(true);});listen($('leave'),'click',function(){enterRoom(false);});
@@ -287,5 +293,5 @@ if(motion.addEventListener)listen(motion,'change',onMotion);
 function destroy(){if(disposed)return;disposed=true;cancelAnimationFrame(raf);raf=0;if(resizeObserver)resizeObserver.disconnect();if(heightObserver)heightObserver.disconnect();listeners.forEach(function(off){off();});listeners=[];releaseScene();}
 listen(window,'pagehide',function(event){if(!event.persisted)destroy();else{cancelAnimationFrame(raf);raf=0;}});
 listen(window,'pageshow',function(event){if(event.persisted){lastTime=0;requestRender();}});
-send({type:'funtrack:gallery:ready'});reportHeight();
+send({type:'funtrack:gallery:ready',documentId:documentId});reportHeight();
 })();

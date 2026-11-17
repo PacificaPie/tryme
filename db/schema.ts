@@ -12,9 +12,11 @@ export const works = sqliteTable('ft_works', {
   currentVersionId: text('current_version_id').notNull(), url: text('url'), createdAt: text('created_at').notNull(),
   currentMetadataId: text('current_metadata_id'), initialMetadataId: text('initial_metadata_id'),
   revision: integer('revision').notNull().default(1), updatedAt: text('updated_at').notNull().default(''),
+  archivedAt: text('archived_at'),
   idempotencyKey: text('idempotency_key').notNull(), requestHash: text('request_hash').notNull(),
 }, t => [uniqueIndex('ft_works_owner_key').on(t.authorId, t.idempotencyKey), index('ft_works_owner_created').on(t.authorId,t.createdAt,t.id),
-  index('ft_works_created_id').on(t.createdAt,t.id),index('ft_works_source_created').on(t.source,t.createdAt,t.id)]);
+  index('ft_works_created_id').on(t.createdAt,t.id),index('ft_works_source_created').on(t.source,t.createdAt,t.id),
+  index('ft_works_owner_archived_created').on(t.authorId,t.archivedAt,t.createdAt,t.id)]);
 export const workMetadata = sqliteTable('ft_work_metadata', {
   id: text('id').primaryKey(), workId: text('work_id').notNull().references(()=>works.id),
   name: text('name').notNull(), description: text('description').notNull(), coverKey: text('cover_key'), coverMime: text('cover_mime'),
@@ -124,3 +126,12 @@ export const buildJobs = sqliteTable('ft_build_jobs', {
   createdAt: text('created_at').notNull(), updatedAt: text('updated_at').notNull(),
 }, t=>[uniqueIndex('ft_build_jobs_owner_key').on(t.ownerId,t.idempotencyKey),index('ft_build_jobs_owner_created').on(t.ownerId,t.createdAt),
   index('ft_build_jobs_queue').on(t.status,t.createdAt),index('ft_build_jobs_lease').on(t.workerId,t.status,t.leaseExpiresAt)]);
+
+export const autoCoverJobs = sqliteTable('ft_auto_cover_jobs', {
+  id: text('id').primaryKey(), workId: text('work_id').notNull().references(()=>works.id), versionId: text('version_id').notNull().references(()=>versions.id), ownerId: text('owner_id').notNull(),
+  status: text('status').notNull().default('queued'), attempts: integer('attempts').notNull().default(0), leaseId: text('lease_id'), leaseUntil: text('lease_until'), reason: text('reason'), metadataId: text('metadata_id'),
+  createdAt: text('created_at').notNull(), updatedAt: text('updated_at').notNull(),
+}, t=>[uniqueIndex('ft_auto_cover_work_version').on(t.workId,t.versionId),index('ft_auto_cover_queue').on(t.status,t.createdAt)]);
+export const autoCoverAttempts = sqliteTable('ft_auto_cover_attempts', {
+  id: text('id').primaryKey(), jobId: text('job_id').notNull().references(()=>autoCoverJobs.id), reservedSeconds: integer('reserved_seconds').notNull(), elapsedMs: integer('elapsed_ms'), outcome: text('outcome'), createdAt: text('created_at').notNull(),
+}, t=>[index('ft_auto_cover_budget_time').on(t.createdAt)]);

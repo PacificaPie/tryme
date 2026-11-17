@@ -1,8 +1,9 @@
 <!doctype html>
 <html lang="zh-CN"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>Funtrack · 卡中展厅</title>
-<link rel="stylesheet" href="gallery.css">
-</head><body>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>Funtrack · 卡中展厅</title>
+<script src="/theme-init.js"></script>
+<link rel="stylesheet" href="gallery.css"><link rel="stylesheet" href="/theme.css">
+</head><body data-portfolio-embed>
 <main id="shell" class="shell" aria-label="卡中展厅互动预览">
  <h1 id="gallery-title" class="sr-only">卡中展厅</h1><p id="gallery-status" class="sr-only" role="status" aria-live="polite">等待作品</p>
  <section id="stage" class="stage" data-state="waiting" data-face="front" aria-label="三维名片预览">
@@ -25,5 +26,6 @@
   <p class="keys">Enter 展开 · F 翻面 · G 进入 · ← → 切换作品 · Enter 试玩 · Esc 返回</p>
  </details>
 </main>
+<script type="module" src="/theme.js"></script>
 <script src="config.js"></script><script src="vendor/three.min.js"></script><script src="shaders.js"></script><script src="core.js"></script><script src="paper.js"></script><script src="prints.js"></script><script src="popup.js"></script><script src="tour.js"></script><script type="module" src="controller.js"></script>
 </body></html>

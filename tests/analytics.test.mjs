@@ -40,6 +40,18 @@ function fixture(){
   return {sqlite,query,session,event};
 }
 
+test('archiving changes only work metadata in analytics, preserving the full historical scope',async()=>{
+  const f=fixture();try{
+    const before=await f.query(),singleBefore=await f.query({work:'work-a'}),at=stamp('2026-11-16');
+    f.sqlite.prepare('UPDATE ft_works SET archived_at=?,revision=revision+1,updated_at=? WHERE id=?').run(at,at,'work-a');
+    const after=await f.query(),singleAfter=await f.query({work:'work-a'});
+    for(const key of ['summary','previous','series','funnel','coverage','receipts'])assert.deepEqual(after[key],before[key]);
+    assert.equal(after.byWork.find(work=>work.workId==='work-a').archivedAt,at);
+    assert.equal(after.byWork.find(work=>work.workId==='work-b').archivedAt,null);
+    assert.deepEqual(singleAfter.summary,singleBefore.summary);assert.deepEqual(singleAfter.versions,singleBefore.versions);
+  }finally{f.sqlite.close();}
+});
+
 test('UTC ranges are exact, previous period equal-length, compatible days and invalid filters bounded',()=>{
   const q=analyticsQuery(new URLSearchParams({from:'2026-11-09',to:'2026-11-15'}),NOW);assert.equal(q.previousFrom,'2026-11-02');assert.equal(q.previousTo,'2026-11-08');assert.equal(q.partialToday,false);
   assert.equal(analyticsQuery(new URLSearchParams({days:'1'}),NOW).from,'2026-11-16');assert.equal(analyticsQuery(new URLSearchParams(),NOW).partialToday,true);

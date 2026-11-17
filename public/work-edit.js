@@ -1,6 +1,8 @@
 import { t } from './i18n.js';
 import './work-edit.messages.js';
+import { isArchived, archiveGuardMarkup, archivedWorkPath } from './archive-controls.js';
 import { newWorkEditDraft, editWorkDraft, rebaseWorkEditDraft, workEditChanged, coverFileError, workEditReturnPath } from './work-edit-state.js';
+import { mountAutoCover, adoptAutoCoverDraft } from './auto-cover.js';
 
 const contexts = new Map();
 let active = null;
@@ -18,6 +20,7 @@ function fileWrite(ctx, action, file) {
   return ctx.fileWrites;
 }
 function errorText(error) {
+  if (error.code === 'WORK_ARCHIVED') return '这件作品已归档，请先恢复再继续。';
   if (error.code === 'WORK_CONFLICT') return '作品信息已变化，你的修改已保留。';
   if (error.code === 'IDEMPOTENCY_CONFLICT') return '保存内容与上次提交不一致，请刷新后继续编辑。';
   if (['COVER_TOO_LARGE', 'BODY_TOO_LARGE'].includes(error.code)) return '封面不能超过 2 MiB，请压缩图片后重新选择。';
@@ -25,7 +28,7 @@ function errorText(error) {
   return error.message;
 }
 export function hasPendingWorkEdit() { return [...contexts.values()].some(ctx => ctx.pending); }
-export function disposeWorkEdit() { if (active) { active.disposed = true; revoke(active.ctx); active = null; } }
+export function disposeWorkEdit() { if (active) { active.disposed = true; active.autoCover?.dispose(); revoke(active.ctx); active = null; } }
 
 async function context(view, work) {
   const { h } = view, key = `funtrack.work-info:${h.owner}:${work.id}`;
@@ -40,7 +43,7 @@ async function context(view, work) {
     })();
   }
   await ctx.loading;
-  ctx.h = h; ctx.work = work;
+  ctx.h = h; ctx.work = work; ctx.archived = isArchived(work);
   if (!workEditChanged(ctx.draft) && !ctx.draft.attempted && !ctx.pending) { ctx.draft = newWorkEditDraft(work, uuid()); ctx.conflict = false; }
   if (ctx.draft.expectedRevision !== work.revision && !ctx.draft.attempted) ctx.conflict = true;
   saveDraft(ctx); return ctx;
@@ -51,11 +54,12 @@ function refresh(view) {
   const { ctx } = view, form = query('#work-edit-form'); if (!form) return;
   const d = ctx.draft, busy = ctx.pending || ctx.rebasing, changed = workEditChanged(d);
   form.querySelectorAll('input,textarea,button').forEach(el => { el.disabled = busy; });
-  query('#work-edit-submit').disabled = busy || ctx.conflict || Boolean(ctx.fileError) || !changed && !d.attempted;
+  query('#work-edit-submit').disabled = busy || ctx.archived || ctx.conflict || Boolean(ctx.fileError) || !changed && !d.attempted;
   query('#work-edit-submit').textContent = t(ctx.pending ? '正在保存…' : d.attempted ? ctx.error ? '重试保存' : '确认保存结果' : '保存修改');
   query('#work-edit-status').textContent = t(changed || d.attempted ? '未保存' : '没有修改');
   query('#work-edit-error').textContent = t(ctx.conflict && ctx.error === '作品信息已变化，你的修改已保留。' ? '' : ctx.error || '');
   if (ctx.unauthorized) query('#work-edit-error').innerHTML = view.h.esc(t(ctx.error)) + ` <a class="text-link" target="_top" href="${view.h.esc(view.h.signinURL())}">${t('重新登录')}</a>`;
+  if (ctx.archived) query('#work-edit-error').innerHTML = view.h.esc(t('这件作品已归档，请先恢复再继续。')) + ` <a class="text-link" href="#${archivedWorkPath(ctx.id)}">${t('前往归档恢复')}</a>`;
   query('#work-edit-cover-error').textContent = t(ctx.fileError || ctx.storageWarning || '');
   query('#work-edit-conflict').hidden = !ctx.conflict;
   query('#work-edit-cover-reset').hidden = !d.replaceCover && !ctx.fileError;
@@ -65,6 +69,7 @@ function refresh(view) {
   img.hidden = !src; if (src && img.getAttribute('src') !== src) img.src = src;
   query('#work-edit-no-cover').hidden = Boolean(src);
   query('#work-edit-cover-name').textContent = d.replaceCover ? ctx.cover?.name || '' : '';
+  view.autoCover?.render();
 }
 async function rebase(view) {
   const { ctx } = view; if (ctx.pending || ctx.rebasing) return;
@@ -72,7 +77,8 @@ async function rebase(view) {
   try {
     const { work } = await view.h.api('/api/works/' + encodeURIComponent(ctx.id));
     if (!visible(view)) return;
-    ctx.work = work; ctx.draft = rebaseWorkEditDraft(ctx.draft, work, uuid()); ctx.conflict = false; ctx.unauthorized = false; saveDraft(ctx);
+    if (isArchived(work)) { ctx.archived = true; ctx.error = '这件作品已归档，请先恢复再继续。'; return; }
+    ctx.archived = false; ctx.work = work; ctx.draft = rebaseWorkEditDraft(ctx.draft, work, uuid()); ctx.conflict = false; ctx.unauthorized = false; saveDraft(ctx);
     query('#work-edit-name').value = ctx.draft.name; query('#work-edit-desc').value = ctx.draft.desc;
     view.h.notify(t('已载入最新信息，请检查后保存。'));
   } catch (error) { ctx.error = errorText(error); ctx.unauthorized = error.status === 401; }
@@ -80,7 +86,7 @@ async function rebase(view) {
 }
 async function submit(view) {
   const { ctx, h } = view, d = ctx.draft;
-  if (ctx.pending || ctx.rebasing || ctx.conflict || ctx.fileError || !workEditChanged(d) && !d.attempted) return;
+  if (ctx.pending || ctx.rebasing || ctx.archived || ctx.conflict || ctx.fileError || !workEditChanged(d) && !d.attempted) return;
   if (!d.name.trim() || !d.desc.trim()) { ctx.error = '作品名称和介绍不能为空。'; refresh(view); return; }
   if (d.replaceCover && coverFileError(ctx.cover)) { ctx.fileError = coverFileError(ctx.cover); refresh(view); return; }
   const body = new FormData(); body.set('name', d.name.trim()); body.set('desc', d.desc.trim()); body.set('expectedRevision', String(d.expectedRevision)); if (d.replaceCover) body.set('cover', ctx.cover);
@@ -95,6 +101,7 @@ async function submit(view) {
     if (visible(view) || active?.ctx === ctx && visible(active)) h.go(active?.ctx === ctx ? active.returnPath : view.returnPath);
   } catch (error) {
     ctx.pending = false; ctx.error = errorText(error); ctx.unauthorized = error.status === 401;
+    if (error.code === 'WORK_ARCHIVED') ctx.archived = true;
     if (['WORK_CONFLICT', 'IDEMPOTENCY_CONFLICT'].includes(error.code)) { ctx.conflict = true; d.attempted = false; saveDraft(ctx); }
     refresh(view);
   }
@@ -104,9 +111,10 @@ export async function renderWorkEdit(route, h) {
   const id = decodeURIComponent(match[1]), view = { h, disposed: false, returnPath: workEditReturnPath(route.params.get('from'), id) }; active = view;
   const { work } = await h.api('/api/works/' + encodeURIComponent(id)); if (!visible(view)) return true;
   if (work.authorId !== h.owner) throw new Error(t('只能编辑自己的作品信息。'));
+  if (isArchived(work)) { h.render(archiveGuardMarkup(work, h)); return true; }
   view.ctx = await context(view, work); if (!visible(view)) return true;
   const ctx = view.ctx, d = ctx.draft, e = h.esc;
-  if (!h.render(`<div class="page narrow work-edit-page"><a class="back" href="#${e(view.returnPath)}">${t(view.returnPath === '/studio/works' ? '← 我的作品' : '← 返回作品')}</a><div class="page-head"><h1>${t('编辑作品信息')}</h1></div><form id="work-edit-form" class="form"><div class="field"><label for="work-edit-name">${t('作品名称')}</label><input id="work-edit-name" name="name" maxlength="80" required value="${e(d.name)}"></div><div class="field"><label for="work-edit-desc">${t('一句介绍')}</label><textarea id="work-edit-desc" name="desc" maxlength="500" required>${e(d.desc)}</textarea></div><div class="field"><label for="work-edit-cover">${t('封面')}</label><div class="work-edit-cover"><div class="work-edit-cover-preview"><img id="work-edit-preview" alt="${t('封面预览')}" hidden><span id="work-edit-no-cover">${t('暂无封面')}</span></div><div class="work-edit-cover-controls"><input id="work-edit-cover" type="file" accept="image/png,image/jpeg,image/webp" aria-label="${t('选择封面')}"><small>${t('PNG、JPG 或 WebP，最大 2 MiB。')}</small><span id="work-edit-cover-name"></span><button class="button quiet small" id="work-edit-cover-reset" type="button" hidden>${t('沿用当前封面')}</button></div></div><p id="work-edit-cover-error" class="error" role="alert"></p></div><section id="work-edit-conflict" class="version-conflict" hidden><p>${t('作品信息已变化，你的修改已保留。')}</p><button id="work-edit-rebase" type="button" class="button small">${t('刷新后继续编辑')}</button></section><p id="work-edit-error" class="error" role="alert"></p><div class="form-footer"><button id="work-edit-submit" class="button primary" type="submit">${t('保存修改')}</button><a class="button quiet" href="#${e(view.returnPath)}">${t('保留草稿并返回')}</a><span id="work-edit-status" class="tiny muted" role="status"></span></div></form></div>`)) return true;
+  if (!h.render(`<div class="page narrow work-edit-page"><a class="back" href="#${e(view.returnPath)}">${t(view.returnPath === '/studio/works' ? '← 我的作品' : '← 返回作品')}</a><div class="page-head"><h1>${t('编辑作品信息')}</h1></div><form id="work-edit-form" class="form"><div class="field"><label for="work-edit-name">${t('作品名称')}</label><input id="work-edit-name" name="name" maxlength="80" required value="${e(d.name)}"></div><div class="field"><label for="work-edit-desc">${t('一句介绍')}</label><textarea id="work-edit-desc" name="desc" maxlength="500" required>${e(d.desc)}</textarea></div><div class="field"><label for="work-edit-cover">${t('封面')}</label><div class="work-edit-cover"><div class="work-edit-cover-preview"><img id="work-edit-preview" alt="${t('封面预览')}" hidden><span id="work-edit-no-cover">${t('暂无封面')}</span></div><div class="work-edit-cover-controls"><input id="work-edit-cover" type="file" accept="image/png,image/jpeg,image/webp" aria-label="${t('选择封面')}"><small>${t('PNG、JPG 或 WebP，最大 2 MiB。')}</small><span id="work-edit-cover-name"></span><button class="button quiet small" id="work-edit-cover-reset" type="button" hidden>${t('沿用当前封面')}</button></div></div><p id="work-edit-cover-error" class="error" role="alert"></p><div id="work-edit-auto-cover"></div></div><section id="work-edit-conflict" class="version-conflict" hidden><p>${t('作品信息已变化，你的修改已保留。')}</p><button id="work-edit-rebase" type="button" class="button small">${t('刷新后继续编辑')}</button></section><p id="work-edit-error" class="error" role="alert"></p><div class="form-footer"><button id="work-edit-submit" class="button primary" type="submit">${t('保存修改')}</button><a class="button quiet" href="#${e(view.returnPath)}">${t('保留草稿并返回')}</a><span id="work-edit-status" class="tiny muted" role="status"></span></div></form></div>`)) return true;
   const form = query('#work-edit-form');
   form.addEventListener('input', event => {
     const field = event.target.name; if (!['name', 'desc'].includes(field) || ctx.pending) return;
@@ -125,5 +133,19 @@ export async function renderWorkEdit(route, h) {
   });
   query('#work-edit-rebase').addEventListener('click', () => rebase(view));
   form.addEventListener('submit', event => { event.preventDefault(); submit(view); });
+  view.autoCover = mountAutoCover(query('#work-edit-auto-cover'), {work, owner:h.owner, api:h.api,
+    blocked:()=>ctx.pending||ctx.rebasing||ctx.archived||ctx.draft.replaceCover||ctx.draft.attempted,
+    onReady:async status=>{
+      const {work:latest}=await h.api('/api/works/'+encodeURIComponent(ctx.id));
+      if(!visible(view)||ctx.pending||ctx.rebasing||ctx.draft.attempted)return;
+      const updatedDraft=!isArchived(latest)&&adoptAutoCoverDraft(ctx.draft,ctx.work,latest,status,uuid());
+      if(updatedDraft){
+        // The captured cover is the only server-side change. Preserve all typed
+        // fields and any manually selected file while adopting its new revision.
+        ctx.work=latest;ctx.draft=updatedDraft;ctx.conflict=false;if(ctx.error==='作品信息已变化，你的修改已保留。')ctx.error='';saveDraft(ctx);h.onChanged();
+      }else if(latest.revision!==ctx.draft.expectedRevision){ctx.conflict=true;ctx.error='作品信息已变化，你的修改已保留。';}
+      refresh(view);
+    },
+  });
   refresh(view); return true;
 }

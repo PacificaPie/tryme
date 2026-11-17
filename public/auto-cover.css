@@ -1,0 +1,6 @@
+.auto-cover{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;margin-top:12px;color:var(--text-secondary);font-size:12px;line-height:1.7}
+.auto-cover:empty{display:none}.auto-cover .button{margin:0;padding:6px 10px;min-height:34px}
+.auto-cover[data-state="queued"]>span:before,.auto-cover[data-state="running"]>span:before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-right:8px;vertical-align:middle}
+.auto-cover[data-state="ready"]{color:var(--success)}
+.publish-file-selection{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:7px}.publish-file-selection .file-selected{margin:0;overflow-wrap:anywhere}.publish-file-selection .button{padding:4px 8px;min-height:32px;font-size:11px}
+@media(max-width:650px){.auto-cover .button,.publish-file-selection .button{min-height:44px}}

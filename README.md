@@ -1,6 +1,17 @@
 # Funtrack
 
-最新独立测试站与推荐实验状态见 [2026-11-16 推荐实验验收](docs/recommendation-experiment-2026-11-16.md)。下文早期验收数字与 owner-only 描述是原 Sites 阶段记录；独立部署配置见 [部署文档](docs/independent-deployment.md)。
+新合作者请先看 [协作开发交接](docs/collaboration-handoff.md)：包含环境安装、目录分工、分支/PR、迁移与名片快照契约，以及已完成和待验收的边界。当前独立站使用 Cloudflare Worker + D1 + R2 + Clerk；配置见 [独立部署](docs/independent-deployment.md)，本轮分享入口见 [公开名片方案](docs/public-card-sharing-plan.md)。
+
+```sh
+npm run install:ci
+npm run check
+npm test
+npm run build:standalone
+```
+
+这些检查和本地目标构建不需要云端密钥；完整本地登录、上传和试玩仍需配置 Clerk development 实例。GitHub CI 只检查、测试和构建，不部署。
+
+**以下保留原 Sites 阶段的历史说明与验收证据。** 其中 1 MiB、两模板、owner-only、旧登录与初始迁移命令不再代表当前独立站；当前 HTML 上限为 8 MiB，名片有 5 种模板。新开发按上方协作交接操作，历史推荐验收见 [2026-11-16 记录](docs/recommendation-experiment-2026-11-16.md)。
 
 发现作品、上传并试玩小游戏、留下反馈，以及用自己的作品制作可分享名片。当前应用入口是 `/site.html#/`，已经连接服务端 API、D1 和 R2；`/wireframe.html` 及早期前端演示仅保留作设计参考，其中的身份和统计不属于当前应用数据。
 

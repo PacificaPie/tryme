@@ -1,14 +1,18 @@
 import { env } from 'cloudflare:workers';
 import { PUBLICATION_MAX_BYTES } from './limits.mjs';
+import { createAutoCoverService } from './auto-cover-service.mjs';
+import { captureHostedHTML } from './auto-cover-capture.mjs';
 import { handleBuildAPI, handleBuildWorker, getBuildArtifact } from './build-service';
 import { resolveGithubHTML } from './github-import.mjs';
 import { publicationArtifact } from './publication-artifact.mjs';
 import { createVersionService } from './version-service.mjs';
 import { createWorkEditService } from './work-edit-service.mjs';
 import { createDuplicateService } from './duplicate-service.mjs';
+import { createArchiveService, requireActiveWork, archiveConstraint, mineWorkState } from './archive-service.mjs';
 import { createDiscoveryService,discoveryJSON,initialDiscovery,DISCOVERY_COLUMNS,DISCOVERY_JOIN,DISCOVERY_ELIGIBLE } from './discovery-service.mjs';
 import { createRecommendationService,recommendationRank,RECOMMENDATION_VERSION } from './recommendation-service.mjs';
 import { metadataId } from './work-metadata.mjs';
+import { createPublicSharingService } from './public-sharing.mjs';
 import { cardWorkRefs } from './version-rules.mjs';
 import { analyticsResponse } from './analytics';
 import { ApiError, fail, authenticate, verifyWrite, requiredText, eventId, safeURL, coverType, htmlSource, sessionEvents, GAME_CSP, gameDocument, likedState, cardDetails, cardSnapshot, cardTemplate, commentInput, validateCommentParent, commentPageLimit, encodeCommentCursor, decodeCommentCursor, discoverQuery, encodeDiscoverCursor, decodeDiscoverCursor } from './rules.mjs';
@@ -17,10 +21,11 @@ type Row = Record<string, any>;
 type User = { id: string; name: string; email: string };
 const iso = () => new Date().toISOString();
 const uuid = () => crypto.randomUUID();
-const bindings = () => env as unknown as { DB?: D1Database; BUCKET?: R2Bucket };
+const bindings = () => env as unknown as { DB?: D1Database; BUCKET?: R2Bucket; BROWSER?: Fetcher; FUNTRACK_AUTO_COVER_ENABLED?: string };
 function db(): D1Database { const d=bindings().DB; if(!d)throw new ApiError(503,'STORAGE_UNAVAILABLE','数据库暂不可用'); return d; }
 function bucket(): R2Bucket { const b=bindings().BUCKET; if(!b)throw new ApiError(503,'STORAGE_UNAVAILABLE','文件存储暂不可用'); return b; }
 const sql=(query:string,...values:any[])=>db().prepare(query).bind(...values);
+const autoCovers=createAutoCoverService({db,bucket,configured:()=>bindings().FUNTRACK_AUTO_COVER_ENABLED==='1'&&typeof bindings().BROWSER?.fetch==='function',capture:(html:string)=>captureHostedHTML(bindings().BROWSER,html)});
 const first=(query:string,...values:any[])=>sql(query,...values).first<Row>();
 async function rows(query:string,...values:any[]):Promise<Row[]> { return (await sql(query,...values).all<Row>()).results; }
 export function json(value:unknown,status=200) { return Response.json(value,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}}); }
@@ -37,7 +42,7 @@ async function bodyJSON(request:Request):Promise<Row> {
   try {const body=JSON.parse(new TextDecoder().decode(await limitedBody(request,65536)));if(!body||typeof body!=='object'||Array.isArray(body))throw new Error();return body;}catch(e){if(e instanceof ApiError)throw e;throw new ApiError(400,'INVALID_JSON','JSON 格式无效');}
 }
 const WORK_QUERY=`SELECT w.*,v.version,v.game_key,CASE WHEN m.id IS NOT NULL THEN m.cover_key ELSE v.cover_key END cover_key,CASE WHEN m.id IS NOT NULL THEN m.cover_mime ELSE v.cover_mime END cover_mime,v.provenance_json,${DISCOVERY_COLUMNS} FROM ft_works w JOIN ft_work_versions v ON v.id=w.current_version_id LEFT JOIN ft_work_metadata m ON m.id=w.current_metadata_id AND m.work_id=w.id${DISCOVERY_JOIN}`;
-function workJSON(w:Row) { return {id:w.id,authorId:w.author_id,authorName:w.author_name,name:w.name,desc:w.description,source:w.source,versionId:w.current_version_id,version:w.version,metadataId:w.current_metadata_id||null,coverUrl:w.cover_key?`/media/${w.current_metadata_id||w.current_version_id}`:'',...(w.url?{url:w.url}:{}),...(w.provenance_json?{build:JSON.parse(w.provenance_json)}:{}),createdAt:w.created_at,revision:w.revision,updatedAt:w.updated_at||w.created_at,discovery:discoveryJSON(w)}; }
+function workJSON(w:Row) { return {id:w.id,authorId:w.author_id,authorName:w.author_name,name:w.name,desc:w.description,source:w.source,versionId:w.current_version_id,version:w.version,metadataId:w.current_metadata_id||null,coverUrl:w.cover_key?`/media/${w.current_metadata_id||w.current_version_id}`:'',...(w.url?{url:w.url}:{}),...(w.provenance_json?{build:JSON.parse(w.provenance_json)}:{}),createdAt:w.created_at,revision:w.revision,updatedAt:w.updated_at||w.created_at,archivedAt:w.archived_at||null,discovery:discoveryJSON(w)}; }
 async function getWork(id:unknown) { if(typeof id!=='string'||id.length>128)throw new ApiError(404,'WORK_NOT_FOUND','作品不存在');const w=await first(WORK_QUERY+' WHERE w.id=?',id);if(!w)throw new ApiError(404,'WORK_NOT_FOUND','作品不存在');return w; }
 async function ownWork(id:unknown,user:User) {const w=await getWork(id);if(w.author_id!==user.id)throw new ApiError(403,'NOT_OWNER','只能访问自己的作品数据');return w;}
 async function userProfile(user:User) {const p=await first('SELECT name,bio,signature,headline,website,back_style FROM ft_profiles WHERE id=?',user.id);return {id:user.id,name:p?.name||user.name,bio:p?.bio||'',signature:p?.signature||'',headline:p?.headline||'',website:p?.website||'',backStyle:p?.back_style||'ink'};}
@@ -57,7 +62,8 @@ async function withWorkStats(works:Row[],user:User) {
 function likeJSON(workId:string,row:Row) {return {workId,liked:Boolean(row.liked),likesCount:Number(row.n||0)};}
 async function discover(url:URL,user:User,mine=false) {
   const params=new URLSearchParams(url.searchParams);if(mine)params.set('author',user.id);
-  const query=discoverQuery(params),cursor=decodeDiscoverCursor(params.get('cursor'),query),scope=mine?'mine:'+user.id:'public',asOf=cursor?.asOf||iso();
+  const state=mine?mineWorkState(params.get('state')):'active';
+  const query=discoverQuery(params),cursor=decodeDiscoverCursor(params.get('cursor'),query),scope=mine?'mine:'+user.id+':'+state:'public',asOf=cursor?.asOf||iso();
   if(cursor&&(cursor.scope||'public')!==scope)fail(400,'INVALID_CURSOR','分页游标与当前列表不符，请重新加载');
   // Capture all high-water marks in one SQLite read snapshot. A write that
   // started before asOf but commits after this read cannot reshape page two.
@@ -66,7 +72,7 @@ async function discover(url:URL,user:User,mine=false) {
     (SELECT COALESCE(MAX(rowid),0) FROM ft_events) events,
     (SELECT COALESCE(MAX(rowid),0) FROM ft_feed_impressions) impressions,
     (SELECT COALESCE(MAX(rowid),0) FROM ft_contribution_credits) credits`)):null;
-  const conditions=['w.created_at<=?',...mine?[]:[DISCOVERY_ELIGIBLE]],values:any[]=[asOf];
+  const conditions=['w.created_at<=?',...mine?(state==='all'?[]:[state==='archived'?'w.archived_at IS NOT NULL':'w.archived_at IS NULL']):[DISCOVERY_ELIGIBLE]],values:any[]=[asOf];
   if(snapshot){conditions.push('w.rowid<=?');values.push(snapshot.works);}
   if(query.source!=='all'){conditions.push('w.source=?');values.push(query.source);}
   if(query.author){conditions.push('w.author_id=?');values.push(query.author);}
@@ -115,8 +121,10 @@ const readArtifact=(form:FormData,source:string,owner:string)=>publicationArtifa
 const duplicates=createDuplicateService({db});
 const recommendations=createRecommendationService({db,bodyJSON});
 const handleDiscoveryAPI=createDiscoveryService({db,ownWork,getWork,workJSON,bodyJSON});
+const handleArchiveAPI=createArchiveService({db,ownWork,workJSON,bodyJSON});
+const publicSharing=createPublicSharingService({db,bucket,origin:()=>(env as unknown as {APP_ORIGIN?:string}).APP_ORIGIN||''});
 const handleWorkEditAPI=createWorkEditService({db,bucket,ownWork,workJSON,hash,readForm:readPublicationForm});
-const handleVersionAPI=createVersionService({db,bucket,ownWork,workJSON,hash,readForm:readPublicationForm,readArtifact,bodyJSON});
+const handleVersionAPI=createVersionService({db,bucket,ownWork,workJSON,hash,readForm:readPublicationForm,readArtifact,bodyJSON,onPublished:(workId:string,versionId:string,ownerId:string)=>autoCovers.enqueue(workId,versionId,ownerId)});
 
 async function publish(request:Request,user:User) {
   const key=eventId(request.headers.get('idempotency-key'));
@@ -128,7 +136,7 @@ async function publish(request:Request,user:User) {
   const fingerprint=gameBytes?await hash(gameBytes):url!;
   const requestHash=await hash(JSON.stringify({name,description,source,url,...(buildId?{buildId}:{}),game:gameBytes?fingerprint:null,cover:coverBytes?await hash(coverBytes):null,coverMime}));
   const initialQuery=`SELECT w.*,v.id initial_version_id,v.version,v.game_key,v.cover_key,v.cover_mime,v.provenance_json,i.name initial_name,i.description initial_description,${DISCOVERY_COLUMNS} FROM ft_works w JOIN ft_work_versions v ON v.work_id=w.id AND v.ordinal=1 LEFT JOIN ft_work_metadata i ON i.id=w.initial_metadata_id AND i.work_id=w.id${DISCOVERY_JOIN}`;
-  function initialResponse(found:Row,status=200){if(found.request_hash!==requestHash)throw new ApiError(409,'IDEMPOTENCY_CONFLICT','同一次提交的内容已变化，请创建新的提交标识');return json({work:workJSON({...found,name:found.initial_name??found.name,description:found.initial_description??found.description,current_metadata_id:found.initial_metadata_id,current_version_id:found.initial_version_id,revision:1,updated_at:found.created_at}),current:{versionId:found.current_version_id,revision:found.revision}},status);}
+  async function initialResponse(found:Row,status=200){if(found.request_hash!==requestHash)throw new ApiError(409,'IDEMPOTENCY_CONFLICT','同一次提交的内容已变化，请创建新的提交标识');await autoCovers.enqueue(found.id,found.initial_version_id,user.id);return json({work:workJSON({...found,name:found.initial_name??found.name,description:found.initial_description??found.description,current_metadata_id:found.initial_metadata_id,current_version_id:found.initial_version_id,revision:1,updated_at:found.created_at}),current:{versionId:found.current_version_id,revision:found.revision}},status);}
   async function replay(){const found=await first(initialQuery+' WHERE w.author_id=? AND w.idempotency_key=?',user.id,key);return found?initialResponse(found):null;}
   const prior=await replay();if(prior)return prior;
   await duplicates.assertNew(user.id,source,fingerprint);
@@ -329,7 +337,7 @@ async function createCard(request:Request,user:User) {
   async function replay(){if(!key)return null;const row=await first('SELECT * FROM ft_cards WHERE author_id=? AND idempotency_key=?',user.id,key);if(!row)return null;if(row.request_hash!==requestHash&&row.request_hash!==legacyHash)throw new ApiError(409,'IDEMPOTENCY_CONFLICT','名片提交内容已变化，请使用新的提交标识');return json({card:cardSnapshot(JSON.parse(row.snapshot_json))});}
   const prior=await replay();if(prior)return prior;
   const works=[];for(let i=0;i<input.workIds.length;i++){
-    const w=await ownWork(input.workIds[i],user);
+    const w=await ownWork(input.workIds[i],user);requireActiveWork(w);
     if(workRefs&&!workRefs[i].metadataId&&workRefs[i].expectedRevision!==undefined&&workRefs[i].expectedRevision!==w.revision){const error=new ApiError(409,'WORK_CONFLICT','名片预览信息已变化，请重新生成预览');(error as ApiError&{current:unknown}).current={versionId:w.current_version_id,revision:w.revision,metadataId:w.current_metadata_id||null};throw error;}
     if(workRefs){const v=await first('SELECT * FROM ft_work_versions WHERE id=? AND work_id=?',workRefs[i].versionId,w.id);if(!v)throw new ApiError(422,'INVALID_VERSION','名片预览版本不属于该作品');Object.assign(w,{current_version_id:v.id,current_metadata_id:null,version:v.version,game_key:v.game_key,cover_key:v.cover_key,cover_mime:v.cover_mime,provenance_json:v.provenance_json});
       if(workRefs[i].metadataId){const m=await first('SELECT * FROM ft_work_metadata WHERE id=? AND work_id=?',workRefs[i].metadataId,w.id);if(!m)throw new ApiError(422,'INVALID_METADATA','名片预览信息不属于该作品');Object.assign(w,{current_metadata_id:m.id,name:m.name,description:m.description,cover_key:m.cover_key,cover_mime:m.cover_mime});}}
@@ -340,7 +348,7 @@ async function createCard(request:Request,user:User) {
     sql('INSERT INTO ft_cards (id,author_id,snapshot_json,created_at,idempotency_key,request_hash) VALUES (?,?,?,?,?,?)',card.id,user.id,JSON.stringify(card),card.createdAt,key,requestHash),
     sql('INSERT INTO ft_profiles (id,name,bio,signature,headline,website,back_style) VALUES (?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,bio=excluded.bio,signature=excluded.signature,headline=excluded.headline,website=excluded.website,back_style=excluded.back_style',user.id,name,bio,details.signature,details.headline,details.website,details.backStyle),
     sql('UPDATE ft_works SET author_name=? WHERE author_id=?',name,user.id),
-  ]);}catch(e){const found=await replay();if(found)return found;throw e;}
+  ]);}catch(e){const found=await replay();if(found)return found;if(archiveConstraint(e))fail(409,'WORK_ARCHIVED','选中的作品已归档，请返回重新选择作品。');throw e;}
   return json({card},201);
 }
 
@@ -354,8 +362,11 @@ export async function handleAPI(request:Request) {
     // Sites keeps its platform-owned sign-in; no secret is exposed here.
     if(request.method==='GET'&&new URL(request.url).pathname==='/api/auth/config')return json({provider:'sites',configured:true,signInPath:'/signin-with-chatgpt',signOutPath:'/signout-with-chatgpt'});
     const workerResponse=await handleBuildWorker(request);if(workerResponse)return workerResponse;
+    const publicResponse=await publicSharing.api(request);if(publicResponse)return publicResponse;
     const user=authenticate(request.headers),url=new URL(request.url),parts=url.pathname.replace(/^\/api\/?/,'').split('/').filter(Boolean);
     if(['POST','PATCH'].includes(request.method))verifyWrite(request);
+    const autoCoverResponse=await autoCovers.handle(request,user);if(autoCoverResponse)return autoCoverResponse;
+    const archiveResponse=await handleArchiveAPI(request,user);if(archiveResponse)return archiveResponse;
     const discoveryResponse=await handleDiscoveryAPI(request,user);if(discoveryResponse)return discoveryResponse;
     const editResponse=await handleWorkEditAPI(request,user);if(editResponse)return editResponse;
     const buildResponse=await handleBuildAPI(request,user);if(buildResponse)return buildResponse;
@@ -393,6 +404,9 @@ export async function handleAPI(request:Request) {
   }catch(e){return errorResponse(e);}
 }
 
+export async function publicCardPageResponse(request:Request,id:string) {
+  try{return await publicSharing.page(request,id);}catch(e){return errorResponse(e);}
+}
 export async function mediaResponse(request:Request,id:string) {
   try{authenticate(request.headers);const v=await first('SELECT cover_key,cover_mime FROM ft_work_versions WHERE id=? UNION ALL SELECT cover_key,cover_mime FROM ft_work_metadata WHERE id=? LIMIT 1',id,id);if(!v?.cover_key)throw new ApiError(404,'MEDIA_NOT_FOUND','封面不存在');const object=await bucket().get(v.cover_key);if(!object)throw new ApiError(404,'MEDIA_NOT_FOUND','封面文件不存在');return new Response(object.body as unknown as BodyInit,{headers:{'Content-Type':v.cover_mime,'Cache-Control':'private, max-age=3600','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'}});}catch(e){return errorResponse(e);}
 }

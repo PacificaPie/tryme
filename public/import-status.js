@@ -1,11 +1,13 @@
 import { t } from './i18n.js';
 import './import-status.messages.js';
+import './archive.messages.js';
 
 export const HTML_MAX_BYTES = 8 * 1024 * 1024;
 export const HTML_UPLOAD_HINT = '单个 HTML，最大 8 MiB；图片、样式和脚本需包含在文件里。';
 const OFFLINE = '仓库构建暂不可用。可上传已打包的 HTML，或直接导入独立 HTML 链接。';
 const OVERSIZE = 'HTML 超过 8 MiB。请压缩图片、音频等资源，重新打包后再上传。';
 const messages = {
+  WORK_ARCHIVED: '这件作品已归档，请先恢复再继续。',
   BUILD_RUNNER_OFFLINE: OFFLINE,
   BUILD_RUNNER_UNCONFIGURED: OFFLINE,
   BUILD_FAILED: '构建失败。请查看构建记录并修复项目，也可在本地打包后上传 HTML。',

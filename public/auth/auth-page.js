@@ -1,5 +1,6 @@
 import { ensureAuth, getAuthConfig, getClerk, authURL, signOut, safeAuthReturnTo } from '../auth-client.js';
 import { t, getLocale, setLocale, registerMessages } from '../i18n.js';
+import { publicCardBackPath } from '../public-card-links.js';
 
 registerMessages({
   '登录': 'Sign in', '退出登录': 'Sign out', '返回': 'Back', '继续': 'Continue',
@@ -14,6 +15,7 @@ const main = document.querySelector('#auth-main');
 const localeButton = document.querySelector('#auth-locale');
 const action = document.body.dataset.authAction;
 const returnTo = safeAuthReturnTo(new URLSearchParams(location.search).get('return_to'), location.origin);
+const backTo = action === 'sign-in' ? publicCardBackPath(returnTo) || returnTo : returnTo;
 let loading = true, failure = null, signingOut = false, mountedNode = null;
 const esc = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const button = (label, attributes = '', secondary = false) => `<button type="button" class="auth-button${secondary ? ' secondary' : ''}" ${attributes}>${esc(t(label))}</button>`;
@@ -31,7 +33,7 @@ function render() {
   const config = getAuthConfig();
   const badge = config.provider === 'clerk' && config.environment === 'test' && config.configured ? `<span class="auth-badge">${esc(t('测试环境'))}</span>` : '';
   if (failure) {
-    main.innerHTML = `<section class="auth-panel">${badge}<h1>${esc(t('登录暂不可用'))}</h1><p role="alert">${esc(t(failure.message))}</p><div class="auth-actions">${button('重试', 'data-retry')}${link('返回', returnTo, true)}</div></section>`;
+    main.innerHTML = `<section class="auth-panel">${badge}<h1>${esc(t('登录暂不可用'))}</h1><p role="alert">${esc(t(failure.message))}</p><div class="auth-actions">${button('重试', 'data-retry')}${link('返回', backTo, true)}</div></section>`;
     main.querySelector('[data-retry]').onclick = () => location.reload();
     return;
   }
@@ -50,7 +52,7 @@ function render() {
     return;
   }
   if (config.provider === 'sites') {
-    main.innerHTML = `<section class="auth-panel"><h1>${esc(t('登录'))}</h1><p>${esc(t('登录后可继续发布和试玩。'))}</p><div class="auth-actions">${link('登录', authURL('sign-in', returnTo))}${link('返回', returnTo, true)}</div></section>`;
+    main.innerHTML = `<section class="auth-panel"><h1>${esc(t('登录'))}</h1><p>${esc(t('登录后可继续发布和试玩。'))}</p><div class="auth-actions">${link('登录', authURL('sign-in', returnTo))}${link('返回', backTo, true)}</div></section>`;
     return;
   }
   const clerk = getClerk();
@@ -58,13 +60,14 @@ function render() {
     main.innerHTML = `<section class="auth-panel">${badge}<h1>${esc(t('已登录'))}</h1><div class="auth-actions">${link('继续', returnTo)}</div></section>`;
     return;
   }
-  main.innerHTML = `<section class="auth-component">${badge}<div id="clerk-sign-in"></div><a class="auth-back" href="${esc(returnTo)}">${esc(t('返回'))}</a></section>`;
+  main.innerHTML = `<section class="auth-component">${badge}<div id="clerk-sign-in"></div><a class="auth-back" href="${esc(backTo)}">${esc(t('返回'))}</a></section>`;
   const node = main.querySelector('#clerk-sign-in');
   try {
     clerk.mountSignIn(node, {
       routing: 'hash', withSignUp: true,
       forceRedirectUrl: returnTo, signUpForceRedirectUrl: returnTo,
-      appearance: { variables: { colorPrimary: '#252927', borderRadius: '0.75rem' } },
+      // Theme CSS variables follow the site without remounting the form.
+      appearance: { variables: { borderRadius: '0.75rem' } },
     });
     mountedNode = node;
   } catch {

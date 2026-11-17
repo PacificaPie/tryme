@@ -1,5 +1,6 @@
 import { t, getLocale, localeNumber, localeDate } from './i18n.js';
 import './analytics.messages.js';
+import { isArchived } from './archive-controls.js';
 
 const METRICS = {
   feedImpressions: { label: 'Feed 曝光', unit: '次' },
@@ -126,8 +127,6 @@ function insights(data, state) {
     const key = keys[works.length > 1 ? ties > 1 ? 2 : 1 : 0];
     result.push({ title: t('作品表现'), body: t(key, { name: top.name, count: formatAnalyticsNumber(top[metric]) }) });
   }
-  const coverage = data.coverage || {};
-  if (coverage.endedStarts > 0 && coverage.durationSamples < coverage.endedStarts) result.push({ title: t('时长覆盖'), body: t(coverage.durationSamples > 0 ? '已记录 {ended} 局已结束试玩中 {samples} 局的时长。' : '{ended} 局已结束试玩尚无可用时长样本，时长显示为 —。', { ended: formatAnalyticsNumber(coverage.endedStarts), samples: formatAnalyticsNumber(coverage.durationSamples) }) });
   const buckets = (data.series || []).filter(row => validNumber(row.uv) && row.uv > 0);
   if (buckets.length > 1) {
     const max = Math.max(...buckets.map(row => row.uv)), peaks = buckets.filter(row => row.uv === max);
@@ -152,31 +151,35 @@ function graphGeometry(series, metric, width, height = 254) {
 }
 
 /** Mount in a studio container. onQuery updates the URL only; dispose on route exit. */
-export async function mountAnalytics(root, { api, esc, initial = {}, onQuery = () => {}, works = null, signinURL = () => '/signin-with-chatgpt?return_to=' + encodeURIComponent(location.pathname + location.search + location.hash) } = {}) {
+export async function mountAnalytics(root, { api, esc, initial = {}, onQuery = () => {}, works = null, timers = globalThis, signinURL = () => '/signin-with-chatgpt?return_to=' + encodeURIComponent(location.pathname + location.search + location.hash) } = {}) {
   const id = `analytics-${++instanceId}`, state = normalizeAnalyticsQuery(initial), owned = new Map();
-  for (const work of works || []) owned.set(work.id || work.workId, { id: work.id || work.workId, name: work.name, source: work.source });
-  let data = null, loading = false, revision = 0, controller = null, disposed = false, resizeObserver = null, geometry = null, focusIndex = null, pendingFocus = null, secondaryTab = 'play';
+  for (const work of works || []) owned.set(work.id || work.workId, { id: work.id || work.workId, name: work.name, source: work.source, archivedAt: work.archivedAt });
+  let data = null, loading = false, revision = 0, controller = null, disposed = false, resizeObserver = null, geometry = null, focusIndex = null, pendingFocus = null, slowTimer = null;
   const $ = selector => root.querySelector(selector);
   const alive = () => !disposed && root.isConnected !== false;
   const emit = () => onQuery(analyticsQuery(state, true));
   const selectedExternal = () => Boolean(state.work && owned.get(state.work)?.source === 'url');
-  const dispose = () => { disposed = true; revision++; controller?.abort(); resizeObserver?.disconnect(); root.removeEventListener('click', handleClick); root.removeEventListener('change', handleChange); root.removeEventListener('submit', handleSubmit); };
+  const clearSlowTimer = () => { if (slowTimer !== null) timers.clearTimeout(slowTimer); slowTimer = null; };
+  const dispose = () => { if (disposed) return; disposed = true; revision++; clearSlowTimer(); controller?.abort(); resizeObserver?.disconnect(); root.removeEventListener('click', handleClick); root.removeEventListener('change', handleChange); root.removeEventListener('submit', handleSubmit); root.removeEventListener('keydown', handleKeydown); };
 
   root.classList.add('analytics');
-  root.innerHTML = `<header class="an-header"><div class="an-heading"><button type="button" class="an-back" data-an-back hidden>${t('← 全部作品')}</button><h1>${t('数据')}</h1><p class="an-range" data-an-range></p></div><div class="an-period" aria-label="${t('统计期间')}">${[7, 30, 90].map(days => `<button type="button" data-an-days="${days}">${t('{days} 天', { days: localeNumber(days) })}</button>`).join('')}<details class="an-calendar"><summary>${t('自定义')}</summary><form class="an-date-form"><label>${t('开始日期')}<input type="date" name="from" required min="1970-01-01" max="${todayUTC()}"></label><span aria-hidden="true">—</span><label>${t('结束日期')}<input type="date" name="to" required min="1970-01-01" max="${todayUTC()}"></label><p class="an-date-error" role="alert"></p><button class="an-apply" type="submit">${t('应用日期')}</button></form></details></div></header><div class="an-filters"><label class="an-select"><span class="an-sr-only">${t('作品')}</span><select data-an-work><option value="">${t('全部作品')}</option></select></label><label class="an-select an-version-select" hidden><span class="an-sr-only">${t('版本')}</span><select data-an-version><option value="">${t('所有版本')}</option></select></label><label class="an-self"><input type="checkbox" data-an-self><span>${t('排除本人')}</span></label><button type="button" class="an-refresh" data-an-refresh aria-label="${t('刷新数据')}" title="${t('刷新数据')}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 8A8 8 0 1 0 20 14M19 3v5h-5"/></svg></button></div><div class="an-request-status" role="status" aria-live="polite"></div><div class="an-content" aria-busy="true"></div>`;
+  root.innerHTML = `<header class="an-header"><div class="an-heading"><button type="button" class="an-back" data-an-back hidden>${t('← 全部作品')}</button><h1>${t('数据概览')}</h1><p class="an-range" data-an-range></p></div><div class="an-period" aria-label="${t('统计期间')}">${[7, 30, 90].map(days => `<button type="button" data-an-days="${days}">${t('{days} 天', { days: localeNumber(days) })}</button>`).join('')}<details class="an-calendar"><summary>${t('自定义')}</summary><form class="an-date-form"><label>${t('开始日期')}<input type="date" name="from" required min="1970-01-01" max="${todayUTC()}"></label><span aria-hidden="true">—</span><label>${t('结束日期')}<input type="date" name="to" required min="1970-01-01" max="${todayUTC()}"></label><p class="an-date-error" role="alert"></p><button class="an-apply" type="submit">${t('应用日期')}</button></form></details></div></header><div class="an-filters"><label class="an-select"><span class="an-sr-only">${t('作品')}</span><select data-an-work><option value="">${t('全部作品')}</option></select></label><details class="an-advanced"><summary>${t('筛选')}<span data-an-filter-count></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></summary><div class="an-advanced-panel"><label class="an-select an-version-select" hidden><span>${t('版本')}</span><select data-an-version><option value="">${t('所有版本')}</option></select></label><label class="an-self"><input type="checkbox" data-an-self><span>${t('不计入我的活动')}</span></label><p>${t('只过滤你的访问、试玩和互动，作品仍保留。')}</p></div></details><button type="button" class="an-refresh" data-an-refresh aria-label="${t('刷新数据')}" title="${t('刷新数据')}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 8A8 8 0 1 0 20 14M19 3v5h-5"/></svg></button></div><div class="an-request-status" role="status" aria-live="polite"></div><div class="an-content" aria-busy="true"></div>`;
 
   function drawControls() {
     root.querySelectorAll('[data-an-days]').forEach(button => { const selected = Number(button.dataset.anDays) === state.days; button.classList.toggle('is-active', selected); button.setAttribute('aria-pressed', String(selected)); });
     $('.an-calendar').classList.toggle('is-active', state.days === 'custom');
     $('[data-an-self]').checked = state.excludeSelf;
-    $('[data-an-work]').innerHTML = `<option value="">${t('全部作品')}</option>` + [...owned.values()].map(work => `<option value="${esc(work.id)}" ${state.work === work.id ? 'selected' : ''}>${esc(work.name)}</option>`).join('');
+    const filterCount = Number(state.excludeSelf) + Number(Boolean(state.version));
+    $('[data-an-filter-count]').textContent = filterCount ? String(filterCount) : '';
+    $('.an-advanced').classList.toggle('has-filters', filterCount > 0);
+    $('[data-an-work]').innerHTML = `<option value="">${t('全部作品')}</option>` + [...owned.values()].map(work => `<option value="${esc(work.id)}" ${state.work === work.id ? 'selected' : ''}>${esc(work.name)}${isArchived(work)?' · '+t('已归档'):''}</option>`).join('');
     if (state.work && !owned.has(state.work)) { const option = document.createElement('option'); option.value = state.work; option.textContent = t('所选作品'); option.selected = true; $('[data-an-work]').append(option); }
     const versions = data?.versions || [];
     $('[data-an-version]').innerHTML = `<option value="">${t('所有版本')}</option>` + versions.map(version => `<option value="${esc(version.id)}" ${state.version === version.id ? 'selected' : ''}>${esc(version.label)}${version.isCurrent ? ' · ' + t('当前') : ''}</option>`).join('');
     if (state.version && !versions.some(version => version.id === state.version)) { const option = document.createElement('option'); option.value = state.version; option.textContent = t('所选版本'); option.selected = true; $('[data-an-version]').append(option); }
     $('.an-version-select').hidden = !state.work || selectedExternal();
     $('[data-an-back]').hidden = !state.work;
-    $('h1').textContent = state.work ? owned.get(state.work)?.name || t('作品数据') : t('数据');
+    $('h1').textContent = state.work ? (owned.get(state.work)?.name || t('作品数据')) + (isArchived(owned.get(state.work))?' · '+t('已归档'):'') : t('数据概览');
     const meta = data?.meta;
     $('[data-an-range]').textContent = meta ? `${dateRange(meta.from, meta.to)} · UTC${meta.partialToday ? ' · ' + t('今日未结束') : ''}` : state.days === 'custom' ? `${dateRange(state.from, state.to)} · UTC` : `${state.days === 1 ? t('最近 1 天') : t('最近 {days} 天', { days: localeNumber(state.days) })} · UTC`;
     $('input[name="from"]').value = state.days === 'custom' ? state.from : meta?.from || addDays(todayUTC(), -(Number(state.days) - 1));
@@ -190,24 +193,63 @@ export async function mountAnalytics(root, { api, esc, initial = {}, onQuery = (
   function drawEmpty() {
     resizeObserver?.disconnect(); geometry = null; focusIndex = null;
     root.classList.add('is-empty');
-    $('.an-content').innerHTML = `<section class="an-no-works" aria-labelledby="${id}-empty-title"><svg class="an-empty-art" viewBox="0 0 240 160" aria-hidden="true" focusable="false"><ellipse cx="120" cy="143" rx="82" ry="7" fill="#f1f4f5"/><rect x="45" y="30" width="136" height="98" rx="10" fill="#f5f7f8" stroke="#e1e7eb" transform="rotate(-7 113 79)"/><rect x="63" y="22" width="136" height="106" rx="10" fill="#fff" stroke="#cad7de"/><path d="M63 46h136" stroke="#e4eaee"/><circle cx="76" cy="34" r="2" fill="#bccdd5"/><circle cx="84" cy="34" r="2" fill="#d6e1e6"/><rect x="81" y="63" width="42" height="42" rx="6" fill="#f4f8f9" stroke="#dbe6eb"/><path d="m98 76 12 8-12 8z" fill="#abc4cd"/><path d="M138 72h42m-42 13h32m-32 13h22" stroke="#dbe5e9" stroke-width="3" stroke-linecap="round"/><path d="M38 60v12m-6-6h12m159 41v10m-5-5h10" stroke="#c3d6db" stroke-width="1.5" stroke-linecap="round"/></svg><h2 id="${id}-empty-title">${t('还没有作品')}</h2><p>${t('发布作品后，访问和试玩数据会显示在这里。')}</p><a class="button primary an-empty-action" href="#/publish">${t('发布作品')}</a></section>`;
+    $('.an-content').innerHTML = `<section class="an-no-works" aria-labelledby="${id}-empty-title"><svg class="an-empty-art" viewBox="0 0 240 160" aria-hidden="true" focusable="false"><ellipse cx="120" cy="143" rx="82" ry="7" fill="var(--soft, #f1f4f5)"/><rect x="45" y="30" width="136" height="98" rx="10" fill="var(--soft, #f5f7f8)" stroke="var(--line, #e1e7eb)" transform="rotate(-7 113 79)"/><rect x="63" y="22" width="136" height="106" rx="10" fill="var(--surface, #fff)" stroke="var(--border, #cad7de)"/><path d="M63 46h136" stroke="var(--line, #e4eaee)"/><circle cx="76" cy="34" r="2" fill="var(--text-tertiary, #bccdd5)"/><circle cx="84" cy="34" r="2" fill="var(--line, #d6e1e6)"/><rect x="81" y="63" width="42" height="42" rx="6" fill="var(--soft, #f4f8f9)" stroke="var(--line, #dbe6eb)"/><path d="m98 76 12 8-12 8z" fill="var(--accent, #abc4cd)"/><path d="M138 72h42m-42 13h32m-32 13h22" stroke="var(--line, #dbe5e9)" stroke-width="3" stroke-linecap="round"/><path d="M38 60v12m-6-6h12m159 41v10m-5-5h10" stroke="var(--text-tertiary, #c3d6db)" stroke-width="1.5" stroke-linecap="round"/></svg><h2 id="${id}-empty-title">${t('还没有作品')}</h2><p>${t('发布作品后，访问和试玩数据会显示在这里。')}</p><a class="button primary an-empty-action" href="#/publish">${t('发布作品')}</a></section>`;
     $('.an-content').setAttribute('aria-busy', String(loading));
   }
   function metricCard(metric) {
     const definition = METRICS[metric], value = data.summary?.[metric], change = analyticsChange(value, data.previous?.[metric]);
-    return `<button type="button" class="an-metric ${state.metric === metric ? 'is-selected' : ''}" data-an-metric="${metric}" aria-pressed="${state.metric === metric}"><span class="an-metric-label">${t(definition.label)}${definition.short ? `<span>${definition.short}</span>` : ''}</span><strong class="${definition.duration ? 'an-duration-value' : ''}">${valueLabel(metric, value)}</strong><span class="an-change an-change-${change.direction}" aria-label="${esc(t('较前期{change}', { change: change.label }))}">${change.label}</span></button>`;
+    return `<button type="button" class="an-metric ${state.metric === metric ? 'is-selected' : ''}" data-an-metric="${metric}" aria-pressed="${state.metric === metric}"><span class="an-metric-label">${t(definition.label)}${definition.short ? `<span>${definition.short}</span>` : ''}</span><strong class="${definition.duration ? 'an-duration-value' : ''}">${valueLabel(metric, value)}</strong><span class="an-metric-foot"><span class="an-change an-change-${change.direction}" aria-label="${esc(t('较前期{change}', { change: change.label }))}">${change.label}</span>${definition.duration ? `<span class="an-metric-context">${selectedExternal() || data.funnel?.supported === false ? t('外链未接入') : data.coverage?.durationSamples > 0 ? t('{count} 局样本', { count: formatAnalyticsNumber(data.coverage.durationSamples) }) : t('时长待采集')}</span>` : ''}</span></button>`;
   }
   function drawData() {
     if (!alive() || !data) return;
+    const opened = ['.an-secondary', '.an-methods', '.an-series-data'].filter(selector => $(selector)?.open);
     resizeObserver?.disconnect(); geometry = null; focusIndex = null;
     if (!state.work && !data.byWork.length) { drawEmpty(); return; }
     root.classList.remove('is-empty');
     const observations = insights(data, state);
-    $('.an-content').innerHTML = `<div class="an-metrics">${PRIMARY.map(metricCard).join('')}</div><p class="an-comparison">${esc(t('对比 {range}', { range: dateRange(data.meta.previousFrom, data.meta.previousTo) }))}</p><section class="an-chart-section" aria-labelledby="${id}-trend-title"><div class="an-section-head"><h2 id="${id}-trend-title">${t('趋势')}</h2><div class="an-chart-controls"><label><span class="an-sr-only">${t('趋势指标')}</span><select data-an-metric-select>${TREND_METRICS.map(key => { const definition = METRICS[key]; return `<option value="${key}" ${state.metric === key ? 'selected' : ''}>${t(definition.label)}</option>`; }).join('')}</select></label><div class="an-granularity" aria-label="${t('趋势粒度')}"><button type="button" data-an-granularity="day" aria-pressed="${state.granularity === 'day'}">${t('天')}</button><button type="button" data-an-granularity="week" aria-pressed="${state.granularity === 'week'}">${t('周')}</button></div></div></div><div class="an-chart-host"></div><details class="an-series-data"><summary>${t('查看趋势数据')}</summary><div class="an-table-scroll" tabindex="0" aria-label="${t('趋势数据表')}"><table><thead><tr><th scope="col">${t('日期（UTC）')}</th><th scope="col">${t(METRICS[state.metric].label)}</th></tr></thead><tbody>${(data.series || []).map(row => `<tr><th scope="row">${esc(bucketLabel(row.date, data.meta))}</th><td>${valueLabel(state.metric, row[state.metric])}</td></tr>`).join('')}</tbody></table></div></details></section>${observations.length ? `<section class="an-observations" aria-label="${t('数据观察')}">${observations.map(item => `<div><span>${item.title}</span><p>${esc(item.body)}</p></div>`).join('')}</section>` : ''}<section class="an-works-section" aria-labelledby="${id}-works-title"><div class="an-section-head"><h2 id="${id}-works-title">${t(state.work ? '作品汇总' : '作品')}</h2><span class="an-work-count">${t((data.byWork || []).length === 1 ? '1 件' : '{count} 件', { count: localeNumber((data.byWork || []).length) })}</span></div><div class="an-work-table"></div></section><details class="an-secondary"><summary>${t('试玩与互动')}</summary><div class="an-secondary-tabs" role="group" aria-label="${t('更多统计')}"><button type="button" data-an-tab="play" aria-pressed="${secondaryTab === 'play'}">${t('试玩')}</button><button type="button" data-an-tab="social" aria-pressed="${secondaryTab === 'social'}">${t('互动统计')}</button></div><div class="an-secondary-content"></div></details>${methodology()}`;
+    $('.an-content').innerHTML = `
+      <div class="an-metrics">${PRIMARY.map(metricCard).join('')}</div>
+      <p class="an-comparison">${esc(t('对比 {range}', { range: dateRange(data.meta.previousFrom, data.meta.previousTo) }))}</p>
+      <section class="an-chart-section" aria-labelledby="${id}-trend-title">
+        <div class="an-section-head"><h2 id="${id}-trend-title">${t('趋势')}</h2>
+          <div class="an-chart-controls"><label><span class="an-sr-only">${t('趋势指标')}</span><select data-an-metric-select>${TREND_METRICS.map(key => `<option value="${key}" ${state.metric === key ? 'selected' : ''}>${t(METRICS[key].label)}</option>`).join('')}</select></label>
+            <div class="an-granularity" aria-label="${t('趋势粒度')}"><button type="button" data-an-granularity="day" aria-pressed="${state.granularity === 'day'}">${t('天')}</button><button type="button" data-an-granularity="week" aria-pressed="${state.granularity === 'week'}">${t('周')}</button></div>
+          </div>
+        </div>
+        <div class="an-chart-host"></div>
+        <details class="an-series-data"><summary>${t('查看趋势数据')}</summary><div class="an-table-scroll" tabindex="0" aria-label="${t('趋势数据表')}"><table><thead><tr><th scope="col">${t('日期（UTC）')}</th><th scope="col">${t(METRICS[state.metric].label)}</th></tr></thead><tbody>${(data.series || []).map(row => `<tr><th scope="row">${esc(bucketLabel(row.date, data.meta))}</th><td>${valueLabel(state.metric, row[state.metric])}</td></tr>`).join('')}</tbody></table></div></details>
+      </section>
+      ${engagementSummary()}
+      ${observations.length ? `<section class="an-observations" aria-label="${t('数据观察')}">${observations.map(item => `<div><span>${item.title}</span><p>${esc(item.body)}</p></div>`).join('')}</section>` : ''}
+      <section class="an-works-section" aria-labelledby="${id}-works-title"><div class="an-section-head"><h2 id="${id}-works-title">${t(state.work ? '作品汇总' : '作品比较')}</h2><span class="an-work-count">${t((data.byWork || []).length === 1 ? '1 件' : '{count} 件', { count: localeNumber((data.byWork || []).length) })}</span></div><div class="an-work-table"></div></section>
+      <details class="an-secondary"><summary>${t('更多统计')}</summary><div class="an-secondary-content"></div></details>
+      ${methodology()}`;
     $('.an-content').setAttribute('aria-busy', String(loading));
     drawChart(); drawWorks(); drawSecondary();
+    opened.forEach(selector => { if ($(selector)) $(selector).open = true; });
     if (typeof ResizeObserver !== 'undefined') { let lastWidth = $('.an-chart-host').clientWidth; resizeObserver = new ResizeObserver(entries => { const width = Math.round(entries[0].contentRect.width); if (Math.abs(width - lastWidth) > 2 && alive()) { lastWidth = width; drawChart(); } }); resizeObserver.observe($('.an-chart-host')); }
     if (pendingFocus) { $(pendingFocus)?.focus({ preventScroll: true }); pendingFocus = null; }
+  }
+  function engagementSummary() {
+    if (selectedExternal() || data.funnel?.supported === false) return `<section class="an-external-summary"><span>${t('外链点击')}</span><strong>${valueLabel('outboundClicks', data.summary?.outboundClicks)}</strong><p>${t('外链试玩数据未接入')}</p></section>`;
+    const funnel = data.funnel;
+    if (!funnel || funnel.supported === false) return '';
+    const denominator = funnel.visitors, coverage = data.coverage || {};
+    const durationLabel = coverage.endedStarts > 0
+      ? t('{samples} / {ended} 局已结束试玩', { samples: formatAnalyticsNumber(coverage.durationSamples), ended: formatAnalyticsNumber(coverage.endedStarts) })
+      : t('尚无可用的试玩时长样本');
+    return `<div class="an-engagement-grid">
+      <section class="an-funnel" aria-labelledby="${id}-funnel-title"><div class="an-section-head"><h2 id="${id}-funnel-title">${t('访客与试玩')}</h2><span class="an-scope-note">${t('站内作品')}</span></div>
+        <ol>${[['visitors', '访问人数'], ['opened', '打开人数'], ['started', '操作人数']].map(([key, label]) => {
+          const value = funnel[key], ratio = validNumber(value) && denominator > 0 ? Math.min(1, value / denominator) : 0;
+          return `<li><span>${t(label)}</span><strong>${formatAnalyticsNumber(value)}</strong><div class="an-funnel-bar" aria-hidden="true"><i style="width:${ratio * 100}%"></i></div><small>${denominator > 0 && validNumber(value) ? t('{percent}% 的访客', { percent: localeNumber(ratio * 100, { maximumFractionDigits: 1 }) }) : '—'}</small></li>`;
+        }).join('')}</ol>
+      </section>
+      <section class="an-duration-summary" aria-labelledby="${id}-duration-title"><h2 id="${id}-duration-title">${t('时长样本')}</h2><strong>${formatAnalyticsNumber(coverage.durationSamples)}</strong><p>${durationLabel}</p>
+        ${validNumber(coverage.durationCoverage) ? `<div class="an-coverage-bar" aria-hidden="true"><i style="width:${Math.min(1, coverage.durationCoverage) * 100}%"></i></div>` : ''}
+        ${coverage.unendedStarts > 0 ? `<small>${t('另有 {count} 局尚未结束', { count: formatAnalyticsNumber(coverage.unendedStarts) })}</small>` : ''}
+      </section>
+    </div>`;
   }
   function drawChart() {
     const host = $('.an-chart-host'); if (!host || !data) return;
@@ -222,7 +264,7 @@ export async function mountAnalytics(root, { api, esc, initial = {}, onQuery = (
     const ticks = [...new Set([0, METRICS[state.metric].duration ? g.upper / 2 : Math.round(g.upper / 2), g.upper])];
     const grid = ticks.map(value => { const y = g.y(value); return `<line x1="${g.left}" x2="${width - 14}" y1="${y}" y2="${y}" class="an-grid-line"/><text x="${g.left - 10}" y="${y + 4}" text-anchor="end">${esc(axisLabel(state.metric, value, g.upper))}</text>`; }).join('');
     const indices = [...new Set([0, ...(width > 500 ? [Math.floor((series.length - 1) / 2)] : []), series.length - 1])];
-    host.innerHTML = `<div class="an-chart-interactive" tabindex="0" role="group" aria-label="${esc(t('{metric}趋势，使用左右方向键查看每个时间点', { metric: t(METRICS[state.metric].label) }))}" aria-describedby="${id}-chart-hint"><span id="${id}-chart-hint" class="an-sr-only">${t('左右方向键切换时间点，Home 和 End 跳到两端，Escape 关闭提示。下方也有完整数据表。')}</span><svg viewBox="0 0 ${width} ${g.height}" role="img" aria-labelledby="${id}-chart-title"><title id="${id}-chart-title">${esc(t('{metric}，{range}', { metric: t(METRICS[state.metric].label), range: dateRange(data.meta.from, data.meta.to) }))}</title><defs><linearGradient id="${id}-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#78aeb9" stop-opacity=".19"/><stop offset="100%" stop-color="#78aeb9" stop-opacity=".015"/></linearGradient></defs>${grid}${area.map(path => `<path d="${path}" fill="url(#${id}-fill)"/>`).join('')}${paths.map(path => `<path d="${path}" class="an-trend-line"/>`).join('')}${g.segments.filter(segment => segment.length === 1).map(segment => `<circle cx="${segment[0].x}" cy="${segment[0].y}" r="3.5" class="an-trend-dot"/>`).join('')}${indices.map(index => `<text x="${g.x(index)}" y="${g.height - 8}" text-anchor="${index === 0 ? 'start' : index === series.length - 1 ? 'end' : 'middle'}">${esc(shortDate(series[index].date < data.meta.from ? data.meta.from : series[index].date))}</text>`).join('')}<g data-an-chart-focus hidden><line class="an-focus-line" y1="${g.top}" y2="${g.baseline}"/><circle class="an-focus-point" r="4.5"/></g></svg><div class="an-tooltip" role="tooltip" hidden></div><div class="an-sr-only" data-an-chart-announcement aria-live="polite"></div></div>`;
+    host.innerHTML = `<div class="an-chart-interactive" tabindex="0" role="group" aria-label="${esc(t('{metric}趋势，使用左右方向键查看每个时间点', { metric: t(METRICS[state.metric].label) }))}" aria-describedby="${id}-chart-hint"><span id="${id}-chart-hint" class="an-sr-only">${t('左右方向键切换时间点，Home 和 End 跳到两端，Escape 关闭提示。下方也有完整数据表。')}</span><svg viewBox="0 0 ${width} ${g.height}" role="img" aria-labelledby="${id}-chart-title"><title id="${id}-chart-title">${esc(t('{metric}，{range}', { metric: t(METRICS[state.metric].label), range: dateRange(data.meta.from, data.meta.to) }))}</title><defs><linearGradient id="${id}-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--an-blue)" stop-opacity=".19"/><stop offset="100%" stop-color="var(--an-blue)" stop-opacity=".015"/></linearGradient></defs>${grid}${area.map(path => `<path d="${path}" fill="url(#${id}-fill)"/>`).join('')}${paths.map(path => `<path d="${path}" class="an-trend-line"/>`).join('')}${g.segments.filter(segment => segment.length === 1).map(segment => `<circle cx="${segment[0].x}" cy="${segment[0].y}" r="3.5" class="an-trend-dot"/>`).join('')}${indices.map(index => `<text x="${g.x(index)}" y="${g.height - 8}" text-anchor="${index === 0 ? 'start' : index === series.length - 1 ? 'end' : 'middle'}">${esc(shortDate(series[index].date < data.meta.from ? data.meta.from : series[index].date))}</text>`).join('')}<g data-an-chart-focus hidden><line class="an-focus-line" y1="${g.top}" y2="${g.baseline}"/><circle class="an-focus-point" r="4.5"/></g></svg><div class="an-tooltip" role="tooltip" hidden></div><div class="an-sr-only" data-an-chart-announcement aria-live="polite"></div></div>`;
     const interactive = $('.an-chart-interactive');
     interactive.addEventListener('pointermove', event => { const bounds = interactive.querySelector('svg').getBoundingClientRect(); const x = (event.clientX - bounds.left) * g.width / bounds.width; const index = series.length === 1 ? 0 : Math.round((x - g.left) / g.plotWidth * (series.length - 1)); showPoint(Math.max(0, Math.min(series.length - 1, index))); });
     interactive.addEventListener('pointerleave', () => { if (document.activeElement !== interactive) hidePoint(); });
@@ -243,25 +285,20 @@ export async function mountAnalytics(root, { api, esc, initial = {}, onQuery = (
   function drawWorks() {
     const rows = sortAnalyticsWorks(data.byWork || [], state.sort, state.direction), max = Math.max(0, ...rows.map(work => validNumber(work.uv) ? work.uv : 0));
     if (!rows.length) { $('.an-work-table').innerHTML = `<div class="an-table-empty">${t('还没有作品')}</div>`; return; }
-    $('.an-work-table').innerHTML = `<div class="an-table-scroll" tabindex="0" aria-label="${t('作品比较表')}"><table><thead><tr><th scope="col">${t('作品')}</th>${SORTABLE.map(metric => `<th scope="col" aria-sort="${state.sort === metric ? state.direction === 'asc' ? 'ascending' : 'descending' : 'none'}"><button type="button" data-an-sort="${metric}">${t(METRICS[metric].label)}<span aria-hidden="true">${state.sort === metric ? state.direction === 'asc' ? ' ↑' : ' ↓' : ''}</span></button></th>`).join('')}</tr></thead><tbody>${rows.map(work => `<tr><th scope="row"><button type="button" class="an-work-name" data-an-drill="${esc(work.workId)}">${esc(work.name)}</button>${work.source === 'url' ? `<span class="an-external">${t('外链')}</span>` : ''}</th>${SORTABLE.map(metric => `<td>${metric === 'uv' ? `<span class="an-table-number">${valueLabel(metric, work[metric], true)}<i style="--an-bar:${max && validNumber(work.uv) ? work.uv / max * 100 : 0}%" aria-hidden="true"></i></span>` : valueLabel(metric, work[metric], true)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    $('.an-work-table').innerHTML = `<div class="an-table-scroll" tabindex="0" aria-label="${t('作品比较表')}"><table><thead><tr><th scope="col">${t('作品')}</th>${SORTABLE.map(metric => `<th scope="col" aria-sort="${state.sort === metric ? state.direction === 'asc' ? 'ascending' : 'descending' : 'none'}"><button type="button" data-an-sort="${metric}">${t(METRICS[metric].label)}<span aria-hidden="true">${state.sort === metric ? state.direction === 'asc' ? ' ↑' : ' ↓' : ''}</span></button></th>`).join('')}</tr></thead><tbody>${rows.map(work => `<tr><th scope="row"><button type="button" class="an-work-name" data-an-drill="${esc(work.workId)}">${esc(work.name)}</button>${isArchived(work)?`<span class="work-archived"> · ${t('已归档')}</span>`:''}${work.source === 'url' ? `<span class="an-external">${t('外链')}</span>` : ''}</th>${SORTABLE.map(metric => `<td>${metric === 'uv' ? `<span class="an-table-number">${valueLabel(metric, work[metric], true)}<i style="--an-bar:${max && validNumber(work.uv) ? work.uv / max * 100 : 0}%" aria-hidden="true"></i></span>` : valueLabel(metric, work[metric], true)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
   }
   function drawSecondary() {
-    const metrics = secondaryTab === 'play' ? ['opens', 'starts', 'totalActiveMs', 'completions', 'returningPlayers'] : ['feedImpressions', 'feedViewers', 'comments', 'likes', 'outboundClicks'];
-    root.querySelectorAll('[data-an-tab]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.anTab === secondaryTab)));
-    let html = `<dl class="an-detail-metrics">${metrics.map(metric => `<div><dt>${t(METRICS[metric].label)}</dt><dd>${valueLabel(metric, data.summary?.[metric])}</dd></div>`).join('')}</dl>`;
-    if (secondaryTab === 'play' && !selectedExternal()) {
-      const funnel = data.funnel, denominator = funnel?.visitors;
-      if (funnel && funnel.supported !== false) html += `<div class="an-funnel"><h3>${t('访客与试玩 · 站内作品')}</h3><ol>${[['visitors', '访问人数'], ['opened', '打开人数'], ['started', '操作人数']].map(([key, label]) => { const value = funnel[key], ratio = validNumber(value) && denominator > 0 ? Math.min(1, value / denominator) : 0; return `<li><span>${t(label)}</span><strong>${formatAnalyticsNumber(value)}</strong><div class="an-funnel-bar" aria-hidden="true"><i style="width:${ratio * 100}%"></i></div><small>${denominator > 0 && validNumber(value) ? t('{percent}% 的访客', { percent: localeNumber(ratio * 100, { maximumFractionDigits: 1 }) }) : '—'}</small></li>`; }).join('')}</ol></div>`;
-      const coverage = data.coverage || {};
-      html += `<div class="an-duration-coverage"><span>${t('时长样本')}</span><strong>${t('{samples} / {ended} 局已结束试玩', { samples: formatAnalyticsNumber(coverage.durationSamples), ended: formatAnalyticsNumber(coverage.endedStarts) })}</strong>${validNumber(coverage.durationCoverage) ? `<div class="an-coverage-bar" aria-hidden="true"><i style="width:${Math.min(1, coverage.durationCoverage) * 100}%"></i></div>` : ''}</div>`;
-    }
-    $('.an-secondary-content').innerHTML = html;
+    $('.an-secondary-content').innerHTML = [
+      ['试玩', ['opens', 'starts', 'totalActiveMs', 'completions', 'returningPlayers']],
+      ['互动统计', ['feedImpressions', 'feedViewers', 'comments', 'likes', 'outboundClicks']],
+    ].map(([title, metrics]) => `<section class="an-detail-section"><h3>${t(title)}</h3><dl class="an-detail-metrics">${metrics.map(metric => `<div><dt>${t(METRICS[metric].label)}</dt><dd>${valueLabel(metric, data.summary?.[metric])}</dd></div>`).join('')}</dl></section>`).join('');
   }
   function methodology() {
     return `<details class="an-methods"><summary>${t('统计口径')}</summary><dl><div><dt>${t('Feed 曝光')}</dt><dd>${t('卡片在前台至少一半可见并持续 1 秒才记曝光。同一账号、作品、UTC 日期只计一次；触达人数在所选期间跨作品去重。仅从本次上线开始采集，不补算历史；曝光没有版本归属，按版本筛选显示 —。它不表示点击、试玩或经过认证的真人数。')}</dd></div><div><dt>${t('访问')}</dt><dd>${t('PV 是作品详情访问次数；UV 按登录账号去重。同一账号浏览多件作品，整体 UV 只计一次。它不等于设备数或经过认证的真人数。')}</dd></div><div><dt>${t('试玩')}</dt><dd>${t('打开试玩统计创建的会话；收到首次操作才计为开始试玩。试玩人数按账号去重，期间回访指所选期间内至少两个 UTC 日期有试玩，不是次日留存。')}</dd></div><div><dt>${t('时长')}</dt><dd>${t('从首次操作后累计页面可见时间，仅统计已结束且包含新版时长样本的试玩。它不是持续操作时间；未结束和历史无样本会话不补算。没有样本显示 —，真实零时长显示 0 秒。')}</dd></div><div><dt>${t('完成与互动')}</dt><dd>${t('完成上报是游戏客户端报告完成，不表示验证过的通关或胜率。评论包含回复；点赞统计期间新增且目前仍保留的点赞。评论和点赞没有版本归属，按版本筛选时显示 —。')}</dd></div><div><dt>${t('访客与试玩')}</dt><dd>${t('三项仅统计站内作品，按同一期间、同一作品上的账号交集计算，再跨作品去重。它表示期间重叠人群，不承诺访问与试玩的先后或因果关系。外链作品没有站内试玩数据。')}</dd></div><div><dt>${t('时间与对比')}</dt><dd>${t('日期采用 UTC，起止日均包含；对比紧邻的等长前期。今天尚未结束时，当前期间数据仍会增加。周从周一开始，边界周只含选中日期；周与整体 UV 重新去重，不是每日 UV 相加。')}</dd></div></dl></details>`;
   }
   async function load() {
-    const ownRevision = ++revision; controller?.abort(); controller = new AbortController();
+    if (!alive()) return;
+    const ownRevision = ++revision; clearSlowTimer(); controller?.abort(); controller = new AbortController();
     const keepData = Boolean(data);
     if (!keepData) { resizeObserver?.disconnect(); geometry = null; }
     const dateError = state.days === 'custom' ? validateAnalyticsDates(state.from, state.to) : '';
@@ -272,17 +309,22 @@ export async function mountAnalytics(root, { api, esc, initial = {}, onQuery = (
       $('.an-content').innerHTML = '<div class="an-loading" aria-hidden="true"><div></div><div></div><div></div><div></div><span></span></div>';
     }
     if (dateError) { if (!keepData) $('.an-content').innerHTML = ''; $('.an-calendar').open = true; $('.an-date-error').textContent = dateError; return; }
+    slowTimer = timers.setTimeout(() => {
+      slowTimer = null;
+      if (!alive() || ownRevision !== revision || !loading) return;
+      $('.an-request-status').innerHTML = `<span>${t('数据还在加载，可以继续等待或重试。')}</span><button type="button" class="an-inline-retry" data-an-retry>${t('重试')}</button>`;
+    }, 6500);
     try {
       const response = await api('/api/analytics?' + new URLSearchParams(analyticsQuery(state)), { signal: controller.signal });
       if (!alive() || ownRevision !== revision) return;
       if (!response?.meta || !response.summary || !Array.isArray(response.series) || !Array.isArray(response.byWork)) throw Object.assign(new Error('暂时没有收到完整的统计数据。'), { code: 'INCOMPLETE_ANALYTICS' });
-      data = response;
+      clearSlowTimer(); data = response;
       if (!state.work) owned.clear();
-      for (const work of data.byWork) owned.set(work.workId, { id: work.workId, name: work.name, source: work.source });
+      for (const work of data.byWork) owned.set(work.workId, { id: work.workId, name: work.name, source: work.source, archivedAt: work.archivedAt });
       setPending(false); drawControls(); drawData(); $('.an-request-status').textContent = '';
     } catch (error) {
       if (!alive() || ownRevision !== revision || controller.signal.aborted) return;
-      setPending(false);
+      clearSlowTimer(); setPending(false);
       if (keepData && error.status !== 401) {
         $('.an-request-status').innerHTML = `<span>${t('刷新失败，当前仍显示上次数据。')}</span><button type="button" class="an-inline-retry" data-an-retry>${t('重试')}</button>`;
         return;
@@ -304,7 +346,6 @@ export async function mountAnalytics(root, { api, esc, initial = {}, onQuery = (
     else if (button.hasAttribute('data-an-metric') && data) { state.metric = button.dataset.anMetric; pendingFocus = `[data-an-metric="${state.metric}"]`; emit(); drawData(); }
     else if (button.hasAttribute('data-an-granularity')) changed({ granularity: button.dataset.anGranularity }, `[data-an-granularity="${button.dataset.anGranularity}"]`);
     else if (button.hasAttribute('data-an-sort') && data) { state.direction = state.sort === button.dataset.anSort && state.direction === 'desc' ? 'asc' : 'desc'; state.sort = button.dataset.anSort; emit(); drawWorks(); $(`[data-an-sort="${state.sort}"]`)?.focus({ preventScroll: true }); }
-    else if (button.hasAttribute('data-an-tab') && data) { secondaryTab = button.dataset.anTab; drawSecondary(); }
   }
   function handleChange(event) {
     const element = event.target;
@@ -318,10 +359,17 @@ export async function mountAnalytics(root, { api, esc, initial = {}, onQuery = (
     const from = $('input[name="from"]').value, to = $('input[name="to"]').value, error = validateAnalyticsDates(from, to); $('.an-date-error').textContent = error; if (error) return;
     $('.an-calendar').open = false; changed({ days: 'custom', from, to });
   }
-  root.addEventListener('click', handleClick); root.addEventListener('change', handleChange); root.addEventListener('submit', handleSubmit);
+  function handleKeydown(event) {
+    if (event.key !== 'Escape') return;
+    for (const selector of ['.an-calendar', '.an-advanced']) {
+      const details = $(selector);
+      if (details?.open) { details.open = false; details.querySelector('summary')?.focus(); event.preventDefault(); }
+    }
+  }
+  root.addEventListener('click', handleClick); root.addEventListener('change', handleChange); root.addEventListener('submit', handleSubmit); root.addEventListener('keydown', handleKeydown);
   drawControls();
   if (Array.isArray(works) && !works.length && !state.work) drawEmpty();
-  else await load();
+  else void load();
   return { dispose, refresh: load };
 }
 
