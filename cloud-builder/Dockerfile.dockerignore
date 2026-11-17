@@ -1,0 +1,14 @@
+**
+!cloud-builder/
+!cloud-builder/Dockerfile
+!cloud-builder/runner/
+!cloud-builder/runner/*.mjs
+!cloud-builder/runner/start.sh
+!scripts/
+!scripts/repo-builder.mjs
+!scripts/build-toolkit/
+!scripts/build-toolkit/package.json
+!scripts/build-toolkit/package-lock.json
+!scripts/build-toolkit/bundle.mjs
+!scripts/build-toolkit/inspect.mjs
+!scripts/build-toolkit/export.mjs

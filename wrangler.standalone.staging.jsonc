@@ -9,10 +9,12 @@
   "preview_urls": false,
   "vars": {
     "APP_ORIGIN": "https://funtrack-staging.zhayizha-pacificapie.workers.dev",
+    "FUNTRACK_BUILD_MODE": "cloud",
     "CLERK_TEST_MODE": "1",
     "CLERK_PUBLISHABLE_KEY": "pk_test_cHJlbWl1bS1ncmlmZm9uLTk3NzEuY2xlcmsuYWNjb3VudHMuZGV2JA"
   },
   "secrets": { "required": ["CLERK_SECRET_KEY"] },
+  "services": [{ "binding": "FUNTRACK_CLOUD_BUILDER", "service": "funtrack-builder-staging" }],
   "d1_databases": [
     {
       "binding": "DB",

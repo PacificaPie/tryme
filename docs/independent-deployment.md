@@ -158,4 +158,4 @@ node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js de
 - 上传、版本更新、回滚、封面、名片快照和统计已在 staging 公网 origin 验收；切换 production 密钥和域名后仍需复核对应流程。
 - 本轮定向修补后，生产依赖 audit 为 0，全量依赖无 high/critical，仍有 9 项构建/开发工具及未调用 OG 链路告警。正式发布前按新代码重新审计实际调用路径；不要用一键 `audit fix` 代替兼容性评估。
 
-GitHub 仓库构建仍需要单独运行受隔离的 build runner；Workers 本身不会安装 npm 依赖或替用户构建仓库。本轮没有创建常驻 builder。缺少 runner 时仍应显示离线状态，不能把准备好的部署入口描述为已可持续提供公开构建服务。
+GitHub 仓库构建已在独立 staging 接入 Cloudflare Containers：私有 Worker 调度每任务容器，完成后回收，不再需要本机 runner。网站 Worker 本身仍不执行 npm；真实仓库的导入、构建、预览、发布与试玩已通过，详情见 [云构建部署与验收](./cloud-builder-deployment-2026-11-16.md)。当前仅支持符合约束的公开 Vite 项目，正式域名和 Clerk production 验收仍属独立后续工作。

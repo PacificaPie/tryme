@@ -1,5 +1,7 @@
 # GitHub 仓库构建原型
 
+**2026-11-16 更新：独立 staging 已采用 Cloudflare 云构建，部署与验收见 [云构建说明](./cloud-builder-deployment-2026-11-16.md)。** 下文 Docker runner 为保留的本地模式和历史验收方式；当前 staging 为 `FUNTRACK_BUILD_MODE=cloud`，不要按本地方式轮换它的 token 或启动通用领取 runner。
+
 发布页支持公开 GitHub 根仓库链接，固定默认分支的 commit SHA 后进入构建队列。完成后先预览，再发布为站内作品；作品版本保留仓库、SHA、产物哈希及构建元数据。原有独立 HTML 导入仍可用。
 
 ## 当前范围
@@ -9,7 +11,7 @@
 - 源码可以是多文件。平台在真实构建后自动封装 HTML/JS/CSS/资源，适配现有 opaque-origin 游戏沙箱。静态资源校验不等于任意项目的运行兼容性保证，仍须预览。
 - 下载 16 MiB、解压 64 MiB、5,000 项；最终 HTML 上限 8 MiB。单任务最长 8 分钟。
 
-## 构建器
+## 本地模式构建器
 
 网站 Worker 负责鉴权、队列、日志和 R2 托管；本机 Docker 负责执行构建。不是常驻云构建服务。构建器离线时新导入会明确报错，已发布游戏仍由网站托管。
 
@@ -21,7 +23,7 @@
 
 `runnerToken` 必须与**所选站点**运行环境的 `FUNTRACK_BUILD_RUNNER_TOKEN` 相同；这是构建器专用秘密，与 Clerk 登录密钥不同。仅 Sites 私有站点需要 `siteAccessToken`。真实凭据只放内存，不写仓库、日志或命令参数。`once:true` 处理一个任务（成功或失败）后退出；无任务时会等待，测试结束若未提交任务应使用 Ctrl-C 停止。省略 `once` 会持续轮询，临时验收不使用该模式。
 
-### 独立 staging
+### 独立 staging 的历史本地验收方式
 
 当前临时测试站点的 exact origin 是 `https://funtrack-staging.zhayizha-pacificapie.workers.dev`。为这个 Worker 单独生成至少 32 字节的随机秘密，通过 stdin 写入 Cloudflare Secret `FUNTRACK_BUILD_RUNNER_TOKEN`；所有 Wrangler 命令明确指定 `--config wrangler.standalone.staging.jsonc`。不要读取、复制或覆盖 Sites 的 runner token，也不要把 Clerk token 当 runner token。秘密写入成功后，边缘运行时可能有短暂传播延迟；先确认新凭据的 heartbeat 成功，再让用户提交仓库。
 
@@ -40,4 +42,4 @@
 - `node scripts/repo-builder.mjs owner/repo FULL_COMMIT_SHA`：独立构建，产物和元数据写入忽略的 `.preview/builds/`。
 - 真实样例为 `yuss-raa/Snake-Game`，来源细节见 `repository-build-reference.md`。它没有接入 Funtrack 通关协议，不能把操作事件当作通关。
 
-后续可将构建器迁移到常驻隔离执行环境，再扩展框架和多资源托管。构建完成只生成可预览产物，发布或更新作品仍由作者在页面完成；它不会通过 Webhook 自动发布。2026-11-16 的 staging 实测见 [仓库验证记录](./staging-repository-validation-2026-11-16.md)。
+云迁移已完成，扩展框架和多资源托管仍未完成。构建完成只生成可预览产物，发布或更新作品仍由作者在页面完成；它不会通过 Webhook 自动发布。早先本地 staging 实测见 [仓库验证记录](./staging-repository-validation-2026-11-16.md)。
