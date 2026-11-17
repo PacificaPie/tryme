@@ -7,6 +7,7 @@ import {avatarMarkup} from '../public/avatars.js';
 import {emptyState} from '../public/empty-state.js';
 import {cardShareText} from '../public/sharing.js';
 import {publicCardPath} from '../public/public-card-links.js';
+import {renderCardWorkspace} from '../public/card-workspace.js';
 import {t,setLocale} from '../public/i18n.js';
 import '../public/site.messages.js';
 import '../public/creator-social.messages.js';
@@ -16,12 +17,12 @@ const functions=['identity','renderCards','renderFollowing','cardsPage','head','
   const node=source.statements.find(item=>ts.isFunctionDeclaration(item)&&item.name?.text===name);assert(node,name);return node.getText(source);
 }).join('\n');
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-const deferred=()=>{let resolve;const promise=new Promise(done=>resolve=done);return {promise,resolve};};
+const deferred=()=>{let resolve,reject;const promise=new Promise((done,fail)=>{resolve=done;reject=fail;});return {promise,resolve,reject};};
 const ownCard={id:'71160f2c-1946-4d96-a85c-bfdaf5940fe8',authorId:'my/id',name:'My saved card',bio:'Snapshot bio',works:[{coverUrl:'/media/own-work'}]};
 const otherCard={id:'81160f2c-1946-4d96-a85c-bfdaf5940fe8',authorId:'someone-else',name:'Other saved card',headline:'Creator',works:[{coverUrl:'https://foreign.test/track'},...Array.from({length:4},(_,i)=>({coverUrl:'/media/work-'+i}))]};
 
 function siteFixture(){
-  const requests=[],renders=[],mounts=[],identity={innerHTML:''},directory={isConnected:true},context=vm.createContext({
+  const requests=[],renders=[],mounts=[],workspaces=[],identity={innerHTML:''},directory={isConnected:true},context=vm.createContext({
     t,esc,avatarMarkup,emptyState,cardShareText,publicCardPath,URL,
     me:{id:'my/id',name:'Profile <name>',avatarUrl:'/avatars/moon.svg'},routeNumber:1,creatorPanel:null,
     route:()=>({path:'/cards'}),location:{origin:'https://funtrack.test'},
@@ -29,11 +30,12 @@ function siteFixture(){
     applyHTML:(html,number)=>{renders.push({html,number});return number===context.routeNumber;},
     $:selector=>selector==='#identity'?identity:selector==='.creator-directory-page'?directory:null,
     mountCreatorDirectory:(root,options)=>{const panel={dispose(){}};mounts.push({root,options,panel});return panel;},
+    renderCardWorkspace:options=>{workspaces.push(options);return '<section data-card-workspace></section>';},
     authURL:(action,target)=>'/auth/'+action+'?return_to='+encodeURIComponent(target),
     getAuthConfig:()=>({provider:'clerk'}),signinURL:()=>'/auth/sign-in',
   });
   vm.runInContext(functions,context);
-  return {context,requests,renders,mounts,identity,directory};
+  return {context,requests,renders,mounts,workspaces,identity,directory};
 }
 
 test('the primary card tab keeps its original card destination and label',()=>{
@@ -43,32 +45,46 @@ test('the primary card tab keeps its original card destination and label',()=>{
   assert.doesNotMatch(nav,/>创作者<\/a>/);
 });
 
-test('cards browse saved cards, open card views directly, and show management only on the owner’s card',async()=>{
+test('the card tab loads only the current owner card and passes sharing details into its workspace',async()=>{
   const f=siteFixture(),pending=f.context.renderCards(1);
-  assert.deepEqual(f.requests.map(request=>request.url),['/api/cards']);
-  f.requests[0].resolve({cards:[ownCard,otherCard]});await pending;
-  assert.equal(f.renders.length,1);
-  const html=f.renders[0].html,articles=[...html.matchAll(/<article class="creator-card">([\s\S]*?)<\/article>/g)].map(match=>match[1]);
-  assert.equal(articles.length,2);
-  for(const [index,card] of [ownCard,otherCard].entries()){
-    assert.match(articles[index],new RegExp('class="creator-card-link" href="#/card/'+card.id+'"'));
-    assert(articles[index].includes('data-share-url="https://funtrack.test/c/'+card.id+'"'));
-    assert(articles[index].includes(card.name));
-    assert(!articles[index].includes('#/author/'),'A card entry opens the saved card, not a person directory');
-  }
-  assert.match(articles[0],/href="#\/cards\/me">重新制作/);
-  assert(articles[0].includes('data-delete-card="'+ownCard.id+'"'));
-  assert.doesNotMatch(articles[1],/data-delete-card|重新制作/);
-  assert.match(html,/href="#\/cards\/me">制作名片/);
-  assert.doesNotMatch(html,/foreign\.test|creator-person-link/);
-  assert.equal((articles[1].match(/<img /g)||[]).length,2,'Covers remain capped at the first three slots, including missing covers');
+  assert.deepEqual(f.requests.map(request=>request.url),['/api/cards/me']);
+  f.requests[0].resolve({card:ownCard});await pending;
+  assert.equal(f.renders.length,1);assert.equal(f.workspaces.length,1);
+  const options=f.workspaces[0];assert.equal(options.card,ownCard);assert.equal(options.user,f.context.me);
+  assert.equal(options.shareURL,'https://funtrack.test/c/'+ownCard.id);assert.equal(options.shareText,cardShareText(ownCard,true));
+  assert.equal(options.esc('<name>'),'&lt;name&gt;');assert.equal(options.safeCover('https://foreign.test/track'),'');
+  assert.match(f.renders[0].html,/class="page card-workspace-page"/);assert.match(f.renders[0].html,/data-card-workspace/);
+  assert.deepEqual(f.requests.map(request=>request.url),['/api/cards/me'],'The workspace does not query the global saved-card listing');
 });
 
-test('an empty cards page still offers card creation without inventing people or cards',async()=>{
-  const f=siteFixture(),pending=f.context.renderCards(1);f.requests[0].resolve({cards:[]});await pending;
-  const html=f.renders[0].html;
-  assert.match(html,/还没有名片/);assert.match(html,/href="#\/cards\/me">制作名片/);
-  assert.doesNotMatch(html,/class="creator-card"|creator-person-link|#\/following/);
+test('a missing current card opens the empty workspace while service or authorization failures propagate',async()=>{
+  const f=siteFixture(),pending=f.context.renderCards(1);
+  f.requests[0].reject(Object.assign(new Error('No saved card'),{status:404}));await pending;
+  assert.equal(f.workspaces.length,1);assert.equal(f.workspaces[0].card,null);
+  assert.equal(f.workspaces[0].shareURL,'');assert.equal(f.workspaces[0].shareText,'');assert.equal(f.renders.length,1);
+  for(const status of [401,403,503]){
+    const failed=siteFixture(),loading=failed.context.renderCards(1),error=Object.assign(new Error('Cannot load card'),{status});
+    failed.requests[0].reject(error);await assert.rejects(loading,cause=>cause===error);
+    assert.equal(failed.renders.length,0);assert.equal(failed.workspaces.length,0);
+  }
+});
+
+test('the real workspace exposes management only for the owner and never renders a foreign card returned as current',async()=>{
+  setLocale('zh-CN');
+  for(const card of [ownCard,otherCard]){
+    const f=siteFixture();f.context.renderCardWorkspace=renderCardWorkspace;
+    const pending=f.context.renderCards(1);f.requests[0].resolve({card});await pending;
+    const html=f.renders[0].html;
+    if(card===ownCard){
+      assert(html.includes('data-delete-card="'+ownCard.id+'"'));assert(html.includes('href="#/card/'+ownCard.id+'"'));
+      assert(html.includes('data-share-url="https://funtrack.test/c/'+ownCard.id+'"'));assert(html.includes(ownCard.name));
+    }else{
+      assert.doesNotMatch(html,/data-delete-card|data-share-url|Other saved card|someone-else|foreign\.test/);
+      assert(!html.includes(otherCard.id));assert.match(html,/制作你的第一张名片/);
+    }
+    assert.match(html,/探索模板/);assert.match(html,/href="#\/cards\/templates\/fold"/);
+    assert.deepEqual(f.requests.map(request=>request.url),['/api/cards/me']);
+  }
 });
 
 test('late cards responses cannot replace a newer route or another account’s page',async()=>{
@@ -77,8 +93,8 @@ test('late cards responses cannot replace a newer route or another account’s p
     if(change==='route')f.context.routeNumber=2;
     else if(change==='account')f.context.me={id:'someone-else'};
     else f.context.me=null;
-    f.requests[0].resolve({cards:[ownCard,otherCard]});await pending;
-    assert.equal(f.renders.length,0,change);
+    f.requests[0].resolve({card:ownCard});await pending;
+    assert.equal(f.renders.length,0,change);assert.equal(f.workspaces.length,0,change);
   }
 });
 

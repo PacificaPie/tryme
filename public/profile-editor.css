@@ -20,15 +20,18 @@
 .avatar-preset>img{display:block;width:34px;height:34px;border-radius:50%}
 .avatar-preset:hover{background:var(--surface-hover)}
 .avatar-preset[aria-pressed=true]{border-color:var(--focus);background:var(--surface)}
-.profile-avatar-buttons [aria-pressed=true]{background:var(--soft);color:var(--text)}
-.avatar-crop{display:grid;grid-template-columns:150px minmax(0,1fr);align-items:center;gap:24px;padding:18px;border-radius:12px;background:var(--soft);margin-bottom:20px}
+.profile-avatar-buttons [hidden]{display:none}
+.avatar-crop{display:grid;justify-items:center;gap:13px;padding:22px 18px 18px;border-radius:12px;background:var(--soft);margin-bottom:20px}
 .avatar-crop[hidden]{display:none}
-.avatar-crop-preview{width:150px;height:150px;border-radius:50%;overflow:hidden;background:var(--surface);box-shadow:0 0 0 1px var(--border)}
-.avatar-crop canvas{display:block;width:100%;height:100%}
-.avatar-crop-controls{min-width:0;display:grid;gap:9px}
-.avatar-crop-controls label{font-size:12px;color:var(--text-secondary);display:grid;gap:3px}
-.avatar-crop-controls input[type=range]{padding:0;min-height:24px;width:100%;accent-color:var(--focus);background:transparent;box-shadow:none;border:0}
-.avatar-crop-controls .button{justify-self:start;margin-top:0;padding-left:0}
+.avatar-crop-preview{width:min(260px,100%);aspect-ratio:1;border-radius:50%;overflow:hidden;background:var(--surface);box-shadow:0 0 0 1px var(--border)}
+.avatar-crop canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none;border-radius:50%}
+.avatar-crop canvas.dragging{cursor:grabbing}
+.avatar-crop canvas:focus-visible{outline:3px solid var(--focus);outline-offset:-4px}
+.avatar-crop-tools{display:flex;align-items:center;gap:13px}
+.avatar-crop-tools .button{width:38px;min-height:38px;padding:0;font-size:20px;background:var(--surface);border:1px solid var(--border);border-radius:50%}
+.avatar-crop-tools output{min-width:46px;text-align:center;font-size:12px;font-variant-numeric:tabular-nums;color:var(--text-secondary)}
+.avatar-crop-help{font-size:12px;color:var(--text-secondary);line-height:1.6;text-align:center;margin:0}
+.avatar-crop-help span{display:block;color:var(--text-tertiary);font-size:11px;margin-top:3px}
 .profile-editor .profile-image-status{font-size:12px;color:var(--text-secondary);margin:0 0 15px}
 .profile-editor .profile-image-status:empty{display:none}
 .profile-editor-fields{display:grid;grid-template-columns:1fr 1fr;gap:18px}
@@ -41,5 +44,5 @@
 .profile-editor-error:empty{display:none}
 .profile-editor-footer{display:flex;justify-content:flex-end;gap:9px;margin-top:22px}
 .profile-editor [aria-busy=true]{cursor:progress}
-@media(max-width:540px){.profile-editor.share-dialog{padding:22px 18px}.profile-avatar-section{gap:16px;align-items:flex-start}.profile-avatar-large{width:64px;height:64px;font-size:24px}.profile-avatar-buttons .button{min-height:42px}.profile-editor-fields{grid-template-columns:1fr;gap:16px}.profile-editor-fields input,.profile-editor-fields textarea{font-size:16px}.profile-bio-field,.profile-website-field{grid-column:auto}.avatar-crop{grid-template-columns:110px minmax(0,1fr);padding:14px;gap:16px}.avatar-crop-preview{width:110px;height:110px}.profile-editor-footer .button{min-height:44px}.avatar-crop-controls input[type=range]{min-height:32px}}
-@media(max-width:360px){.profile-avatar-section{flex-direction:column}.avatar-crop{grid-template-columns:1fr}.avatar-crop-preview{margin:auto}.profile-avatar-options{width:100%}}
+@media(max-width:540px){.profile-editor.share-dialog{padding:22px 18px}.profile-avatar-section{gap:16px;align-items:flex-start}.profile-avatar-large{width:64px;height:64px;font-size:24px}.profile-avatar-buttons .button{min-height:42px}.profile-editor-fields{grid-template-columns:1fr;gap:16px}.profile-editor-fields input,.profile-editor-fields textarea{font-size:16px}.profile-bio-field,.profile-website-field{grid-column:auto}.avatar-crop{padding:18px 14px}.avatar-crop-preview{width:min(230px,100%)}.profile-editor-footer .button{min-height:44px}.avatar-crop-tools .button{width:44px;min-height:44px}}
+@media(max-width:360px){.profile-avatar-section{flex-direction:column}.profile-avatar-options{width:100%}}

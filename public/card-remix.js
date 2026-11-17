@@ -21,15 +21,9 @@ export function remixStyle(card) {
 }
 
 export function createRemixDraft(card, user) {
-  let website = '';
-  try {
-    const url = new URL(user?.website);
-    if (['https:', 'http:'].includes(url.protocol) && !url.username && !url.password && url.href.length <= 2000) website = url.href;
-  } catch { /* An empty or invalid personal website stays empty. */ }
   return {
     ids: [], ...remixStyle(card),
-    name: text(user?.name, 80), bio: text(user?.bio, 500),
-    headline: text(user?.headline, 120), signature: text(user?.signature, 80), website,
+    signature: text(user?.signature, 80),
   };
 }
 

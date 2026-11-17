@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { AVATAR_PRESETS, safeAvatarURL, avatarMarkup, avatarContent } from '../public/avatars.js';
-import { avatarCropRect, avatarFileError, AVATAR_MAX_BYTES, profileChangeBody, saveProfileEdits, ProfileSaveError } from '../public/profile-editor.js';
+import { avatarCropRect, avatarDragCrop, avatarZoomCrop, avatarFileError, AVATAR_MAX_BYTES, profileChangeBody, saveProfileEdits, ProfileSaveError } from '../public/profile-editor.js';
 import { setLocale } from '../public/i18n.js';
 
 test('only canonical first-party avatar images may be rendered; names remain text', () => {
@@ -37,6 +37,17 @@ test('crop coordinates stay square and in bounds for landscape, portrait and zoo
 test('avatar input rejects unsupported and oversized images before decoding', () => {
   for(const type of ['image/png','image/jpeg','image/webp'])assert.equal(avatarFileError({type,size:AVATAR_MAX_BYTES}),'');
   for(const file of [{type:'image/svg+xml',size:100},{type:'image/gif',size:100},{type:'image/png',size:0},{type:'image/png',size:AVATAR_MAX_BYTES+1}])assert(avatarFileError(file));
+});
+
+test('dragging follows the image and zooming preserves the source point at the preview center',()=>{
+  const initial={zoom:1,x:50,y:50},zoomed=avatarZoomCrop(1200,600,initial,2);
+  assert.deepEqual(avatarCropRect(1200,600,zoomed),{x:450,y:150,width:300,height:300});
+  const moved=avatarDragCrop(1200,600,zoomed,-384,128,256);
+  assert.deepEqual(avatarCropRect(1200,600,moved),{x:900,y:0,width:300,height:300});
+  const clamped=avatarDragCrop(1200,600,moved,-9999,9999,256);
+  assert.deepEqual(avatarCropRect(1200,600,clamped),{x:900,y:0,width:300,height:300});
+  assert.deepEqual(avatarCropRect(1200,600,avatarZoomCrop(1200,600,zoomed,1)),{x:300,y:0,width:600,height:600});
+  assert.equal(avatarZoomCrop(512,512,initial,99).zoom,3);assert.equal(avatarZoomCrop(512,512,initial,.1).zoom,1);
 });
 
 test('profile edits preserve uploaded avatars unless a preset or initial is explicitly selected', () => {

@@ -15,9 +15,10 @@ import { metadataId } from './work-metadata.mjs';
 import { createPublicSharingService } from './public-sharing.mjs';
 import { createCreatorService } from './creator-service.mjs';
 import { safeAvatarURL } from './avatar-rules.mjs';
+import { cardIdentity,cardRowIdentities } from './card-identity.mjs';
 import { cardWorkRefs } from './version-rules.mjs';
 import { analyticsResponse } from './analytics';
-import { ApiError, fail, authenticate, verifyWrite, requiredText, eventId, safeURL, coverType, htmlSource, sessionEvents, GAME_CSP, gameDocument, likedState, cardDetails, cardSnapshot, cardTemplate, commentInput, validateCommentParent, commentPageLimit, encodeCommentCursor, decodeCommentCursor, discoverQuery, encodeDiscoverCursor, decodeDiscoverCursor } from './rules.mjs';
+import { ApiError, fail, authenticate, verifyWrite, requiredText, eventId, safeURL, coverType, htmlSource, sessionEvents, GAME_CSP, gameDocument, likedState, cardDetails, cardTemplate, commentInput, validateCommentParent, commentPageLimit, encodeCommentCursor, decodeCommentCursor, discoverQuery, encodeDiscoverCursor, decodeDiscoverCursor } from './rules.mjs';
 
 type Row = Record<string, any>;
 type User = { id: string; name: string; email: string };
@@ -349,7 +350,7 @@ async function createCard(request:Request,user:User) {
   // A pre-upgrade request without the new details can still replay its original
   // immutable snapshot. New detail values must never reuse that old request key.
   const legacyHash=!pinnedAvatar&&!workRefs&&!details.signature&&!details.headline&&!details.website&&details.backStyle==='ink'?await hash(JSON.stringify({name,bio,template:input.template,workIds:input.workIds})):null;
-  async function replay(){if(!key)return null;const row=await first('SELECT * FROM ft_cards WHERE author_id=? AND idempotency_key=?',user.id,key);if(!row)return null;if(row.deleted_at)throw new ApiError(409,'CARD_DELETED','这张名片已删除，请重新生成预览后保存。');if(row.request_hash!==requestHash&&row.request_hash!==legacyHash)throw new ApiError(409,'IDEMPOTENCY_CONFLICT','名片提交内容已变化，请使用新的提交标识');return json({card:cardSnapshot(JSON.parse(row.snapshot_json))});}
+  async function replay(){if(!key)return null;const row=await first('SELECT * FROM ft_cards WHERE author_id=? AND idempotency_key=?',user.id,key);if(!row)return null;if(row.deleted_at)throw new ApiError(409,'CARD_DELETED','这张名片已删除，请重新生成预览后保存。');if(row.request_hash!==requestHash&&row.request_hash!==legacyHash)throw new ApiError(409,'IDEMPOTENCY_CONFLICT','名片提交内容已变化，请使用新的提交标识');return json({card:await cardIdentity(db(),{...JSON.parse(row.snapshot_json),id:row.id},row.author_id)});}
   const prior=await replay();if(prior)return prior;
   const works=[];for(let i=0;i<input.workIds.length;i++){
     const w=await ownWork(input.workIds[i],user);requireActiveWork(w);
@@ -364,7 +365,7 @@ async function createCard(request:Request,user:User) {
     sql('INSERT INTO ft_profiles (id,name,bio,signature,headline,website,back_style) VALUES (?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING',user.id,name,bio,details.signature,details.headline,details.website,details.backStyle),
     sql('UPDATE ft_works SET author_name=(SELECT name FROM ft_profiles WHERE id=?) WHERE author_id=?',user.id,user.id),
   ]);}catch(e){const found=await replay();if(found)return found;if(archiveConstraint(e))fail(409,'WORK_ARCHIVED','选中的作品已归档，请返回重新选择作品。');throw e;}
-  return json({card},201);
+  return json({card:await cardIdentity(db(),card,user.id)},201);
 }
 
 async function analytics(url:URL,user:User) {
@@ -400,8 +401,8 @@ export async function handleAPI(request:Request) {
       if(parts[0]==='comments'&&parts.length===3&&parts[2]==='like')return await commentLike(request,user,parts[1]);
       if(parts[0]==='analytics'&&parts.length===1)return await analytics(url,user);
       if(parts[0]==='feedback'&&parts.length===1){const workId=url.searchParams.get('work');if(workId)await ownWork(workId,user);return json({feedback:(await rows(`SELECT f.*,w.name work_name FROM ft_feedback f JOIN ft_works w ON w.id=f.work_id WHERE w.author_id=?${workId?' AND w.id=?':''} ORDER BY f.created_at DESC LIMIT 200`,...workId?[user.id,workId]:[user.id])).map(feedbackJSON)});}
-      if(parts[0]==='cards'&&parts.length===1)return json({cards:(await rows('SELECT c.snapshot_json FROM ft_cards c WHERE c.deleted_at IS NULL AND c.id=(SELECT d.id FROM ft_cards d WHERE d.author_id=c.author_id ORDER BY d.rowid DESC LIMIT 1) ORDER BY c.created_at DESC LIMIT 200')).map(c=>cardSnapshot(JSON.parse(c.snapshot_json)))});
-      if(parts[0]==='cards'&&parts.length===2){const c=parts[1]==='me'?await first('SELECT snapshot_json,deleted_at FROM ft_cards WHERE author_id=? ORDER BY rowid DESC LIMIT 1',user.id):await first('SELECT snapshot_json,deleted_at FROM ft_cards WHERE id=?',parts[1]);if(!c||c.deleted_at)throw new ApiError(404,'CARD_NOT_FOUND','还没有已保存的名片');return json({card:cardSnapshot(JSON.parse(c.snapshot_json))});}
+      if(parts[0]==='cards'&&parts.length===1)return json({cards:await cardRowIdentities(db(),await rows('SELECT c.id,c.author_id,c.snapshot_json FROM ft_cards c WHERE c.deleted_at IS NULL AND c.id=(SELECT d.id FROM ft_cards d WHERE d.author_id=c.author_id ORDER BY d.rowid DESC LIMIT 1) ORDER BY c.created_at DESC LIMIT 200'))});
+      if(parts[0]==='cards'&&parts.length===2){const c=parts[1]==='me'?await first('SELECT id,author_id,snapshot_json,deleted_at FROM ft_cards WHERE author_id=? ORDER BY rowid DESC LIMIT 1',user.id):await first('SELECT id,author_id,snapshot_json,deleted_at FROM ft_cards WHERE id=?',parts[1]);if(!c||c.deleted_at)throw new ApiError(404,'CARD_NOT_FOUND','还没有已保存的名片');return json({card:await cardIdentity(db(),{...JSON.parse(c.snapshot_json),id:c.id},c.author_id)});}
       if(parts[0]==='media'&&parts.length===2)return mediaResponse(request,parts[1]);
     }
     if(request.method==='POST') {

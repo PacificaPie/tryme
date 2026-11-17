@@ -8,17 +8,18 @@ import { setLocale } from '../public/i18n.js';
 const creator = { id:'author-one', name:'A creator', bio:'Small games', headline:'Maker', website:'https://example.com/', avatarUrl:'/avatars/sprout.svg', worksCount:4, followersCount:2, followingCount:1, followedByMe:false };
 const card = { id:'f5a5d89f-8530-4c1b-8c04-cd6104036c24', authorId:creator.id, name:'Saved name', bio:'Saved bio', avatarUrl:'/avatars/moon.svg', template:'fold', backStyle:'ivory', works:[{id:'work-one',name:'First game',coverUrl:'/media/version-one'}] };
 
-test('same-template creation keeps only allowlisted visual choices and the current creator’s own profile', () => {
+test('same-template creation keeps allowlisted design and signature without duplicating either person’s live identity', () => {
   const current = { id:'my-id', name:'My name', bio:'My bio', signature:'My signature', headline:'My role', website:'https://mine.example/', avatarUrl:'/avatars/sun.svg' };
   for (const template of CARD_TEMPLATES) {
     const source = { ...card, template:template.id, signature:'Their signature', website:'https://theirs.example', workIds:['foreign-work'], saveKey:'foreign-save', authorId:'someone-else', customHTML:'<script>bad</script>' };
     const before = structuredClone(source), draft = createRemixDraft(source,current);
-    assert.deepEqual(draft,{ids:[],template:template.id,backStyle:'ivory',name:current.name,bio:current.bio,signature:current.signature,headline:current.headline,website:current.website});
-    assert.deepEqual(source,before);assert(!('id' in draft));assert(!('saveKey' in draft));assert(!('works' in draft));assert(!('avatarUrl' in draft));
+    assert.deepEqual(draft,{ids:[],template:template.id,backStyle:'ivory',signature:current.signature});
+    assert.deepEqual(source,before);
+    for(const field of ['id','authorId','saveKey','works','avatarUrl','name','bio','headline','website'])assert(!Object.hasOwn(draft,field),field+' belongs outside the design draft');
   }
   assert.deepEqual(remixStyle({template:'<script>',backStyle:'url(evil)'}),{template:'wall',backStyle:'ink'});
-  assert.equal(createRemixDraft(card,{website:'javascript:alert(1)'}).website,'');
-  assert.equal(createRemixDraft(card,{website:'https://u:p@example.com/'}).website,'');
+  assert.equal(createRemixDraft(card,{}).signature,'');
+  assert.equal(createRemixDraft(card,{signature:'s'.repeat(100)}).signature.length,80);
   assert.equal(cardRemixPath('a/b?c'),'/cards/me?templateFrom=a%2Fb%3Fc');
 });
 

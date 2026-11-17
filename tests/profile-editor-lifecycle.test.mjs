@@ -10,10 +10,11 @@ function editorEnvironment() {
   class Node {
     constructor(values={}) {Object.assign(this,{value:'',disabled:false,isConnected:true,hidden:false,dataset:{},listeners:new Map(),attributes:{}},values);}
     addEventListener(name,fn) {const handlers=this.listeners.get(name)||[];handlers.push(fn);this.listeners.set(name,handlers);}
-    async fire(name,values={}) {await Promise.all((this.listeners.get(name)||[]).map(fn=>fn({target:this,preventDefault(){},...values})));}
+    async fire(name,values={}) {await Promise.all((this.listeners.get(name)||[]).map(fn=>fn({type:name,target:this,preventDefault(){},...values})));}
     setAttribute(name,value) {this.attributes[name]=value;}
     focus() {document.activeElement=this;}
     remove() {this.isConnected=false;}
+    getBoundingClientRect() {return {width:256};}
   }
   const nodes=new Map(), images=[], canvases=[], revoked=[], exit=deferred();
   const q=selector=>{if(!nodes.has(selector))nodes.set(selector,new Node());return nodes.get(selector);};
@@ -24,7 +25,8 @@ function editorEnvironment() {
   q('#profile-name').value='Creator';
   for(const control of crops)nodes.set('[data-crop='+control.dataset.crop+']',control);
   function canvas() {
-    const node=new Node({draws:[]}),context={clearRect(){},drawImage(...args){node.draws.push(args);}};
+    const node=new Node({draws:[],captured:new Set()}),context={clearRect(){},drawImage(...args){node.draws.push(args);}};
+    node.setPointerCapture=id=>node.captured.add(id);node.hasPointerCapture=id=>node.captured.has(id);node.releasePointerCapture=id=>node.captured.delete(id);
     node.getContext=()=>context;node.toBlob=done=>done(new Blob(['normalized pixels'],{type:'image/png'}));canvases.push(node);return node;
   }
   nodes.set('canvas',canvas());
@@ -77,7 +79,7 @@ test('selecting an illustration wins over a previous image decode and saves only
   } finally {env.restore();}
 });
 
-test('cropped upload uses the current sliders and retries a failed image after keeping confirmed profile state', async () => {
+test('pinch and direct drag match the exported crop and retry a failed image after keeping confirmed profile state', async () => {
   const env=editorEnvironment(),calls=[],confirmed=[];let failAvatar=true;
   try {
     openProfileEditor({user:{id:'user',name:'Creator',avatarUrl:'/avatars/sun.svg'},onSaved:user=>confirmed.push(user),api:async(path,options)=>{
@@ -87,10 +89,19 @@ test('cropped upload uses the current sliders and retries a failed image after k
     }});
     const {pending,image}=await env.upload();image.naturalWidth=1200;image.naturalHeight=600;image.pending.resolve();await pending;
     env.q('#profile-name').value='Changed';
-    for(const [index,value] of [[0,2],[1,100],[2,0]]){env.crops[index].value=String(value);await env.crops[index].fire('input');}
+    const preview=env.q('canvas');
+    await preview.fire('pointerdown',{pointerId:1,button:0,clientX:100,clientY:100});
+    await preview.fire('pointerdown',{pointerId:2,button:0,clientX:200,clientY:100});
+    await preview.fire('pointermove',{pointerId:1,clientX:50,clientY:100});
+    await preview.fire('pointermove',{pointerId:2,clientX:250,clientY:100});
+    await preview.fire('pointerup',{pointerId:1});await preview.fire('pointerup',{pointerId:2});
+    assert.equal(env.q('[data-crop-zoom]').textContent,'200%');
+    await preview.fire('pointerdown',{pointerId:3,button:0,clientX:100,clientY:100});
+    await preview.fire('pointermove',{pointerId:3,clientX:-284,clientY:228});
     await env.form.fire('submit');
     const output=env.canvases.find(node=>node.width===512);
     assert.deepEqual(output.draws[0].slice(1),[900,0,300,300,0,0,512,512]);
+    assert.equal(preview.captured.size,0,'Saving ends any captured drag before exporting');
     assert.equal(confirmed.length,1);assert.equal(confirmed[0].name,'Changed');
     assert.match(env.q('.profile-editor-error').textContent,/资料已保存/);
     assert.equal(env.dialog.open,true);assert.equal(env.q('[type=submit]').disabled,false);
@@ -98,4 +109,35 @@ test('cropped upload uses the current sliders and retries a failed image after k
     assert.deepEqual(calls.map(call=>call.path),['/api/me/profile','/api/me/avatar','/api/me/profile','/api/me/avatar']);
     assert.equal(confirmed.at(-1).avatarUrl,'/api/public/avatars/12345678-1234-1234-1234-123456789abc');
   } finally {env.restore();}
+});
+
+test('avatar initials are fallback only; removal is contextual and the four profile fields remain editable',async()=>{
+  const env=editorEnvironment();
+  try{
+    openProfileEditor({user:{id:'user',name:'Creator'},api:async()=>assert.fail('Choosing an avatar does not save')});
+    const html=env.dialog.innerHTML;
+    assert.doesNotMatch(html,/使用首字母|data-initial|type="range"|左右位置|上下位置/);
+    for(const field of ['name','bio','headline','website'])assert(html.includes('name="'+field+'"'));
+    assert.match(html,/个人资料会同步到主页、名片、Feed 和评论/);
+    assert.equal(env.q('[data-remove-avatar]').hidden,true);
+    await env.presets[0].fire('click');assert.equal(env.q('[data-remove-avatar]').hidden,false);
+    await env.q('[data-remove-avatar]').fire('click');assert.equal(env.q('[data-remove-avatar]').hidden,true);
+  }finally{env.restore();}
+});
+
+test('wheel, buttons and keyboard zoom remain bounded, and pointer cancellation ends dragging',async()=>{
+  const env=editorEnvironment();
+  try{
+    openProfileEditor({user:{id:'user',name:'Creator'},api:async()=>assert.fail('Crop adjustments do not save')});
+    const {pending,image}=await env.upload();image.naturalWidth=1200;image.naturalHeight=600;image.pending.resolve();await pending;
+    const preview=env.q('canvas');
+    await preview.fire('wheel',{deltaY:-100,deltaMode:0});assert.equal(env.q('[data-crop-zoom]').textContent,'128%');
+    await preview.fire('keydown',{key:'Home'});assert.equal(env.q('[data-crop-zoom]').textContent,'100%');assert.equal(env.q('[data-zoom-out]').disabled,true);
+    await env.q('[data-zoom-in]').fire('click');assert.equal(env.q('[data-crop-zoom]').textContent,'120%');
+    const before=preview.draws.at(-1)[1];await preview.fire('keydown',{key:'ArrowRight'});assert(preview.draws.at(-1)[1]<before,'Image moves right as the source crop moves left');
+    for(let i=0;i<10;i++)await preview.fire('keydown',{key:'+'});assert.equal(env.q('[data-crop-zoom]').textContent,'300%');assert.equal(env.q('[data-zoom-in]').disabled,true);
+    await preview.fire('pointerdown',{pointerId:7,button:0,clientX:40,clientY:40});assert.equal(preview.captured.size,1);
+    await preview.fire('pointercancel',{pointerId:7});assert.equal(preview.captured.size,0);
+    const draws=preview.draws.length;await preview.fire('pointermove',{pointerId:7,clientX:999,clientY:999});assert.equal(preview.draws.length,draws);
+  }finally{env.restore();}
 });

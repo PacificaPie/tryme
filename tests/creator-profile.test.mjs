@@ -81,7 +81,7 @@ test('a person followed from a discussion appears in following even without a ca
   assert.equal((await creator(f,OWNER,{owner:REVIEWER})).status,200);
 });
 
-test('profile edits update live identity while avatar presets, comments and card snapshots preserve their intended scopes',async t=>{
+test('profile edits update works, comments and saved-card identity without rewriting stored content snapshots',async t=>{
   const f=fixture(t),{work}=await f.publish();
   const before=await profile(f,{name:'New name',bio:'Play slowly',headline:'Maker',website:'https://example.com',avatarPreset:'sprout'});
   assert.equal(before.status,200);assert.equal(before.user.avatarUrl,'/avatars/sprout.svg');
@@ -93,7 +93,7 @@ test('profile edits update live identity while avatar presets, comments and card
   const comments=await f.api('/api/works/'+work.id+'/comments');assert.equal(comments.comments[0].authorAvatarUrl,'/avatars/moon.svg');assert.equal(comments.comments[0].authorName,'Renamed');
   const versions=await f.api('/api/works/'+work.id+'/versions');assert.equal(versions.work.authorAvatarUrl,'/avatars/moon.svg');assert.equal(versions.work.authorName,'Renamed');
   assert.equal(f.database.prepare('SELECT snapshot_json FROM ft_cards WHERE id=?').get(card.id).snapshot_json,saved);
-  assert.equal((await (await publicRead('/api/public/cards/'+card.id)).json()).card.avatarUrl,'/avatars/sprout.svg');
+  assert.equal((await (await publicRead('/api/public/cards/'+card.id)).json()).card.avatarUrl,'/avatars/moon.svg');
   const changed=await profile(f,{bio:'Updated',avatarUrl:'https://attacker.test/avatar.svg'});assert.equal(changed.user.avatarUrl,'/avatars/moon.svg');
   assert.equal((await profile(f,{avatarPreset:'unsupported'})).status,422);
   assert.equal((await profile(f,{avatarPreset:null})).user.avatarUrl,'');
@@ -101,7 +101,7 @@ test('profile edits update live identity while avatar presets, comments and card
   assert.equal((await profile(f,{name:'Other'},{extraHeaders:{Origin:'https://elsewhere.test'}})).status,403);
 });
 
-test('uploaded avatars are validated immutable public images, and changing avatar does not break saved cards',async t=>{
+test('uploaded avatars are immutable resources while saved cards display the current profile avatar',async t=>{
   const f=fixture(t),{work}=await f.publish(),first=await upload(f);assert.equal(first.status,200,JSON.stringify(first));
   const url=first.user.avatarUrl;assert.match(url,/^\/api\/public\/avatars\/[a-f0-9-]+$/);
   const response=await publicRead(url);assert.equal(response.status,200);assert.equal(response.headers.get('content-type'),'image/png');
@@ -109,7 +109,7 @@ test('uploaded avatars are validated immutable public images, and changing avata
   assert.equal((await publicRead(url,'HEAD')).status,200);
   const {card}=await save(f,work);assert.equal(card.avatarUrl,url);
   await profile(f,{avatarPreset:'sun'});assert.equal((await publicRead(url)).status,200);
-  assert.equal((await (await publicRead('/api/public/cards/'+card.id)).json()).card.avatarUrl,url);
+  assert.equal((await (await publicRead('/api/public/cards/'+card.id)).json()).card.avatarUrl,'/avatars/sun.svg');
   const second=await upload(f,{owner:OTHER});assert.notEqual(second.user.avatarUrl,url);
   assert.equal((await f.api('/api/me')).user.avatarUrl,'/avatars/sun.svg');
   assert.equal((await publicRead('/api/public/avatars/'+randomUUID())).status,404);
@@ -119,30 +119,35 @@ test('uploaded avatars are validated immutable public images, and changing avata
   assert.equal(safeAvatarURL('https://attacker.test/a.png'),'');assert.equal(safeAvatarURL('/api/public/avatars/../../secret'),'');
 });
 
-test('saving an old card preview preserves the live profile and keeps its own requested snapshot identity',async t=>{
+test('saving an old card preview preserves the live profile and returns current identity',async t=>{
   const f=fixture(t),{work}=await f.publish();
   const current=await profile(f,{name:'Current name',bio:'Current bio',headline:'Current role',website:'https://current.example/',avatarPreset:'wave'});
   const {card}=await f.api('/api/cards',{method:'POST',body:{name:'Old preview name',bio:'Old preview bio',headline:'Old role',website:'https://old.example/',template:'fold',workIds:[work.id]}});
-  assert.equal(card.name,'Old preview name');assert.equal(card.bio,'Old preview bio');assert.equal(card.avatarUrl,'/avatars/wave.svg');
+  assert.equal(card.name,'Current name');assert.equal(card.bio,'Current bio');assert.equal(card.avatarUrl,'/avatars/wave.svg');
+  const stored=JSON.parse(f.database.prepare('SELECT snapshot_json FROM ft_cards WHERE id=?').get(card.id).snapshot_json);
+  assert.equal(stored.name,'Old preview name');assert.equal(stored.bio,'Old preview bio');
   assert.deepEqual((await f.api('/api/me')).user,current.user);
   assert.equal((await creator(f,OWNER)).creator.name,'Current name');
   assert.equal((await f.api('/api/discover?q=Current%20name')).total,1);
 });
 
-test('saved cards pin their approved avatar across live changes and bind explicit avatar to idempotency',async t=>{
+test('legacy explicit avatar submissions keep idempotency semantics while create and replay display current identity',async t=>{
   const f=fixture(t),{work}=await f.publish(),owned=await upload(f);
   const body={name:'Pinned',bio:'',template:'fold',workIds:[work.id],avatarUrl:owned.user.avatarUrl},key=randomUUID();
   await profile(f,{avatarPreset:'moon'});
-  const saved=await f.api('/api/cards',{method:'POST',body,key});assert.equal(saved.status,201);assert.equal(saved.card.avatarUrl,owned.user.avatarUrl);
+  const saved=await f.api('/api/cards',{method:'POST',body,key});assert.equal(saved.status,201);assert.equal(saved.card.avatarUrl,'/avatars/moon.svg');
+  const snapshot=f.database.prepare('SELECT snapshot_json FROM ft_cards WHERE id=?').get(saved.card.id).snapshot_json;
   await profile(f,{avatarPreset:'sprout'});
-  const replay=await f.api('/api/cards',{method:'POST',body,key});assert.equal(replay.status,200);assert.deepEqual(replay.card,saved.card);
+  const replay=await f.api('/api/cards',{method:'POST',body,key});assert.equal(replay.status,200);assert.equal(replay.card.id,saved.card.id);assert.equal(replay.card.avatarUrl,'/avatars/sprout.svg');
+  assert.equal(replay.card.works[0].versionId,saved.card.works[0].versionId);assert.equal(f.database.prepare('SELECT snapshot_json FROM ft_cards WHERE id=?').get(saved.card.id).snapshot_json,snapshot);
   assert.equal((await f.api('/api/cards',{method:'POST',body:{...body,avatarUrl:'/avatars/moon.svg'},key})).error.code,'IDEMPOTENCY_CONFLICT');
-  assert.equal((await f.api('/api/cards',{method:'POST',body:{...body,avatarUrl:''}})).card.avatarUrl,'');
-  assert.equal((await f.api('/api/cards',{method:'POST',body:{...body,avatarUrl:'/avatars/sun.svg'}})).card.avatarUrl,'/avatars/sun.svg');
+  assert.equal((await f.api('/api/cards',{method:'POST',body:{...body,avatarUrl:''}})).card.avatarUrl,'/avatars/sprout.svg');
+  assert.equal((await f.api('/api/cards',{method:'POST',body:{...body,avatarUrl:'/avatars/sun.svg'}})).card.avatarUrl,'/avatars/sprout.svg');
   const legacyKey=randomUUID(),legacyBody={...body};delete legacyBody.avatarUrl;
   const legacy=await f.api('/api/cards',{method:'POST',body:legacyBody,key:legacyKey});assert.equal(legacy.card.avatarUrl,'/avatars/sprout.svg');
   await profile(f,{avatarPreset:'wave'});
-  assert.deepEqual((await f.api('/api/cards',{method:'POST',body:legacyBody,key:legacyKey})).card,legacy.card);
+  const legacyReplay=(await f.api('/api/cards',{method:'POST',body:legacyBody,key:legacyKey})).card;
+  assert.equal(legacyReplay.id,legacy.card.id);assert.equal(legacyReplay.avatarUrl,'/avatars/wave.svg');
 });
 
 test('card avatar inputs reject another account upload, nonexistent assets and unsafe URLs',async t=>{

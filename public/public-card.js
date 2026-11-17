@@ -81,9 +81,10 @@ function mountPublicPage(root) {
   }
   async function load() {
     fetchController?.abort();fetchController=new AbortController();const controller=fetchController;
+    bridge?.dispose();bridge=null;card=null;
     root.innerHTML=`<div class="public-card-loading" role="status">${spinner()}<span>${t('正在加载名片…')}</span></div>`;
     const timeout=setTimeout(()=>controller.abort(),15000);
-    try{card=await fetchPublicCard(id,{signal:controller.signal});if(controller===fetchController)render();}
+    try{const loaded=await fetchPublicCard(id,{signal:controller.signal});if(controller!==fetchController||controller.signal.aborted)return;card=loaded;render();}
     catch(error){if(controller!==fetchController)return;root.innerHTML=`<section class="public-card-error"><h1>${t('名片暂时无法打开')}</h1><p>${t(error.status===404?'这张名片不存在或已不可访问。':'连接暂时中断，请重试。')}</p>${error.status===404?'':`<button type="button" class="button" data-public-retry>${t('重试')}</button>`}</section>`;root.querySelector('[data-public-retry]')?.addEventListener('click',load);}
     finally{clearTimeout(timeout);}
   }
@@ -96,7 +97,7 @@ function mountPublicPage(root) {
   });
   localeButton?.addEventListener('click',()=>{setLocale(getLocale()==='en'?'zh-CN':'en');syncLocale();if(card)render();});
   window.addEventListener('pagehide',()=>{bridge?.dispose();fetchController?.abort();});
-  window.addEventListener('pageshow',event=>{if(event.persisted){if(card)render();else load();}});
+  window.addEventListener('pageshow',event=>{if(event.persisted)load();});
   syncLocale();load();
 }
 

@@ -20,7 +20,7 @@ test('anonymous reads project each saved template without exposing account, mode
     const card=result.data.card;
     assert.deepEqual(Object.keys(card).sort(),['id','template','name','bio','headline','signature','website','backStyle','createdAt','avatarUrl','works'].sort());
     assert.equal(card.template,template);assert.equal(card.name,'Creator');assert.equal(card.signature,'Keep making');
-    assert.deepEqual(Object.keys(card.works[0]).sort(),['id','name','desc','authorName','source','version','versionId','coverUrl'].sort());
+    assert.deepEqual(Object.keys(card.works[0]).sort(),['id','name','desc','authorName','authorAvatarUrl','source','version','versionId','coverUrl'].sort());
     assert.equal(card.works[0].versionId,work.versionId);assert.equal(card.works[0].coverUrl,path+'/works/'+work.id+'/cover');
     const raw=JSON.stringify(card);for(const forbidden of [OWNER,OTHER,'authorId','discovery','reviewNote','requestHash','revision','provenance','email'])assert(!raw.includes(forbidden),forbidden);
     assert.equal((await get(path+'/works/'+other.id+'/cover')).status,404);
