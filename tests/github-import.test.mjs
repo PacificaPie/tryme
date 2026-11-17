@@ -165,7 +165,7 @@ test('timeouts abort the request without waiting for a stuck fetch',async t=>{
   t.mock.timers.tick(10001);await rejection;assert.equal(signal.aborted,true);
 });
 
-test('GitHub HTML imports accept above 1 MiB and exactly 8 MiB, measuring UTF-8 bytes rather than characters',async()=>{
+test('GitHub HTML imports accept above 1 MiB and exactly 16 MiB, measuring UTF-8 bytes rather than characters',async()=>{
   for(const size of [2*1024*1024,HTML_MAX_BYTES]){
     const prefix='<!doctype html><html><!--',suffix='--></html>',source=prefix+'x'.repeat(size-prefix.length-suffix.length)+suffix;
     const result=await resolveGithubHTML(blob,fixture({source}));

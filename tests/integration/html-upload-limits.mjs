@@ -12,7 +12,7 @@ import {localPreviewHTML,LOCAL_PREVIEW_CSP} from '../../public/versioning-state.
 const base=new URL(process.env.FUNTRACK_TEST_URL||'http://127.0.0.1:8767');
 assert(['localhost','127.0.0.1','[::1]'].includes(base.hostname),'This harness only runs on loopback.');
 assert(!base.username&&!base.password&&base.pathname==='/','Use a bare local origin.');
-const MIB=1024*1024,MAX_HTML=8*MIB,MAX_COVER=2*MIB,MAX_PUBLICATION=MAX_HTML+MAX_COVER+128*1024;
+const MIB=1024*1024,MAX_HTML=16*MIB,MAX_COVER=2*MIB,MAX_PUBLICATION=MAX_HTML+MAX_COVER+128*1024;
 const run=randomUUID(),owner=`html_limits_${run}`,reader=`html_limits_reader_${run}`;
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 const pinnedHTML='https://github.com/mpaterakis/html-snakeGame/blob/377d3928d9e595b76dcd0ef8a871f2ab512b110b/snakeGame.html';
@@ -33,13 +33,13 @@ function sizedPNG(size){
 }
 const fixturePath=process.env.FUNTRACK_LARGE_HTML_FIXTURE;
 const large=fixturePath?await readFile(fixturePath):sizedHTML(2*MIB+777,'LARGE_HTML_多字节');
-assert(large.length>MIB&&large.length<MAX_HTML,'The real/synthetic fixture must be larger than 1 MiB and smaller than 8 MiB.');
+assert(large.length>MIB&&large.length<MAX_HTML,'The real/synthetic fixture must be larger than 1 MiB and smaller than 16 MiB.');
 const filename=fixturePath?basename(fixturePath):'large-fixture.html';
 const largeText=new TextDecoder('utf-8',{fatal:true}).decode(large);
-const exact=sizedHTML(MAX_HTML,'EXACT_8_MIB_多字节'),oversize=sizedHTML(MAX_HTML+1,'OVER_8_MIB_多字节'),cover=sizedPNG(MAX_COVER);
-// Initial publication and a different work's update both hit exactly 8 MiB,
+const exact=sizedHTML(MAX_HTML,'EXACT_16_MIB_多字节'),oversize=sizedHTML(MAX_HTML+1,'OVER_16_MIB_多字节'),cover=sizedPNG(MAX_COVER);
+// Initial publication and a different work's update both hit exactly 16 MiB,
 // while remaining distinct content under the same-author deduplication rule.
-const exactPublication=sizedHTML(MAX_HTML,'EXACT_8_MIB_PUBLICATION_多字节');
+const exactPublication=sizedHTML(MAX_HTML,'EXACT_16_MIB_PUBLICATION_多字节');
 report.fixture={kind:fixturePath?'existing-local-game':'deterministic-test-game',filename,bytes:large.length,sha256:sha(large)};
 
 async function request(path,{method='GET',user=owner,json,form,headers={},binary=false}={}){
@@ -54,7 +54,7 @@ function publishForm(name,bytes,{image,nameOfFile='fixture.html'}={}){
   const form=new FormData();form.set('name',name);form.set('desc','Local upload-limit verification only.');form.set('source','html');form.set('file',new File([bytes],nameOfFile,{type:'text/html'}));if(image)form.set('cover',new File([image],'cover.png',{type:'image/png'}));return form;
 }
 function versionForm(revision,bytes,{image}={}){
-  const form=new FormData();form.set('expectedRevision',String(revision));form.set('releaseNotes','Local exact 8 MiB version boundary.');form.set('file',new File([bytes],'new-version.html',{type:'text/html'}));if(image)form.set('cover',new File([image],'cover.png',{type:'image/png'}));return form;
+  const form=new FormData();form.set('expectedRevision',String(revision));form.set('releaseNotes','Local exact 16 MiB version boundary.');form.set('file',new File([bytes],'new-version.html',{type:'text/html'}));if(image)form.set('cover',new File([image],'cover.png',{type:'image/png'}));return form;
 }
 const mine=async()=>ok(await request('/api/works?mine=1')).works;
 const history=async id=>ok(await request(`/api/works/${id}/versions`));
@@ -74,7 +74,7 @@ try{
     const response=await request('/api/builds/capabilities');capabilities=ok(response);assert.match(response.headers.get('cache-control')||'',/no-store/);
     assert.equal(capabilities.online,false,'Use a fresh independent local store with no active builder heartbeat.');assert(['offline','unconfigured'].includes(capabilities.status));assert.equal(capabilities.configured,capabilities.status!=='unconfigured');assert.equal(capabilities.heartbeatTtlSeconds,90);
     assert.deepEqual(capabilities.imports,{html:true,repository:false});assert.deepEqual(capabilities.limits,{htmlBytes:MAX_HTML,coverBytes:MAX_COVER,publicationBytes:MAX_PUBLICATION});
-    assert.equal(capabilities.lastHeartbeatAt,null);assert.deepEqual(capabilities.repositoryRequirements,['public','vite','npm-lockfile','root-license']);
+    assert.equal(capabilities.lastHeartbeatAt,null);assert.deepEqual(capabilities.repositoryRequirements,['public','standalone-html-or-vite']);
     assert.deepEqual(ok(await request('/api/builds/availability')),capabilities);assert.deepEqual(ok(await request('/api/builds/capabilities')),capabilities);assert.equal((await mine()).length,0);
     report.capabilities=capabilities;
   });
@@ -89,7 +89,7 @@ try{
     const session=ok(await request('/api/sessions',{method:'POST',user:reader,json:{workId:work.id,versionId:work.versionId}}),201);assert.equal(session.gameUrl,'/game/'+work.versionId);
     oldGameHash=await fetchedGame(work.versionId,large);report.preview={kind:'client draft wrapper plus real authenticated game/session fetch',bytes:Buffer.byteLength(preview),browserRenderingVerified:false};
   });
-  await check('exactly 8 MiB HTML plus exactly 2 MiB PNG cover fits the publication envelope',async()=>{
+  await check('exactly 16 MiB HTML plus exactly 2 MiB PNG cover fits the publication envelope',async()=>{
     assert.equal(exactPublication.length,MAX_HTML);assert.equal(exact.length,MAX_HTML);assert.notEqual(sha(exactPublication),sha(exact));assert.equal(cover.length,MAX_COVER);
     exactWork=ok(await request('/api/works',{method:'POST',form:publishForm(`Exact limit ${run}`,exactPublication,{image:cover}),headers:{'Idempotency-Key':randomUUID()}}),201).work;
     const listing=await history(exactWork.id);assert.equal(listing.versions[0].contentHash,sha(exactPublication));assert.equal((await mine()).length,2);
@@ -102,7 +102,7 @@ try{
     assert.equal((await history(work.id)).versions.length,2);assert.equal(await fetchedGame(work.versionId,large),oldGameHash);await fetchedGame(updated.version.id,exact);
     assert.equal(sha(ok(await request(current.coverUrl,{binary:true}))),sha(cover));report.ids.v2=updated.version.id;
   });
-  await check('8 MiB plus one byte is rejected on initial publication without creating a work',async()=>{
+  await check('16 MiB plus one byte is rejected on initial publication without creating a work',async()=>{
     assert.equal(oversize.length,MAX_HTML+1);const count=(await mine()).length;
     error(await request('/api/works',{method:'POST',form:publishForm(`Too large ${run}`,oversize),headers:{'Idempotency-Key':randomUUID()}}),413,'HTML_TOO_LARGE');assert.equal((await mine()).length,count);
   });

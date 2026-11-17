@@ -32,7 +32,7 @@ import { renderVersioning, disposeVersioning, hasPendingVersionMutation } from '
 import { renderWorkEdit, disposeWorkEdit, hasPendingWorkEdit } from './work-edit.js';
 import { previewReferences, isPinnedPreview, prepareCardPreview, frozenAction } from './versioning-state.js';
 import { mountDiscovery, clearDiscovery, updateDiscoveryWork } from './discovery.js';
-import { HTML_UPLOAD_HINT, htmlFileError, isGithubHTMLURL, importErrorText, repositoryImportBlocked, buildAvailabilityMarkup, createBuildAvailability } from './import-status.js';
+import { HTML_UPLOAD_HINT, htmlFileError, htmlImportSizeNotice, isGithubHTMLURL, importErrorText, repositoryImportBlocked, buildAvailabilityMarkup, createBuildAvailability } from './import-status.js';
 let templateExperiencePanel=null;
 registerMessages({'名片会自动使用你的最新个人资料。':'Your card automatically uses your latest profile.','模板已选好，继续制作你的名片。':'The template is selected. Continue making your card.','这个名片模板不存在。':'This card template does not exist.'});
 const $ = (s, root=document) => root.querySelector(s);
@@ -342,6 +342,7 @@ function refreshPublishState(){
     $('#build-poll-error').textContent=t(buildPollError);
   }
   $('#game-file-name').textContent=publishFile?.name||'';
+  const sizeNotice=$('#publish-size-notice');sizeNotice.textContent=htmlImportSizeNotice({source:d.source,file:publishFile,build,ready,pending:githubPending});sizeNotice.hidden=!sizeNotice.textContent;
   $('#game-file-remove').hidden=!publishFile;$('#game-file-remove').disabled=publishPending||githubPending;
   $('#cover-file-remove').hidden=!coverFile;$('#cover-file-remove').disabled=publishPending;
   $('#cover-upload-hint').textContent=t(d.source==='url'?'PNG、JPG 或 WebP，最大 2 MiB。':'封面可不上传，发布后自动截取游戏开屏。PNG、JPG 或 WebP，最大 2 MiB。');
@@ -378,6 +379,7 @@ function renderPublish(number){
       <div class="field" id="html-field"><label for="game-file">${t("游戏文件")}</label><input id="game-file" type="file" accept=".html,.htm,text/html"><small>${t(HTML_UPLOAD_HINT)}</small><div class="publish-file-selection"><span id="game-file-name" class="file-selected"></span><button id="game-file-remove" type="button" class="button quiet small" aria-label="${t("移除游戏文件")}" hidden>${t("移除")}</button></div></div>
       <div class="field" id="github-field"><label for="github-url">${t("GitHub 链接")}</label><div class="github-input"><input id="github-url" name="githubURL" type="url" placeholder="${t("https://github.com/作者/仓库")}" value="${esc(d.githubURL||'')}"><button id="github-read" class="button" type="button">${t("导入并构建")}</button></div><p id="github-status" class="file-selected" role="status"></p><section id="github-build-panel" class="build-panel" hidden><progress id="build-progress" max="5" aria-label="${t("构建进度")}"></progress><div class="build-actions"><a id="build-preview" class="button small" target="_blank" rel="noopener">${t("预览试玩 ↗")}</a><button id="build-cancel" class="button quiet small" type="button">${t("取消构建")}</button></div><details class="build-details"><summary>${t("构建记录")}</summary><p id="build-source"></p><pre id="build-logs"></pre></details><p id="build-poll-error" class="error" role="status"></p></section></div>
       <div class="field" id="url-field"><label for="publish-url">${t("作品链接")}</label><input id="publish-url" name="url" type="url" placeholder="https://" value="${esc(d.url)}"><small>${t("已部署的网站（含 GitHub Pages），将在新窗口打开。")}</small></div>
+      <p id="publish-size-notice" class="tiny muted" role="status" hidden></p>
       <div class="field"><label for="cover-file">${t("封面")}</label><div class="cover-picker">${coverPreview?`<img id="cover-preview" src="${esc(coverPreview)}" alt="${t("所选封面")}">`:`<img id="cover-preview" alt="${t("所选封面")}" hidden>`}<input id="cover-file" type="file" accept="image/png,image/jpeg,image/webp"><button id="cover-file-remove" type="button" class="button quiet small" aria-label="${t("移除封面")}" hidden>${t("移除")}</button></div><small id="cover-upload-hint">${t("PNG、JPG 或 WebP，最大 2 MiB。")}</small></div>
       <p id="publish-error" class="error" role="alert"></p><div id="publish-recovery" class="publication-recovery" hidden></div><details id="publish-related" class="sample-links" hidden></details><div class="form-footer"><button class="button primary" type="submit">${t("发布作品")}</button><a class="button quiet" href="#/studio/works">${t("保存草稿并返回")}</a></div>
       <details class="sample-links"><summary>${t("示例文件")}</summary><div><a class="text-link" href="/examples/more.html" target="_blank" rel="noopener">${t("浏览 9 个可玩示例 ↗")}</a></div></details>

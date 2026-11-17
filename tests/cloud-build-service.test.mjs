@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync,readdirSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import ts from 'typescript';
+import {HTML_MAX_BYTES} from '../lib/funtrack/limits.mjs';
 
 // Compile the production TS module for Node. Only the platform import is
 // substituted; all SQL, state transitions and service callbacks run unchanged.
@@ -43,6 +44,17 @@ function fixture(t,{mode='cloud'}={}){
   const complete=async(job,html='<html>game</html>',metadata={framework:'vite'})=>{const form=new FormData();form.set('leaseId',job.leaseId);form.set('file',new File([html],'index.html',{type:'text/html'}));form.set('metadata',JSON.stringify(metadata));return worker(job.id+'/complete',form);};
   return {database,db,bucket,runtime,service,cloud,faults,calls,objects,api,worker,create,claim,complete,read,get resolved(){return resolved;}};
 }
+
+test('real completion API stores exactly 16 MiB and rejects an oversized artifact without writing R2',async t=>{
+  const f=fixture(t),{build}=await f.create(),job=(await f.claim(build.id)).build;
+  await f.worker(job.id+'/progress',{leaseId:job.leaseId,status:'packaging',log:'size boundary'});
+  const html='<html>'+'x'.repeat(HTML_MAX_BYTES-13)+'</html>';
+  await assert.rejects(f.complete(job,html+'x'),code('BUILD_ARTIFACT_TOO_LARGE'));
+  assert.equal(f.objects.size,0);assert.equal(f.read(job.id).status,'packaging');
+  const result=await f.complete(job,html,{framework:'prebuilt-html',sourcePath:'dist/index.html'});
+  assert.equal(result.build.status,'ready');assert.equal(result.build.artifactBytes,HTML_MAX_BYTES);
+  const stored=await f.service.getBuildArtifact(job.id,'cloud-owner');assert.equal(stored.bytes.byteLength,HTML_MAX_BYTES);
+});
 
 test('cloud capabilities are read-only, require a binding and token, and do not depend on local heartbeats',async t=>{
   const f=fixture(t),created=await f.create();f.database.prepare("UPDATE ft_build_jobs SET created_at='2000-01-01T00:00:00.000Z' WHERE id=?").run(created.build.id);

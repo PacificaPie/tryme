@@ -7,8 +7,8 @@ import {publicationArtifact} from '../lib/funtrack/publication-artifact.mjs';
 const documentBytes=size=>{const prefix='<!doctype html><html>',suffix='</html>';return new TextEncoder().encode(prefix+'x'.repeat(size-prefix.length-suffix.length)+suffix);};
 const code=expected=>error=>error.code===expected;
 
-test('HTML validators share an inclusive 8 MiB limit for local uploads, versions and builds',()=>{
-  assert.equal(HTML_MAX_BYTES,8388608);assert.equal(BUILD_MAX_BYTES,HTML_MAX_BYTES);
+test('HTML validators share an inclusive 16 MiB limit for local uploads, versions and builds',()=>{
+  assert.equal(HTML_MAX_BYTES,16777216);assert.equal(BUILD_MAX_BYTES,HTML_MAX_BYTES);
   const bytes=documentBytes(HTML_MAX_BYTES);assert.equal(bytes.byteLength,HTML_MAX_BYTES);
   assert.equal(htmlSource(bytes,'text/html','game.html').length,HTML_MAX_BYTES);
   assert.equal(builtHTML(bytes,'text/html','game.html').length,HTML_MAX_BYTES);
