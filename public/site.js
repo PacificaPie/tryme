@@ -56,7 +56,8 @@ async function api(path, options={}) {
 }
 function signinURL(){return authURL('sign-in','/site.html'+(location.hash||'#/'));}
 function signinLink(label=t("登录")){return `<a class="button primary" href="${esc(signinURL())}" target="_top">${esc(label)}</a>`;}
-function identity(){ $('#identity').innerHTML=me?`<details class="account-menu"><summary class="avatar" aria-label="${t("账号菜单")}">${esc([...me.name][0]||t("我"))}</summary><div class="account-options"><span>${esc(me.name)}</span><a href="#/studio/works">${t("打开创作中心")}</a><a href="${esc(authURL('sign-out','/site.html#/feed'))}" target="_top">${t("退出登录")}</a></div></details><span class="identity-name">${esc(me.name)}</span>`:getAuthConfig().provider==='unknown'?'':`<a class="button quiet" href="${esc(signinURL())}" target="_top">${t("登录")}</a>`; }
+registerMessages({'账号设置':'Account settings'});
+function identity(){ $('#identity').innerHTML=me?`<details class="account-menu"><summary class="avatar" aria-label="${t("账号菜单")}">${esc([...me.name][0]||t("我"))}</summary><div class="account-options"><span>${esc(me.name)}</span><a href="#/studio/works">${t("打开创作中心")}</a>${getAuthConfig().provider==='clerk'?`<a href="/auth/account.html?return_to=${encodeURIComponent('/site.html'+(location.hash||'#/feed'))}" target="_top">${t("账号设置")}</a>`:''}<a href="${esc(authURL('sign-out','/site.html#/feed'))}" target="_top">${t("退出登录")}</a></div></details><span class="identity-name">${esc(me.name)}</span>`:getAuthConfig().provider==='unknown'?'':`<a class="button quiet" href="${esc(signinURL())}" target="_top">${t("登录")}</a>`; }
 function notify(message){message=t(message);clearTimeout(noticeTimer);$('#notice').textContent=message;$('#notice').hidden=false;noticeTimer=setTimeout(()=>$('#notice').hidden=true,3500);}
 function urlFor(path){return '#'+path;}
 function go(path){if(location.hash==='#'+path)renderRoute();else location.hash=path;}

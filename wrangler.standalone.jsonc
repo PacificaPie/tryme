@@ -11,7 +11,8 @@
   "vars": {
     "APP_ORIGIN": "http://127.0.0.1:8787",
     "CLERK_PUBLISHABLE_KEY": "",
-    "FUNTRACK_AUTO_COVER_ENABLED": "0"
+    "FUNTRACK_AUTO_COVER_ENABLED": "0",
+    "WECHAT_LOGIN_ENABLED": "0"
   },
   "secrets": {
     "required": [

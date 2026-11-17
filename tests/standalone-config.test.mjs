@@ -26,6 +26,25 @@ const production = () => {
   return config;
 };
 
+test('optional WeChat login stays disabled by default and cannot enable with incomplete secret declarations', () => {
+  for (const [make, validate, secret] of [[staging, validateStandaloneStaging, testSecret], [production, validateStandaloneProduction, liveSecret]]) {
+    const config = make();
+    assert.deepEqual(validate(config, secret), []);
+    config.vars.WECHAT_LOGIN_ENABLED = 'true';
+    assert.ok(validate(config, secret).some(message => message.includes('WECHAT_LOGIN_ENABLED')));
+    config.vars.WECHAT_LOGIN_ENABLED = '1';
+    assert.ok(validate(config, secret).some(message => message.includes('WECHAT_APP_ID')));
+    assert.ok(validate(config, secret).some(message => message.includes('WECHAT_APP_SECRET')));
+    config.vars.WECHAT_APP_ID = 'wx0123456789abcdef';
+    config.secrets.required.push('WECHAT_APP_SECRET');
+    assert.deepEqual(validate(config, secret), []);
+    config.vars.WECHAT_APP_SECRET = 'synthetic-secret-never-configure-in-vars';
+    const errors = validate(config, secret);
+    assert.ok(errors.some(message => message.includes('config.vars')));
+    assert.ok(!errors.join('\n').includes(config.vars.WECHAT_APP_SECRET));
+  }
+});
+
 test('staging accepts padded and unpadded valid Clerk keys using runtime validation', () => {
   for (const domain of ['a.clerk.accounts.dev$', 'ab.clerk.accounts.dev$', 'abc.clerk.accounts.dev$']) {
     const config = staging();

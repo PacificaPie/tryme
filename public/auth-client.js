@@ -122,6 +122,7 @@ export function createAuthClient({
     config = Object.freeze({
       provider: data.provider, configured: data.configured,
       environment: data.environment === 'test' ? 'test' : 'production',
+      wechat: Object.freeze({ enabled: data.provider === 'clerk' && data.configured && data.wechat?.enabled === true }),
       ...(data.provider === 'clerk' ? { publishableKey: data.publishableKey, signInPath: '/auth/sign-in.html', signOutPath: '/auth/sign-out.html' } : {}),
     });
     if (!config.configured) throw authError('AUTH_NOT_CONFIGURED');
@@ -133,12 +134,12 @@ export function createAuthClient({
     }
     return config;
   }
-  async function authHeaders() {
+  async function authHeaders({ skipCache = false } = {}) {
     await ensureAuth();
     if (config.provider === 'sites' || !clerk.session) return {};
     const session = clerk.session;
     let token;
-    try { token = await session.getToken(); }
+    try { token = await session.getToken(...(skipCache ? [{ skipCache: true }] : [])); }
     catch { throw authError('AUTH_TOKEN_UNAVAILABLE', '无法连接登录服务，请检查网络后重试。'); }
     if (!clerk.session || (session.id ? clerk.session.id !== session.id : clerk.session !== session)) throw authError('AUTH_SESSION_CHANGED', SESSION_CHANGED, 401);
     if (typeof token !== 'string' || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token)) throw authError('AUTH_REQUIRED', SESSION_CHANGED, 401);

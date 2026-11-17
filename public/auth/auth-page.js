@@ -1,6 +1,8 @@
 import { ensureAuth, getAuthConfig, getClerk, authURL, signOut, safeAuthReturnTo } from '../auth-client.js';
 import { t, getLocale, setLocale, registerMessages } from '../i18n.js';
 import { publicCardBackPath } from '../public-card-links.js';
+import { createWechatClient } from './wechat-client.js';
+import { errorText } from './wechat-ui.js';
 
 registerMessages({
   '登录': 'Sign in', '退出登录': 'Sign out', '返回': 'Back', '继续': 'Continue',
@@ -17,6 +19,8 @@ const action = document.body.dataset.authAction;
 const returnTo = safeAuthReturnTo(new URLSearchParams(location.search).get('return_to'), location.origin);
 const backTo = action === 'sign-in' ? publicCardBackPath(returnTo) || returnTo : returnTo;
 let loading = true, failure = null, signingOut = false, mountedNode = null;
+const wechat = createWechatClient();
+let disposed = false, wechatPending = false;
 const esc = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const button = (label, attributes = '', secondary = false) => `<button type="button" class="auth-button${secondary ? ' secondary' : ''}" ${attributes}>${esc(t(label))}</button>`;
 const link = (label, href, secondary = false) => `<a class="auth-button${secondary ? ' secondary' : ''}" href="${esc(href)}">${esc(t(label))}</a>`;
@@ -60,7 +64,17 @@ function render() {
     main.innerHTML = `<section class="auth-panel">${badge}<h1>${esc(t('已登录'))}</h1><div class="auth-actions">${link('继续', returnTo)}</div></section>`;
     return;
   }
-  main.innerHTML = `<section class="auth-component">${badge}<div id="clerk-sign-in"></div><a class="auth-back" href="${esc(backTo)}">${esc(t('返回'))}</a></section>`;
+  main.innerHTML = `<section class="auth-component">${badge}<div id="clerk-sign-in"></div>${config.wechat?.enabled ? `<div class="auth-wechat-entry">${button('微信扫码登录', 'data-wechat', true)}<p class="auth-inline-status" data-wechat-status role="status"></p></div>` : ''}<a class="auth-back" href="${esc(backTo)}">${esc(t('返回'))}</a></section>`;
+  main.querySelector('[data-wechat]')?.addEventListener('click', async event => {
+    if (wechatPending) return;
+    wechatPending = true;
+    const node = event.currentTarget, status = main.querySelector('[data-wechat-status]');
+    node.disabled = true; node.setAttribute('aria-busy', 'true');
+    status.textContent = t('正在前往微信…');
+    try { const url = await wechat.start(returnTo); if (!disposed) location.assign(url); }
+    catch (error) { if (!disposed) status.textContent = errorText(error); }
+    finally { if (!disposed) { wechatPending = false; node.disabled = false; node.removeAttribute('aria-busy'); } }
+  });
   const node = main.querySelector('#clerk-sign-in');
   try {
     clerk.mountSignIn(node, {
@@ -83,9 +97,10 @@ localeButton.addEventListener('click', () => {
   else render();
 });
 window.addEventListener('pagehide', () => {
+  disposed = true; wechat.dispose();
   if (mountedNode) { getClerk()?.unmountSignIn(mountedNode); mountedNode = null; }
 });
-window.addEventListener('pageshow', event => { if (event.persisted) render(); });
+window.addEventListener('pageshow', event => { if (event.persisted) location.reload(); });
 render();
 try { await ensureAuth(); } catch (error) { failure = error; }
 loading = false;

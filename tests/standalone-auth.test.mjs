@@ -54,7 +54,7 @@ test('anonymous config is no-store, contains only public settings, and does not 
   const { handler, calls } = fixture();
   const configured = await handler(request('/api/auth/config'), env);
   assert.equal(configured.status, 200);assert.match(configured.headers.get('cache-control'), /no-store/);
-  assert.deepEqual(await configured.json(), { provider: 'clerk', configured: true, publishableKey: key(), signInPath: '/auth/sign-in.html', signOutPath: '/auth/sign-out.html', environment: 'production' });
+  assert.deepEqual(await configured.json(), { provider: 'clerk', configured: true, publishableKey: key(), signInPath: '/auth/sign-in.html', signOutPath: '/auth/sign-out.html', environment: 'production', wechat: { enabled: false } });
   const unconfigured = await (await handler(request('/api/auth/config'), {})).json();
   assert.equal(unconfigured.configured, false);assert.equal(unconfigured.publishableKey, null);assert.equal(unconfigured.error.code, 'AUTH_NOT_CONFIGURED');
   assert.equal(unconfigured.error.message, '登录暂不可用，请稍后再试或联系站点管理员。');
@@ -230,4 +230,58 @@ test('actual Clerk verification accepts a signed session but rejects expired, fu
   const token = jwt(), parts = token.split('.');parts[1] = Buffer.from(JSON.stringify({ sub: 'user_owner', exp: 9999999999 })).toString('base64url');
   await errorCode(await handler(request('/api/me', { headers: { Authorization: 'Bearer ' + parts.join('.') } }), env), 401, 'AUTH_REQUIRED');
   assert.equal(applications, 2);assert.equal(profiles, 2);
+});
+
+test('WeChat public authentication routes are scoped and never inherit forged identity headers', async () => {
+  let calls = 0, accountCalls = 0;
+  const handler = createStandaloneHandler({
+    fetch: async () => { throw new Error('public WeChat routes must not reach the application'); },
+    createClerkClient: () => { throw new Error('OAuth routes do not assume an existing user'); },
+    createWechatAuth: () => ({
+      publicConfig: async () => ({ enabled: true }),
+      handlePublic: async req => {
+        calls++;
+        assert.equal(req.headers.get('oai-authenticated-user-id'), null);
+        assert.equal(req.headers.get('x-clerk-auth-user-id'), null);
+        return new URL(req.url).pathname.endsWith('/pending') ? Response.json({ pending: false }) : null;
+      },
+      handleAccount: async () => { accountCalls++; },
+    }),
+  });
+  assert.equal((await handler(request('/api/auth/wechat/pending', { headers: { 'oai-authenticated-user-id': 'victim', 'x-clerk-auth-user-id': 'user_victim' } }), env)).status, 200);
+  await errorCode(await handler(request('/api/auth/wechat/unknown'), env), 404, 'NOT_FOUND');
+  await errorCode(await handler(new Request('https://evil.example/api/auth/wechat/pending'), env), 403, 'AUTH_ORIGIN_MISMATCH');
+  await errorCode(await handler(request('/api/auth/wechat/pending'), {}), 503, 'AUTH_NOT_CONFIGURED');
+  assert.equal(calls, 2);assert.equal(accountCalls, 0);
+});
+
+test('WeChat account binding receives verified subject and actual Clerk factor checks, never inferred token freshness', async () => {
+  let currentProfile = profile;
+  const handler = createStandaloneHandler({
+    fetch: async () => { throw new Error('account routes must not fall through'); },
+    createClerkClient(options) {
+      const sdk = createClerkClient({ ...options, jwtKey });
+      return { authenticateRequest: (...args) => sdk.authenticateRequest(...args), users: { getUser: async () => currentProfile } };
+    },
+    createWechatAuth: () => ({
+      publicConfig: async () => ({ enabled: true }), handlePublic: async () => null,
+      handleAccount: async (_req, context) => Response.json({ userId: context.clerkUserId, recent: context.recentVerification, impersonating: context.impersonating }),
+    }),
+  });
+  for (const [claims, mfa, expected] of [
+    [{ fva: [0, -1] }, false, true], [{ fva: [4, -1] }, false, true],
+    [{ fva: [5, -1] }, false, false], [{}, false, false],
+    [{ fva: [-1, -1] }, false, false], [{ fva: ['0', -1] }, false, false],
+    [{ fva: [0, -1] }, true, false], [{ fva: [0, 0] }, true, true],
+    [{ fva: [0, 5] }, true, false], [{ fva: [-1, 0] }, true, false],
+    [{ fva: [0, 0], act: { sub: 'user_admin' } }, false, false],
+  ]) {
+    currentProfile = { ...profile, twoFactorEnabled: mfa };
+    const response = await handler(request('/api/account/wechat', { headers: { Authorization: 'Bearer ' + jwt(claims) } }), env);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { userId: 'user_one', recent: expected, impersonating: Boolean(claims.act) }, JSON.stringify({ claims, mfa }));
+  }
+  currentProfile = { ...profile, emailAddresses: [] };
+  await errorCode(await handler(request('/api/account/wechat', { headers: { Authorization: 'Bearer ' + jwt({ fva: [0, -1] }) } }), env), 403, 'EMAIL_VERIFICATION_REQUIRED');
+  await errorCode(await handler(request('/api/account/wechat', { headers: { Authorization: 'Bearer ' + jwt({ sts: 'pending', fva: [0, -1] }) } }), env), 401, 'AUTH_REQUIRED');
 });

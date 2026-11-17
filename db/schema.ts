@@ -135,3 +135,14 @@ export const autoCoverJobs = sqliteTable('ft_auto_cover_jobs', {
 export const autoCoverAttempts = sqliteTable('ft_auto_cover_attempts', {
   id: text('id').primaryKey(), jobId: text('job_id').notNull().references(()=>autoCoverJobs.id), reservedSeconds: integer('reserved_seconds').notNull(), elapsedMs: integer('elapsed_ms'), outcome: text('outcome'), createdAt: text('created_at').notNull(),
 }, t=>[index('ft_auto_cover_budget_time').on(t.createdAt)]);
+
+export const wechatIdentities = sqliteTable('ft_wechat_identities', {
+  appId:text('app_id').notNull(),openId:text('open_id').notNull(),clerkUserId:text('clerk_user_id').notNull(),unionId:text('union_id'),createdAt:integer('created_at').notNull(),
+},t=>[primaryKey({columns:[t.appId,t.openId]}),uniqueIndex('ft_wechat_identity_user').on(t.appId,t.clerkUserId)]);
+export const wechatFlows = sqliteTable('ft_wechat_flows', {
+  id:text('id').primaryKey(),appId:text('app_id').notNull(),stateHash:text('state_hash').notNull(),browserHash:text('browser_hash').notNull(),tokenHash:text('token_hash'),kind:text('kind').notNull(),phase:text('phase').notNull(),
+  expectedUserId:text('expected_user_id'),initiatingSessionId:text('initiating_session_id'),mappedUserId:text('mapped_user_id'),openId:text('open_id'),unionId:text('union_id'),returnTo:text('return_to').notNull(),createdAt:integer('created_at').notNull(),expiresAt:integer('expires_at').notNull(),consumedAt:integer('consumed_at'),
+},t=>[uniqueIndex('ft_wechat_flow_state').on(t.stateHash),uniqueIndex('ft_wechat_flow_token').on(t.tokenHash),index('ft_wechat_flow_browser').on(t.browserHash,t.phase),index('ft_wechat_flow_expiry').on(t.expiresAt)]);
+export const wechatRateWindows = sqliteTable('ft_wechat_rate_windows', {
+  keyHash:text('key_hash').primaryKey(),count:integer('count').notNull(),expiresAt:integer('expires_at').notNull(),
+},t=>[index('ft_wechat_rate_expiry').on(t.expiresAt)]);

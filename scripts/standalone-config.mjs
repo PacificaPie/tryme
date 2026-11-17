@@ -32,8 +32,19 @@ export function productionResources() {
   };
 }
 
+function validateWechatSettings(config) {
+  const vars = config.vars || {}, enabled = vars.WECHAT_LOGIN_ENABLED;
+  const errors = [];
+  if (enabled !== undefined && !['0', '1'].includes(enabled)) errors.push('WECHAT_LOGIN_ENABLED must be the string "0" or "1".');
+  if (enabled === '1') {
+    if (!/^wx[0-9a-f]{16}$/.test(vars.WECHAT_APP_ID || '')) errors.push('Enabled WeChat login requires a valid WECHAT_APP_ID from the approved website application.');
+    if (!config.secrets?.required?.includes('WECHAT_APP_SECRET')) errors.push('Enabled WeChat login must declare WECHAT_APP_SECRET in secrets.required.');
+  }
+  return errors;
+}
+
 export function validateStandaloneStaging(config, secretKey, protectedResources = { databaseIds: [], bucketNames: [] }) {
-  const errors = [], vars = config.vars || {};
+  const errors = validateWechatSettings(config), vars = config.vars || {};
   let origin;
   try { origin = new URL(vars.APP_ORIGIN); } catch {}
   const labels = origin?.hostname.split('.') || [];
@@ -73,7 +84,7 @@ export function validateStandalone(config, secretKey, mode = 'production') {
 // Offline validation only. Values are never printed; the secret is used only
 // to reject missing/test credentials before an operator plans a deployment.
 export function validateStandaloneProduction(config, secretKey) {
-  const errors = [], vars = config.vars || {};
+  const errors = validateWechatSettings(config), vars = config.vars || {};
   let origin;
   try { origin = new URL(vars.APP_ORIGIN); } catch {}
   if (!origin || origin.origin !== vars.APP_ORIGIN || origin.protocol !== 'https:' || isLoopbackOrigin(vars.APP_ORIGIN) || isIP(origin.hostname.replace(/^\[|\]$/g, '')) || /(?:^|\.)(?:example\.(?:com|org|net)|localhost|local|invalid|test)$/.test(origin.hostname)) errors.push('APP_ORIGIN must be one exact public HTTPS domain origin without a trailing slash.');
