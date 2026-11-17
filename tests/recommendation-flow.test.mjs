@@ -29,7 +29,7 @@ test('recommendation migration is additive and does not change works, versions, 
   assert.equal((await f.api('/api/events',{method:'POST',owner:OTHER,body:{eventId:randomUUID(),type:'work_view',workId:a.id}})).status,200);
   const tables=['ft_works','ft_work_versions','ft_work_discovery','ft_cards','ft_events'];
   const before=tables.map(table=>f.database.prepare('SELECT * FROM '+table+' ORDER BY rowid').all());f.migrate();
-  tables.forEach((table,i)=>{const after=f.database.prepare('SELECT * FROM '+table+' ORDER BY rowid').all();if(table==='ft_works')for(const row of after){assert.equal(row.archived_at,null);delete row.archived_at;}assert.deepEqual(after,before[i]);});
+  tables.forEach((table,i)=>{const after=f.database.prepare('SELECT * FROM '+table+' ORDER BY rowid').all();if(table==='ft_works')for(const row of after){assert.equal(row.archived_at,null);delete row.archived_at;}if(table==='ft_cards')for(const row of after){assert.equal(row.deleted_at,null);delete row.deleted_at;}assert.deepEqual(after,before[i]);});
   assert.equal(credits(f).length,0);assert.equal(impressions(f).length,0);assert.equal((await feed(f)).total,3);
 });
 

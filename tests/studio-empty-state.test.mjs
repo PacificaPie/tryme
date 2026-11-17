@@ -7,6 +7,7 @@ import {emptyState} from '../public/empty-state.js';
 import {mountAnalytics} from '../public/analytics.js';
 import {CARD_TEMPLATES} from '../public/card-templates.js';
 import {archivedWorksPath,isArchived} from '../public/archive-controls.js';
+import {commentVersionLabel,commentHref} from '../public/discussion.js';
 import {t,getLocale,setLocale,registerMessages} from '../public/i18n.js';
 import '../public/site.messages.js';
 
@@ -78,7 +79,7 @@ function fixture({path='/studio/works',locale='zh-CN',active=[],archived=[],card
     if(parsed.pathname==='/api/analytics'){assert(analytics,'Zero-upload analytics must not fetch or synthesize statistics');return structuredClone(analytics);}
     throw new Error('Unexpected API request '+url);
   };
-  const context=vm.createContext({t,registerMessages,emptyState,mountAnalytics,CARD_TEMPLATES,archivedWorksPath,isArchived,esc,api,URLSearchParams,structuredClone,
+  const context=vm.createContext({t,registerMessages,emptyState,mountAnalytics,CARD_TEMPLATES,archivedWorksPath,isArchived,commentVersionLabel,commentHref,esc,api,URLSearchParams,structuredClone,
     route:()=>route,routeNumber:1,finishRouteLoading:null,main,scrolls:new Map(),syncNavigation(){},requestAnimationFrame:callback=>callback(),window:{scrollTo(){}},
     $:selector=>main.querySelector(selector),$$:selector=>main.querySelectorAll(selector),cardDraft:draft,saveCardDraft(){},go:value=>navigations.push(value),
     me:{id:'empty-user',name:'New creator'},analyticsPanel:null,currentRoute:path,date:value=>String(value),CSS:{escape:value=>value},

@@ -35,3 +35,9 @@ test('return navigation only accepts the same canonical work or the creator list
   assert.equal(workEditReturnPath('/work/work','work'),'/work/work');
   for(const path of ['https://example.com','//example.com','/work/other','/card/old','/work/work?card=old'])assert.equal(workEditReturnPath(path,'work'),'/studio/works');
 });
+
+test('editing from a filtered work detail preserves return context without autoplay',()=>{
+  const path='/work/work?from=%2Ffeed%3Fq%3Drain&discussion=1';
+  assert.equal(workEditReturnPath(path,'work'),path);
+  assert.equal(workEditReturnPath(path+'&play=1','work'),path);
+});

@@ -85,6 +85,20 @@
       "when": 1794950000000,
       "tag": "0011_automatic_work_covers",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1795000000000,
+      "tag": "0012_card_deletion",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1795030000000,
+      "tag": "0014_comment_version_context",
+      "breakpoints": true
     }
   ]
 }

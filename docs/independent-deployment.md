@@ -99,7 +99,9 @@ Feed 已取消人工收录确认：新作品直接展示，作者可以隐藏或
 
 ## D1 迁移的执行者与历史表
 
-继续用现有 `npm run db:generate` 生成 `drizzle/000N_*.sql`。独立配置的 `migrations_dir` 指向 `drizzle`，Wrangler 可以发现其中顶层 SQL；`--> statement-breakpoint` 是 SQL 注释。不要再用 Wrangler 生成第二套同名 schema 迁移。
+目前使用经过审阅的手写追加 SQL，同时更新 `db/schema.ts` 和迁移 journal。2026-11-17 核对时，Drizzle 的完整 schema snapshot 只到 `0008`，晚于它的追加迁移尚未反映在生成器快照中；不能直接运行 `npm run db:generate` 后执行其输出，否则可能重复生成已经存在的表或列。恢复自动生成前，先在隔离分支同步生成器基线并核对完整差异，保留全部已执行 SQL 和迁移记录。
+
+独立配置的 `migrations_dir` 指向 `drizzle`，Wrangler 可以发现其中顶层 SQL；`--> statement-breakpoint` 是 SQL 注释。不要再用 Wrangler 生成第二套同名 schema 迁移。迁移编号也需与其他开发分支对照：`0013` 已由微信登录草稿保留，本轮评论使用 `0014`。
 
 `drizzle/meta/_journal.json` 是代码生成历史，Wrangler 的 `d1_migrations` 是目标数据库中已执行迁移的记录，两者不是同一张账。独立的新空 D1 由 **Wrangler migrations** 执行和记账，不同时交给 Sites 的迁移器或另一套 Drizzle migrator 重放。
 

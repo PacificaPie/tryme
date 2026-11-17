@@ -208,7 +208,7 @@ async function ingestEvent(request:Request,user:User) {
   const input=await bodyJSON(request),clientId=eventId(input.eventId),type=input.type;let workId:null|string=null,cardId:null|string=null,versionId:null|string=null;
   const prior=await first('SELECT * FROM ft_events WHERE actor_id=? AND client_event_id=?',user.id,clientId);
   if(type==='work_view'||type==='outbound_click'){const w=await getWork(input.workId);if(type==='outbound_click'&&w.source!=='url')throw new ApiError(422,'INVALID_EVENT','该作品没有外链');workId=w.id;versionId=input.versionId===undefined&&prior&&prior.work_id===w.id?prior.version_id:await targetVersion(input.versionId,w);}
-  else if(type==='card_view'){const card=await first('SELECT id FROM ft_cards WHERE id=?',String(input.cardId||''));if(!card)throw new ApiError(404,'CARD_NOT_FOUND','名片不存在');cardId=card.id;}
+  else if(type==='card_view'){const card=await first('SELECT id FROM ft_cards WHERE id=? AND deleted_at IS NULL',String(input.cardId||''));if(!card)throw new ApiError(404,'CARD_NOT_FOUND','名片不存在');cardId=card.id;}
   else throw new ApiError(422,'INVALID_EVENT','事件类型无效');
   function response(row:Row,duplicate:boolean){if(row.event_type!==type||row.work_id!==workId||row.card_id!==cardId||(input.versionId!==undefined&&row.version_id!==versionId))throw new ApiError(409,'EVENT_CONFLICT','事件标识已用于不同内容');return json({receipt:receipt(row),duplicate});}
   if(prior)return response(prior,true);await rateLimit(user,'ft_events','received_at',240);
@@ -240,16 +240,24 @@ async function addFeedback(request:Request,user:User) {
 
 // These queries deliberately never read ft_feedback. Legacy private messages
 // retain their owner-only inbox and are not part of the work's public discussion.
-const COMMENT_COLUMNS=`c.*,w.name AS work_name,w.author_id AS creator_id,
+const COMMENT_COLUMNS=`c.*,w.name AS work_name,w.author_id AS creator_id,v.version AS comment_version,
   (SELECT COUNT(*) FROM ft_comment_likes l WHERE l.comment_id=c.id) AS likes_count,
   EXISTS(SELECT 1 FROM ft_comment_likes l WHERE l.comment_id=c.id AND l.actor_id=?) AS liked_by_me,
   (SELECT COUNT(*) FROM ft_comments r WHERE r.parent_id=c.id) AS reply_count`;
-const COMMENT_QUERY=`SELECT ${COMMENT_COLUMNS} FROM ft_comments c JOIN ft_works w ON w.id=c.work_id`;
-function commentJSON(c:Row) {return {id:c.id,workId:c.work_id,workName:c.work_name,authorId:c.author_id,authorName:c.author_name,isCreator:c.author_id===c.creator_id,body:c.body,parentId:c.parent_id,createdAt:c.created_at,likesCount:Number(c.likes_count||0),likedByMe:Boolean(c.liked_by_me),replyCount:Number(c.reply_count||0)};}
+const COMMENT_JOINS=` JOIN ft_works w ON w.id=c.work_id LEFT JOIN ft_work_versions v ON v.id=c.version_id AND v.work_id=c.work_id`;
+const COMMENT_QUERY=`SELECT ${COMMENT_COLUMNS} FROM ft_comments c${COMMENT_JOINS}`;
+function commentJSON(c:Row) {return {id:c.id,workId:c.work_id,workName:c.work_name,versionId:c.version_id??null,version:c.comment_version??null,authorId:c.author_id,authorName:c.author_name,isCreator:c.author_id===c.creator_id,body:c.body,parentId:c.parent_id,createdAt:c.created_at,likesCount:Number(c.likes_count||0),likedByMe:Boolean(c.liked_by_me),replyCount:Number(c.reply_count||0)};}
 async function getComment(id:unknown,user:User) {
   if(typeof id!=='string'||id.length>128)throw new ApiError(404,'COMMENT_NOT_FOUND','评论不存在');
   const comment=await first(COMMENT_QUERY+' WHERE c.id=?',user.id,id);
   if(!comment)throw new ApiError(404,'COMMENT_NOT_FOUND','评论不存在');return comment;
+}
+async function commentContext(user:User,id:string) {
+  const target=await getComment(id,user),root=target.parent_id===null?target:await getComment(target.parent_id,user);
+  if(root.work_id!==target.work_id||root.parent_id!==null)throw new ApiError(404,'COMMENT_NOT_FOUND','评论不存在');
+  // This bounded slice is separate from normal pagination. Its replies are
+  // only the requested target, never a claim to be a contiguous thread prefix.
+  return json({workId:target.work_id,targetId:target.id,contextOnly:true,thread:{...commentJSON(root),replies:target.parent_id===null?[]:[commentJSON(target)],repliesNextCursor:null}});
 }
 async function workComments(url:URL,user:User,workId:string) {
   await getWork(workId);
@@ -265,7 +273,7 @@ async function workComments(url:URL,user:User,workId:string) {
       SELECT r.*,ROW_NUMBER() OVER (PARTITION BY r.parent_id ORDER BY r.seq ASC) AS thread_rank,
         COUNT(*) OVER (PARTITION BY r.parent_id) AS thread_count
       FROM ft_comments r WHERE r.parent_id IN (${rootRows.map(()=>'?').join(',')})
-    ) c JOIN ft_works w ON w.id=c.work_id WHERE c.thread_rank<=4 ORDER BY c.parent_id,c.seq ASC`,user.id,...rootRows.map(c=>c.id));
+    ) c${COMMENT_JOINS} WHERE c.thread_rank<=4 ORDER BY c.parent_id,c.seq ASC`,user.id,...rootRows.map(c=>c.id));
     const grouped=new Map<string,Row[]>();for(const reply of replies){const list=grouped.get(reply.parent_id)||[];list.push(reply);grouped.set(reply.parent_id,list);}
     for(const root of comments){const list=grouped.get(root.id)||[];root.replies=list.slice(0,3).map(commentJSON);root.replyCount=Number(list[0]?.thread_count||0);root.repliesNextCursor=list.length>3?encodeCommentCursor(list[2].seq,`comment:${root.id}:replies`):null;}
   }
@@ -294,20 +302,29 @@ async function commentInbox(url:URL,user:User) {
   return json({comments:page.map(commentJSON),commentsCount:Number(result[1].results[0]?.n||0),nextCursor:result[0].results.length>limit?encodeCommentCursor(page[page.length-1].seq,scope):null});
 }
 async function addComment(request:Request,user:User,workId:string) {
-  const w=await getWork(workId),input=commentInput(await bodyJSON(request)),key=eventId(request.headers.get('idempotency-key'));
-  const requestHash=await hash(JSON.stringify({workId,body:input.body,parentId:input.parentId}));
+  const body=await bodyJSON(request),expectedAuthorId=body.expectedAuthorId;
+  // This is a stale-page guard, never an alternate source of identity. Check
+  // before receipt lookup so switching accounts cannot adopt an old draft/key.
+  if(expectedAuthorId!==undefined&&(typeof expectedAuthorId!=='string'||!expectedAuthorId.trim()||expectedAuthorId.length>256||expectedAuthorId!==user.id))throw new ApiError(409,'AUTH_SESSION_CHANGED','登录账号已变化，请回到原账号后重试。');
+  const w=await getWork(workId),input=commentInput(body),key=eventId(request.headers.get('idempotency-key'));
+  const content={workId,body:input.body,parentId:input.parentId};
+  const requestHash=await hash(JSON.stringify({...content,versionId:input.versionId}));
+  // An old client can safely retry a pre-migration receipt only without adding
+  // a version. Never attach today's version to a historical unknown comment.
+  const legacyHash=input.versionId===null?await hash(JSON.stringify(content)):null;
   async function response(comment:Row,duplicate:boolean){
-    if(comment.request_hash!==requestHash)throw new ApiError(409,'IDEMPOTENCY_CONFLICT','评论提交内容已变化，请使用新的提交标识');
+    if(comment.request_hash!==requestHash&&!(input.versionId===null&&comment.version_id===null&&comment.request_hash===legacyHash))throw new ApiError(409,'IDEMPOTENCY_CONFLICT','评论提交内容已变化，请使用新的提交标识');
     const count=await first('SELECT COUNT(*) n FROM ft_comments WHERE work_id=?',workId);
     return json({comment:commentJSON(comment),commentsCount:Number(count?.n||0),duplicate},duplicate?200:201);
   }
   const prior=await first(COMMENT_QUERY+' WHERE c.author_id=? AND c.idempotency_key=?',user.id,user.id,key);if(prior)return response(prior,true);
+  if(input.versionId!==null&&!await first('SELECT id FROM ft_work_versions WHERE id=? AND work_id=?',input.versionId,workId))throw new ApiError(422,'INVALID_COMMENT_VERSION','评论版本不属于当前作品，请刷新作品后重试');
   if(input.parentId){const parent=await first('SELECT id,work_id,parent_id FROM ft_comments WHERE id=?',input.parentId);validateCommentParent(parent,workId);}
   await rateLimit(user,'ft_comments','created_at',30);
   const id=uuid();
   await db().batch([
-    sql(`INSERT INTO ft_comments (id,work_id,author_id,author_name,body,parent_id,created_at,idempotency_key,request_hash)
-      VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(author_id,idempotency_key) DO NOTHING`,id,w.id,user.id,(await userProfile(user)).name,input.body,input.parentId,iso(),key,requestHash),
+    sql(`INSERT INTO ft_comments (id,work_id,version_id,author_id,author_name,body,parent_id,created_at,idempotency_key,request_hash)
+      VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(author_id,idempotency_key) DO NOTHING`,id,w.id,input.versionId,user.id,(await userProfile(user)).name,input.body,input.parentId,iso(),key,requestHash),
     ...input.parentId?[]:[recommendations.creditStatement(user.id,w.id,'comment',id)],
   ]);
   const comment=await first(COMMENT_QUERY+' WHERE c.author_id=? AND c.idempotency_key=?',user.id,user.id,key);if(!comment)throw new Error('Comment insertion failed');
@@ -334,7 +351,7 @@ async function createCard(request:Request,user:User) {
   // A pre-upgrade request without the new details can still replay its original
   // immutable snapshot. New detail values must never reuse that old request key.
   const legacyHash=!workRefs&&!details.signature&&!details.headline&&!details.website&&details.backStyle==='ink'?await hash(JSON.stringify({name,bio,template:input.template,workIds:input.workIds})):null;
-  async function replay(){if(!key)return null;const row=await first('SELECT * FROM ft_cards WHERE author_id=? AND idempotency_key=?',user.id,key);if(!row)return null;if(row.request_hash!==requestHash&&row.request_hash!==legacyHash)throw new ApiError(409,'IDEMPOTENCY_CONFLICT','名片提交内容已变化，请使用新的提交标识');return json({card:cardSnapshot(JSON.parse(row.snapshot_json))});}
+  async function replay(){if(!key)return null;const row=await first('SELECT * FROM ft_cards WHERE author_id=? AND idempotency_key=?',user.id,key);if(!row)return null;if(row.deleted_at)throw new ApiError(409,'CARD_DELETED','这张名片已删除，请重新生成预览后保存。');if(row.request_hash!==requestHash&&row.request_hash!==legacyHash)throw new ApiError(409,'IDEMPOTENCY_CONFLICT','名片提交内容已变化，请使用新的提交标识');return json({card:cardSnapshot(JSON.parse(row.snapshot_json))});}
   const prior=await replay();if(prior)return prior;
   const works=[];for(let i=0;i<input.workIds.length;i++){
     const w=await ownWork(input.workIds[i],user);requireActiveWork(w);
@@ -379,12 +396,13 @@ export async function handleAPI(request:Request) {
       if(parts[0]==='works'&&parts.length===3&&parts[2]==='like')return await workLike(request,user,parts[1]);
       if(parts[0]==='works'&&parts.length===3&&parts[2]==='comments')return await workComments(url,user,parts[1]);
       if(parts[0]==='comments'&&parts.length===1)return await commentInbox(url,user);
+      if(parts[0]==='comments'&&parts.length===3&&parts[2]==='context')return await commentContext(user,parts[1]);
       if(parts[0]==='comments'&&parts.length===3&&parts[2]==='replies')return await commentReplies(url,user,parts[1]);
       if(parts[0]==='comments'&&parts.length===3&&parts[2]==='like')return await commentLike(request,user,parts[1]);
       if(parts[0]==='analytics'&&parts.length===1)return await analytics(url,user);
       if(parts[0]==='feedback'&&parts.length===1){const workId=url.searchParams.get('work');if(workId)await ownWork(workId,user);return json({feedback:(await rows(`SELECT f.*,w.name work_name FROM ft_feedback f JOIN ft_works w ON w.id=f.work_id WHERE w.author_id=?${workId?' AND w.id=?':''} ORDER BY f.created_at DESC LIMIT 200`,...workId?[user.id,workId]:[user.id])).map(feedbackJSON)});}
-      if(parts[0]==='cards'&&parts.length===1)return json({cards:(await rows('SELECT c.snapshot_json FROM ft_cards c WHERE c.id=(SELECT d.id FROM ft_cards d WHERE d.author_id=c.author_id ORDER BY d.rowid DESC LIMIT 1) ORDER BY c.created_at DESC LIMIT 200')).map(c=>cardSnapshot(JSON.parse(c.snapshot_json)))});
-      if(parts[0]==='cards'&&parts.length===2){const c=parts[1]==='me'?await first('SELECT snapshot_json FROM ft_cards WHERE author_id=? ORDER BY rowid DESC LIMIT 1',user.id):await first('SELECT snapshot_json FROM ft_cards WHERE id=?',parts[1]);if(!c)throw new ApiError(404,'CARD_NOT_FOUND','还没有已保存的名片');return json({card:cardSnapshot(JSON.parse(c.snapshot_json))});}
+      if(parts[0]==='cards'&&parts.length===1)return json({cards:(await rows('SELECT c.snapshot_json FROM ft_cards c WHERE c.deleted_at IS NULL AND c.id=(SELECT d.id FROM ft_cards d WHERE d.author_id=c.author_id ORDER BY d.rowid DESC LIMIT 1) ORDER BY c.created_at DESC LIMIT 200')).map(c=>cardSnapshot(JSON.parse(c.snapshot_json)))});
+      if(parts[0]==='cards'&&parts.length===2){const c=parts[1]==='me'?await first('SELECT snapshot_json,deleted_at FROM ft_cards WHERE author_id=? ORDER BY rowid DESC LIMIT 1',user.id):await first('SELECT snapshot_json,deleted_at FROM ft_cards WHERE id=?',parts[1]);if(!c||c.deleted_at)throw new ApiError(404,'CARD_NOT_FOUND','还没有已保存的名片');return json({card:cardSnapshot(JSON.parse(c.snapshot_json))});}
       if(parts[0]==='media'&&parts.length===2)return mediaResponse(request,parts[1]);
     }
     if(request.method==='POST') {
@@ -399,6 +417,14 @@ export async function handleAPI(request:Request) {
       if(parts[0]==='events'&&parts.length===1)return await ingestEvent(request,user);
       if(parts[0]==='feedback'&&parts.length===1)return await addFeedback(request,user);
       if(parts[0]==='cards'&&parts.length===1)return await createCard(request,user);
+      if(parts[0]==='cards'&&parts.length===3&&parts[2]==='delete'){
+        const card=await first('SELECT id FROM ft_cards WHERE id=? AND author_id=?',parts[1],user.id);
+        if(!card)throw new ApiError(404,'CARD_NOT_FOUND','名片不存在');
+        // Tombstone only this snapshot: keep historical events and work references.
+        // Repeated requests are safe, including after a lost response.
+        await sql('UPDATE ft_cards SET deleted_at=COALESCE(deleted_at,?) WHERE id=? AND author_id=?',iso(),card.id,user.id).run();
+        return json({cardId:card.id,deleted:true});
+      }
     }
     return json({error:{code:'NOT_FOUND',message:'接口不存在'}},404);
   }catch(e){return errorResponse(e);}

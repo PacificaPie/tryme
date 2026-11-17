@@ -61,6 +61,7 @@ export const versionOperations = sqliteTable('ft_version_operations', {
   createdAt: text('created_at').notNull(),
 }, t=>[uniqueIndex('ft_version_operations_owner_key').on(t.ownerId,t.idempotencyKey),index('ft_version_operations_work_created').on(t.workId,t.createdAt)]);
 export const cards = sqliteTable('ft_cards', {
+  deletedAt: text('deleted_at'),
   id: text('id').primaryKey(), authorId: text('author_id').notNull(), snapshotJson: text('snapshot_json').notNull(), createdAt: text('created_at').notNull(),
   idempotencyKey: text('idempotency_key'), requestHash: text('request_hash'),
 }, t => [index('ft_cards_owner_created').on(t.authorId,t.createdAt),uniqueIndex('ft_cards_owner_key').on(t.authorId,t.idempotencyKey)]);
@@ -106,6 +107,8 @@ export const contributionCredits = sqliteTable('ft_contribution_credits', {
 export const comments = sqliteTable('ft_comments', {
   seq: integer('seq').primaryKey({autoIncrement:true}), id: text('id').notNull().unique(),
   workId: text('work_id').notNull().references(()=>works.id), authorId: text('author_id').notNull(), authorName: text('author_name').notNull(),
+  // Page context only: a version association does not prove a completed play.
+  versionId: text('version_id').references(()=>versions.id),
   body: text('body').notNull(), parentId: text('parent_id').references(():AnySQLiteColumn=>comments.id), createdAt: text('created_at').notNull(),
   idempotencyKey: text('idempotency_key').notNull(), requestHash: text('request_hash').notNull(),
 }, t=>[uniqueIndex('ft_comments_author_key').on(t.authorId,t.idempotencyKey),index('ft_comments_work_seq').on(t.workId,t.seq),
