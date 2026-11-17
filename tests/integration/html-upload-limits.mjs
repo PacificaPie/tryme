@@ -37,6 +37,9 @@ assert(large.length>MIB&&large.length<MAX_HTML,'The real/synthetic fixture must 
 const filename=fixturePath?basename(fixturePath):'large-fixture.html';
 const largeText=new TextDecoder('utf-8',{fatal:true}).decode(large);
 const exact=sizedHTML(MAX_HTML,'EXACT_8_MIB_多字节'),oversize=sizedHTML(MAX_HTML+1,'OVER_8_MIB_多字节'),cover=sizedPNG(MAX_COVER);
+// Initial publication and a different work's update both hit exactly 8 MiB,
+// while remaining distinct content under the same-author deduplication rule.
+const exactPublication=sizedHTML(MAX_HTML,'EXACT_8_MIB_PUBLICATION_多字节');
 report.fixture={kind:fixturePath?'existing-local-game':'deterministic-test-game',filename,bytes:large.length,sha256:sha(large)};
 
 async function request(path,{method='GET',user=owner,json,form,headers={},binary=false}={}){
@@ -87,10 +90,10 @@ try{
     oldGameHash=await fetchedGame(work.versionId,large);report.preview={kind:'client draft wrapper plus real authenticated game/session fetch',bytes:Buffer.byteLength(preview),browserRenderingVerified:false};
   });
   await check('exactly 8 MiB HTML plus exactly 2 MiB PNG cover fits the publication envelope',async()=>{
-    assert.equal(exact.length,MAX_HTML);assert.equal(cover.length,MAX_COVER);
-    exactWork=ok(await request('/api/works',{method:'POST',form:publishForm(`Exact limit ${run}`,exact,{image:cover}),headers:{'Idempotency-Key':randomUUID()}}),201).work;
-    const listing=await history(exactWork.id);assert.equal(listing.versions[0].contentHash,sha(exact));assert.equal((await mine()).length,2);
-    await fetchedGame(exactWork.versionId,exact);const image=ok(await request(exactWork.coverUrl,{binary:true}));assert.equal(image.length,MAX_COVER);assert.equal(sha(image),sha(cover));report.ids.exactWork=exactWork.id;
+    assert.equal(exactPublication.length,MAX_HTML);assert.equal(exact.length,MAX_HTML);assert.notEqual(sha(exactPublication),sha(exact));assert.equal(cover.length,MAX_COVER);
+    exactWork=ok(await request('/api/works',{method:'POST',form:publishForm(`Exact limit ${run}`,exactPublication,{image:cover}),headers:{'Idempotency-Key':randomUUID()}}),201).work;
+    const listing=await history(exactWork.id);assert.equal(listing.versions[0].contentHash,sha(exactPublication));assert.equal((await mine()).length,2);
+    await fetchedGame(exactWork.versionId,exactPublication);const image=ok(await request(exactWork.coverUrl,{binary:true}));assert.equal(image.length,MAX_COVER);assert.equal(sha(image),sha(cover));report.ids.exactWork=exactWork.id;
   });
   await check('an exact-limit version updates the same work and keeps the older large game immutable',async()=>{
     updated=ok(await request(`/api/works/${work.id}/versions`,{method:'POST',form:versionForm(1,exact,{image:cover}),headers:{'Idempotency-Key':updateKey}}),201);

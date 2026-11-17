@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { randomUUID, createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { gameHTML, versions } from './fixtures/version-games.mjs';
+import { createDiscoveryReviewer } from './fixtures/discovery-review.mjs';
 
 const base = new URL(process.env.FUNTRACK_TEST_URL || 'http://127.0.0.1:8767');
 assert(['localhost', '127.0.0.1', '[::1]'].includes(base.hostname), 'Version fixtures only run on loopback.');
@@ -28,6 +29,7 @@ function ok(response, status = 200) {
   assert.equal(response.status, status, `Expected ${status}, got ${response.status}: ${JSON.stringify(response.body).slice(0, 1200)}`);
   return response.body;
 }
+const approveFixture=createDiscoveryReviewer({request,ok});
 function rejected(response, statuses, code) {
   assert(statuses.includes(response.status), `Expected ${statuses}, got ${response.status}: ${JSON.stringify(response.body).slice(0, 1200)}`);
   if (code) assert.equal(response.body.error?.code, code);
@@ -42,8 +44,8 @@ function newWorkForm(name, fixture = versions[0]) {
   form.set('file', new File([fixture.html], 'fixture.html', { type: 'text/html' }));
   form.set('cover', new File([fixture.cover], 'fixture.png', { type: 'image/png' })); return form;
 }
-async function createWork(name, user = owner, key = randomUUID()) {
-  return ok(await request('/api/works', { method: 'POST', user, form: newWorkForm(name), headers: { 'Idempotency-Key': key } }), 201).work;
+async function createWork(name, user = owner, key = randomUUID(), fixture = versions[0]) {
+  return ok(await request('/api/works', { method: 'POST', user, form: newWorkForm(name,fixture), headers: { 'Idempotency-Key': key } }), 201).work;
 }
 function updateForm(expectedRevision, { html = versions[1].html, releaseNotes = 'fixture: second version', cover, buildId } = {}) {
   const form = new FormData(); form.set('expectedRevision', String(expectedRevision)); form.set('releaseNotes', releaseNotes);
@@ -70,7 +72,7 @@ const v2Input = { html: versions[1].html, cover: versions[1].cover, releaseNotes
 
 try {
   await check('v1 starts with stable identity, ordinal and immutable resources', async () => {
-    v1 = await createWork(workName, owner, keyInitial); second = await createWork(`Second ${run}`); foreign = await createWork(`Foreign ${run}`, reader);
+    v1 = await createWork(workName, owner, keyInitial); second = await createWork(`Second ${run}`,owner,randomUUID(),{...versions[0],html:versions[0].html+`\n<!-- distinct second work ${run} -->`}); foreign = await createWork(`Foreign ${run}`, reader);
     Object.assign(report.ids, { work: v1.id, v1: v1.versionId, secondWork: second.id, foreignWork: foreign.id });
     assert.equal(v1.revision, 1); assert.equal(v1.version, 'v1'); assert(v1.updatedAt);
     const listing = await history(v1.id); assert.equal(listing.revision, 1); assert.equal(listing.currentVersionId, v1.versionId); assert.equal(listing.versions.length, 1);
@@ -122,6 +124,8 @@ try {
     assert.equal(ok(await request('/api/works?mine=1')).works.length, before);
     assert.notEqual(await game(v2.version.id, versions[1].marker), initialGame); assert.equal(await game(v1.versionId, versions[0].marker), initialGame);
     assert.equal(digest(await image(v1.coverUrl)), digest(initialImage)); assert.equal(digest(await image(latest.coverUrl)), digest(versions[1].cover));
+    assert(!ok(await request('/api/discover?q=' + encodeURIComponent(workName))).works.some(item=>item.id===v1.id),'An unreviewed version must not enter Feed.');
+    await approveFixture(v1.id,owner);
     const discovered = ok(await request('/api/discover?q=' + encodeURIComponent(workName))).works.find(item => item.id === v1.id); assert.equal(discovered.versionId, v2.version.id); assert.equal(discovered.createdAt, v1.createdAt);
   });
   await check('same publish retries freeze the original operation; changed requests conflict', async () => {

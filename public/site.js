@@ -1,4 +1,5 @@
 import { t, getLocale, setLocale } from './i18n.js';
+import {discoveryPath,discoveryState,changeVisibility,renderDiscoverySettings,renderReviewQueue,disposePublicationControls,hasPendingPublicationControl,publicationFailureMessage,publicationFailureActions} from './publication-controls.js';
 import './site.messages.js';
 import { emptyState, pageSkeleton } from './empty-state.js';
 import { syncNavigation } from './navigation.js';
@@ -22,6 +23,7 @@ const write = (key,value) => { try { sessionStorage.setItem(key,JSON.stringify(v
 const storage = {publish:'funtrack.real.publish',card:'funtrack.real.card',preview:'funtrack.real.preview',feedback:'funtrack.real.feedback',views:'funtrack.real.gallery'};
 const storageBase={...storage};let draftOwner=null,fileScope='';
 let startPending=false, analyticsPanel=null, visitRecorded=false, publishAvailability=null;
+let canReview=false,publishFailure=null,publishRelatedWorks=[];
 let me=null, authChecked=false, routeNumber=0, currentRoute='', noticeTimer, currentGallery=null, activeSession=null;
 const scrolls=new Map();
 const galleryViews=new Map(Object.entries(read(storage.views,{})));
@@ -38,7 +40,7 @@ async function api(path, options={}) {
   let response;
   try {response=await fetch(path,{credentials:'same-origin',...options,headers});} catch {throw new ApiError("连接暂时中断，请重试。",0,'NETWORK');}
   let data;try{data=await response.json();}catch{throw new ApiError("服务暂时不可用，请稍后重试。",response.status,'BAD_RESPONSE');}
-  if(!response.ok){const error=new ApiError(data.error?.message||"暂时无法完成，请重试。",response.status,data.error?.code);if(data.error?.current)error.current=data.error.current;throw error;}
+  if(!response.ok){const error=new ApiError(data.error?.message||"暂时无法完成，请重试。",response.status,data.error?.code);for(const field of ['current','existingWork','existingVersion'])if(data.error?.[field])error[field]=data.error[field];throw error;}
   return data;
 }
 function signinURL(){return authURL('sign-in','/site.html'+(location.hash||'#/'));}
@@ -65,7 +67,7 @@ function commentIcon(){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path
 
 
 function empty(title,description,action=''){const path=route().path;return emptyState({kind:path.includes('feedback')?'activity':path.startsWith('/cards')?'cards':'works',title,description,action});}
-function studio(content,tab){return `<div class="page"><div class="studio"><nav class="studio-nav" aria-label="${t("创作中心")}">${[['works',t("我的作品")],['data',t("数据")],['feedback',t("互动")]].map(([id,name])=>`<a href="#/studio/${id}" class="${tab===id?'active':''}">${name}</a>`).join('')}</nav><div class="studio-main">${content}</div></div></div>`;}
+function studio(content,tab){return `<div class="page"><div class="studio"><nav class="studio-nav" aria-label="${t("创作中心")}">${[['works',t("我的作品")],['data',t("数据")],['feedback',t("互动")]].map(([id,name])=>`<a href="#/studio/${id}" class="${tab===id?'active':''}">${name}</a>`).join('')}${canReview?`<details class="studio-manage" ${tab==='review'?'open':''}><summary>${t('管理')}</summary><a href="#/studio/review" class="${tab==='review'?'active':''}">${t('收录管理')}</a></details>`:''}</nav><div class="studio-main">${content}</div></div></div>`;}
 function cardsPage(content,tab='mine'){return `<div class="page cards-page"><nav class="cards-nav" aria-label="${t("名片")}"><a href="#/cards" class="${tab==='browse'?'active':''}">${t("浏览名片")}</a><a href="#/cards/me" class="${tab==='mine'?'active':''}">${t("我的名片")}</a></nav>${content}</div>`;}
 function cardProfile(card){return {signature:typeof card.signature==='string'?card.signature:'',headline:typeof card.headline==='string'?card.headline:'',website:safeExternal(card.website),backStyle:['ink','ivory','cobalt'].includes(card.backStyle)?card.backStyle:'ink'};}
 function pageError(error){if(error.status===401){me=null;identity();const standalone=getAuthConfig().provider==='clerk';return `<div class="page narrow">${empty(t("登录后继续"),t(standalone?"使用邮箱或已连接账号继续。":"使用 ChatGPT 账号访问作品和创作中心。"),signinLink(t(standalone?"登录":"使用 ChatGPT 登录")))}</div>`;}return `<div class="page narrow"><section class="error-state"><h2>${t("暂时没能加载")}</h2><p>${esc(t(error.message))}</p><button class="button" data-action="reload">${t("重试")}</button></section></div>`;}
@@ -77,9 +79,10 @@ function contentKey(){return JSON.stringify({ids:cardDraft.ids,template:cardDraf
 function invalidatePreview(){cardError='';cardKey=uid();saveCardDraft();}
 async function readMine(){
   const works=[];let cursor=null;
-  do{const params=new URLSearchParams({author:me.id,limit:'48'});if(cursor)params.set('cursor',cursor);const page=await api('/api/discover?'+params);works.push(...page.works);cursor=page.nextCursor;}while(cursor);
+  do{const params=new URLSearchParams({mine:'1',limit:'48'});if(cursor)params.set('cursor',cursor);const page=await api('/api/works?'+params);works.push(...page.works);cursor=page.nextCursor;}while(cursor);
   return works;
 }
+
 async function activateDrafts(user){
   if(draftOwner===user.id)return;
   const legacyOwner=read('funtrack.real.owner',null),canMigrate=(!legacyOwner||legacyOwner===user.id)&&!read('funtrack.real.migrated:'+user.id,false);
@@ -93,12 +96,12 @@ async function activateDrafts(user){
   if(canMigrate){if(!publishFile){publishFile=await fileStore('get','game',null,true);if(publishFile)await fileStore('put','game',publishFile);}if(!coverFile){coverFile=await fileStore('get','cover',null,true);if(coverFile)await fileStore('put','cover',coverFile);}}
   refreshCoverPreview();savePublish();saveCardDraft();saveFeedback();write(storage.preview,preview);write(storage.views,Object.fromEntries(galleryViews));if(!legacyOwner)write('funtrack.real.owner',user.id);write('funtrack.real.migrated:'+user.id,true);
 }
-async function loadMe(){try{me=(await api('/api/me')).user;}catch(e){if(e.status!==401)throw e;me=null;}finally{identity();}authChecked=true;if(me)await activateDrafts(me);}
+async function loadMe(){try{const data=await api('/api/me');me=data.user;canReview=data.canReview===true;}catch(e){if(e.status!==401)throw e;me=null;canReview=false;}finally{identity();}authChecked=true;if(me)await activateDrafts(me);}
 
 function applyHTML(html,number){if(number!==routeNumber)return false;main.innerHTML=html;syncNavigation();const key=route().raw;requestAnimationFrame(()=>{if(number===routeNumber)window.scrollTo(0,scrolls.get(key)||0);});return true;}
 async function renderRoute(options={}){
   if(!options.localeOnly)visitRecorded=false;
-  const r=route(),number=++routeNumber;stopBuildPolling();publishAvailability?.dispose();publishAvailability=null;disposeVersioning();disposeWorkEdit();analyticsPanel?.dispose();analyticsPanel=null;
+  const r=route(),number=++routeNumber;stopBuildPolling();publishAvailability?.dispose();publishAvailability=null;disposeVersioning();disposeWorkEdit();disposePublicationControls();analyticsPanel?.dispose();analyticsPanel=null;
   if(currentRoute&&currentRoute!==r.raw)scrolls.set(currentRoute,window.scrollY);
   endSession('exit');currentGallery=null;currentRoute=r.raw;
   $$('.site-header nav a').forEach(a=>a.classList.toggle('active',a.dataset.nav===(r.path.startsWith('/cards')||r.path.startsWith('/card/')||r.path.startsWith('/author')?'cards':r.path.startsWith('/studio')||r.path==='/publish'?'studio':'feed')));
@@ -111,6 +114,8 @@ async function renderRoute(options={}){
     else if(r.path.startsWith('/work/'))await renderWork(r,number,!visitRecorded,options.localeOnly!==true);
     else if(r.path==='/publish')renderPublish(number);
     else if(r.path.startsWith('/published/'))await renderPublished(r,number);
+    else if(/^\/studio\/works\/[^/]+\/discovery$/.test(r.path))await renderDiscoverySettings(r,publicationHelpers(number));
+    else if(r.path==='/studio/review')await renderReviewQueue(r,publicationHelpers(number));
     else if(/^\/studio\/works\/[^/]+\/edit$/.test(r.path))await renderWorkEdit(r,{api,esc,owner:me.id,fileStore,signinURL,notify,go,isCurrent:()=>number===routeNumber,render:html=>applyHTML(html,number),onChanged:()=>clearDiscovery()});
     else if(/^\/studio\/works\/[^/]+\/(update|versions)(\/[^/]+)?$/.test(r.path))await renderVersioning(r,{api,esc,owner:me.id,fileStore,signinURL,notify,go,workImage,startGame,isPlaying:()=>Boolean(activeSession),isCurrent:()=>number===routeNumber,render:html=>applyHTML(html,number),onChanged:()=>clearDiscovery()});
     else if(r.path==='/studio'||r.path==='/studio/works')await renderMyWorks(number);
@@ -154,7 +159,12 @@ async function renderWork(r,number,countView=true,autoPlay=true){
   if(r.params.get('discussion')==='1')requestAnimationFrame(()=>{if(number===routeNumber)$('#discussion')?.scrollIntoView({block:'start'});});
 }
 
-async function renderMyWorks(number){const works=await readMine();applyHTML(studio(`${head(t("我的作品"),works.length?`${works.length} ${t("件已发布作品")}`:'',works.length?`<a class="button primary" href="#/publish">${t("＋ 发布作品")}</a>`:'')}${works.length?works.map(w=>`<article class="work-row">${cover(w,workHref(w),false)}<div><a href="${esc(workHref(w))}"><h3>${esc(w.name)}</h3></a><p>${esc(w.desc)}</p><span class="tiny muted">${esc(w.version)} · ${w.source==='url'?t("外链"):'HTML'} · ${date(w.createdAt)}</span></div><div class="row-actions"><details class="work-row-more"><summary>${t("更多")}</summary><a href="#/studio/works/${encodeURIComponent(w.id)}/edit">${t("编辑作品信息")}</a>${w.source==='html'?`<a href="#/studio/works/${encodeURIComponent(w.id)}/update">${t("更新版本")}</a><a href="#/studio/works/${encodeURIComponent(w.id)}/versions">${t("版本历史")}</a>`:''}<a href="#/studio/data?work=${encodeURIComponent(w.id)}">${t("数据")}</a><a href="#/studio/feedback?work=${encodeURIComponent(w.id)}">${t("互动")}</a><a href="${esc(workHref(w))}">${t("打开作品")}</a></details></div></article>`).join(''):empty(t("发布你的第一件作品"),t("上传一个 HTML 小游戏，或放入已经部署好的作品链接。"),`<a class="button primary" href="#/publish">${t("发布作品")}</a>`)}`,'works'),number);}
+function publicationHelpers(number){return {api,esc,owner:me.id,canReview,studio,notify,go,isCurrent:()=>number===routeNumber,render:html=>applyHTML(html,number),onChanged:()=>clearDiscovery(),reload:()=>renderRoute()};}
+async function renderMyWorks(number){
+  const works=await readMine();
+  if(!applyHTML(studio(`${head(t("我的作品"),works.length?`${works.length} ${t("件已发布作品")}`:'',works.length?`<a class="button primary" href="#/publish">${t("＋ 发布作品")}</a>`:'')}${works.length?works.map(w=>{const d=discoveryState(w);return `<article class="work-row">${cover(w,workHref(w),false)}<div><a href="${esc(workHref(w))}"><h3>${esc(w.name)}</h3></a><p>${esc(w.desc)}</p><span class="tiny muted">${esc(w.version)} · ${w.source==='url'?t("外链"):'HTML'} · ${date(w.createdAt)}</span><span class="discovery-status work-discovery-status">${esc(t(d.label))}</span></div><div class="row-actions"><details class="work-row-more"><summary>${t("更多")}</summary><a href="#/studio/works/${encodeURIComponent(w.id)}/edit">${t("编辑作品信息")}</a>${w.source==='html'?`<a href="#/studio/works/${encodeURIComponent(w.id)}/update">${t("更新版本")}</a><a href="#/studio/works/${encodeURIComponent(w.id)}/versions">${t("版本历史")}</a>`:''}<a href="#${discoveryPath(w.id)}">${t(w.discovery?.reviewStatus==='unsubmitted'?'申请进入 Feed':'收录与展示')}</a>${d.canHide?`<button type="button" data-discovery-visibility="hide" data-work-id="${esc(w.id)}">${t('从 Feed 隐藏')}</button>`:d.canRestore?`<button type="button" data-discovery-visibility="restore" data-work-id="${esc(w.id)}">${t('恢复到 Feed')}</button>`:''}<a href="#/studio/data?work=${encodeURIComponent(w.id)}">${t("数据")}</a><a href="#/studio/feedback?work=${encodeURIComponent(w.id)}">${t("互动")}</a><a href="${esc(workHref(w))}">${t("打开作品")}</a></details></div></article>`;}).join(''):empty(t("发布你的第一件作品"),t("上传一个 HTML 小游戏，或放入已经部署好的作品链接。"),`<a class="button primary" href="#/publish">${t("发布作品")}</a>`)}`,'works'),number))return;
+  $$('[data-discovery-visibility]').forEach(button=>button.onclick=()=>{const work=works.find(w=>w.id===button.dataset.workId);if(work)changeVisibility(work,button.dataset.discoveryVisibility,publicationHelpers(number));});
+}
 async function renderData(r,number){
   const works=await readMine();
   if(!applyHTML(studio('<div id="analytics-panel"></div>','data'),number))return;
@@ -222,6 +232,8 @@ function refreshPublishState(){
   $('#game-file-name').textContent=publishFile?.name||'';
   const submit=$('[type="submit"]',form);submit.disabled=publishPending||githubPending||(d.source==='github'&&!ready);submit.classList.toggle('primary',d.source!=='github'||ready);submit.textContent=publishPending?t("正在发布…"):t("发布作品");
   $('#publish-error').textContent=t(publishError||(d.source==='github'&&build?.status==='failed'?importErrorText(build):''));
+  const related=$('#publish-related');if(related){let repository='';try{const u=new URL(d.githubURL);if(u.hostname==='github.com')repository=u.pathname.replace(/^\/|\/$/g,'').replace(/\.git$/i,'').toLowerCase();}catch{}const matches=d.source==='github'&&repository?publishRelatedWorks.filter(w=>w.source==='html'&&w.build?.repository?.toLowerCase()===repository):[];related.hidden=!matches.length;related.innerHTML=matches.length?`<summary>${t('已有同源作品')}</summary><div>${matches.slice(0,5).map(w=>`<a class="text-link" href="#/studio/works/${encodeURIComponent(w.id)}/update">${esc(t('更新 {name}',{name:w.name}))}</a>`).join('')}</div>`:'';}
+  const actions=$('#publish-recovery');if(actions){actions.innerHTML=publishFailure&&publishError===publicationFailureMessage(publishFailure)?publicationFailureActions(publishFailure,{esc}):'';actions.hidden=!actions.innerHTML;}
 }
 async function pollGithubBuild(){
   clearTimeout(buildPollTimer);const build=matchingBuild();if(route().path!=='/publish'||publishDraft.source!=='github'||!activeBuild(build))return;
@@ -252,9 +264,10 @@ function renderPublish(number){
       <div class="field" id="github-field"><label for="github-url">${t("GitHub 链接")}</label><div class="github-input"><input id="github-url" name="githubURL" type="url" placeholder="${t("https://github.com/作者/仓库")}" value="${esc(d.githubURL||'')}"><button id="github-read" class="button" type="button">${t("导入并构建")}</button></div><p id="github-status" class="file-selected" role="status"></p><section id="github-build-panel" class="build-panel" hidden><progress id="build-progress" max="5" aria-label="${t("构建进度")}"></progress><div class="build-actions"><a id="build-preview" class="button small" target="_blank" rel="noopener">${t("预览试玩 ↗")}</a><button id="build-cancel" class="button quiet small" type="button">${t("取消构建")}</button></div><details class="build-details"><summary>${t("构建记录")}</summary><p id="build-source"></p><pre id="build-logs"></pre></details><p id="build-poll-error" class="error" role="status"></p></section></div>
       <div class="field" id="url-field"><label for="publish-url">${t("作品链接")}</label><input id="publish-url" name="url" type="url" placeholder="https://" value="${esc(d.url)}"><small>${t("已部署的网站（含 GitHub Pages），将在新窗口打开。")}</small></div>
       <div class="field"><label for="cover-file">${t("封面")}</label><div class="cover-picker">${coverPreview?`<img id="cover-preview" src="${esc(coverPreview)}" alt="${t("所选封面")}">`:`<img id="cover-preview" alt="${t("所选封面")}" hidden>`}<input id="cover-file" type="file" accept="image/png,image/jpeg,image/webp"></div><small>${t("PNG、JPG 或 WebP，最大 2 MB。")}</small></div>
-      <p id="publish-error" class="error" role="alert"></p><div class="form-footer"><button class="button primary" type="submit">${t("发布作品")}</button><a class="button quiet" href="#/studio/works">${t("保存草稿并返回")}</a></div>
+      <p id="publish-error" class="error" role="alert"></p><div id="publish-recovery" class="publication-recovery" hidden></div><details id="publish-related" class="sample-links" hidden></details><div class="form-footer"><button class="button primary" type="submit">${t("发布作品")}</button><a class="button quiet" href="#/studio/works">${t("保存草稿并返回")}</a></div>
       <details class="sample-links"><summary>${t("示例文件")}</summary><div><a class="text-link" href="/examples/more.html" target="_blank" rel="noopener">${t("浏览 9 个可玩示例 ↗")}</a></div></details>
     </form></div>`,number))return;
+  publishRelatedWorks=[];readMine().then(works=>{if(number===routeNumber){publishRelatedWorks=works;refreshPublishState();}}).catch(()=>{});
   const form=$('#publish-form');publishAvailability=createBuildAvailability(api,refreshPublishState);refreshPublishState();publishAvailability.refresh();
   form.addEventListener('input',event=>{
     if(!['name','desc','url','source','githubURL'].includes(event.target.name))return;
@@ -303,7 +316,7 @@ async function importGithub(){
 }
 async function submitPublish(form){
   if(publishPending||githubPending)return;
-  const d=publishDraft;publishError='';
+  const d=publishDraft;publishError='';publishFailure=null;
   if(d.source==='html'&&!publishFile){publishError="请先选择 HTML 游戏文件。";refreshPublishState();return;}
   if(d.source==='html'&&htmlFileError(publishFile)){publishError=htmlFileError(publishFile);refreshPublishState();return;}
   if(d.source==='github'&&!githubReady()){publishError="请先完成当前 GitHub 项目的导入。";refreshPublishState();return;}
@@ -314,9 +327,12 @@ async function submitPublish(form){
   publishPending=true;refreshPublishState();
   try{
     const {work}=await api('/api/works',{method:'POST',headers:{'Idempotency-Key':d.key},body});stopBuildPolling();publishDraft={name:'',desc:'',source:'html',url:'',key:uid()};publishFile=null;coverFile=null;refreshCoverPreview();savePublish();await Promise.all([fileStore('delete','game'),fileStore('delete','cover')]);publishPending=false;clearDiscovery();if(route().path==='/publish')go('/published/'+encodeURIComponent(work.id));else notify(t("作品已发布。"));
-  }catch(error){publishPending=false;publishError=importErrorText(error);refreshPublishState();if(route().path==='/publish'&&error.status===401)$('#publish-error').innerHTML=esc(t(error.message))+` <a class="text-link" target="_top" href="${esc(signinURL())}">${t("重新登录")}</a>`;}
+  }catch(error){publishPending=false;publishFailure=error;publishError=['DUPLICATE_WORK','VERSION_UNCHANGED','VERSION_ALREADY_EXISTS'].includes(error.code)?publicationFailureMessage(error):importErrorText(error);refreshPublishState();if(route().path==='/publish'&&error.status===401)$('#publish-error').innerHTML=esc(t(error.message))+` <a class="text-link" target="_top" href="${esc(signinURL())}">${t("重新登录")}</a>`;}
 }
-async function renderPublished(r,number){const {work}=await api('/api/works/'+encodeURIComponent(r.path.split('/')[2]));applyHTML(`<div class="page narrow">${head(t("作品已发布"),work.name)}<div class="work-grid" style="max-width:560px;grid-template-columns:1fr">${workTile(work)}</div><div class="form-footer"><a class="button primary" href="${esc(workHref(work,'/studio/works'))}">${t("试玩作品")}</a><a class="button" href="#/cards/me">${t("放进名片")}</a><a class="button quiet" href="#/studio/works">${t("我的作品")}</a></div></div>`,number);}
+async function renderPublished(r,number){
+  const {work}=await api('/api/works/'+encodeURIComponent(r.path.split('/')[2]));
+  applyHTML(`<div class="page narrow">${head(t("作品已发布"),work.name)}<div class="work-grid" style="max-width:560px;grid-template-columns:1fr">${workTile(work)}</div><p class="discovery-scope">${t('作品链接已可分享，收录通过后会进入 Feed。')}</p><div class="form-footer"><a class="button primary" href="${esc(workHref(work,'/studio/works'))}">${t("试玩作品")}</a><details class="version-secondary"><summary>${t('更多')}</summary><a class="button quiet" href="#${discoveryPath(work.id)}">${t('申请进入 Feed')}</a><a class="button quiet" href="#/cards/me">${t("放进名片")}</a><a class="button quiet" href="#/studio/works">${t("我的作品")}</a></details></div></div>`,number);
+}
 const steps = current => `<div class="steps" aria-label="${t("制作步骤")}">${[t("选择作品"),t("选择模板"),t("预览与保存")].map((name,index)=>`<span class="${index===current?'active':''}" ${index===current?'aria-current="step"':''}><b>${index+1}</b>${name}</span>`).join('')}</div>`;
 async function renderBuilder(r,number){
   const works=await readMine();const ids=new Set(works.map(w=>w.id));cardDraft.ids=cardDraft.ids.filter(id=>ids.has(id));saveCardDraft();
@@ -533,7 +549,7 @@ function renderChrome(){
 }
 $('#locale-toggle').addEventListener('click',()=>{
   if(activeSession&&!activeSession.ended){notify(t('结束试玩后可切换语言'));return;}
-  if(publishPending||cardPending||startPending||hasPendingVersionMutation()||hasPendingWorkEdit()){notify(t('正在提交，请稍后切换语言'));return;}
+  if(publishPending||cardPending||startPending||hasPendingVersionMutation()||hasPendingWorkEdit()||hasPendingPublicationControl()){notify(t('正在提交，请稍后切换语言'));return;}
   setLocale(getLocale()==='en'?'zh-CN':'en');
 });
 window.addEventListener('funtrack:localechange',()=>{

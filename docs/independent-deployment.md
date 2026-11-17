@@ -75,6 +75,8 @@ node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js de
 
 ## 准备真实生产配置
 
+Feed 收录需配置服务端 `vars.FUNTRACK_REVIEWER_IDS`（逗号分隔的可信用户 ID，例如对应环境中的 `clerk:user_…`）。未配置时没有审核管理员。此配置只授予 Feed 审核能力，不改变作品归属。2026-11-16 staging 已配置当前作者为审核管理员；新发布作品默认不进 Feed，需作者申请、管理员试玩通过。迁移和验收见 [收录与展示控制](./publication-controls-2026-11-16.md)。
+
 1. 确认独立 Cloudflare 账户、受控域名及域名所在 Zone。先确定唯一站点 origin，例如自己的 `https://play.<真实域名>`；不能有路径或末尾斜线。
 2. 建立 Clerk 生产实例，在 Clerk 控制台完成其域名/DNS和应用设置，将登录与登出后返回地址设为同一站点。测试实例不等于生产实例。
 3. 配置就绪后使用独立 production D1、R2 和 Worker。production 与 staging 均不得借用 Sites 资源，也不能互用各自的数据库或 bucket。当前已单独创建 production D1，尚不代表正式环境已可发布。

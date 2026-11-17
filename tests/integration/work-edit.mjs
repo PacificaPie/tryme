@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { versions } from './fixtures/version-games.mjs';
+import { createDiscoveryReviewer } from './fixtures/discovery-review.mjs';
 
 const base = new URL(process.env.FUNTRACK_TEST_URL || 'http://127.0.0.1:8767');
 assert(['127.0.0.1', 'localhost', '[::1]'].includes(base.hostname), 'Work edit fixtures only run on loopback.');
@@ -36,6 +37,7 @@ function ok(response, status = 200) {
   assert.equal(response.status, status, `Expected ${status}, got ${response.status}: ${JSON.stringify(response.body).slice(0, 1600)}`);
   return response.body;
 }
+const approveFixture=createDiscoveryReviewer({request,ok});
 function rejected(response, statuses, code) {
   assert(statuses.includes(response.status), `Expected ${statuses}, got ${response.status}: ${JSON.stringify(response.body).slice(0, 1600)}`);
   if (code) assert.equal(response.body.error?.code, code); return response.body;
@@ -44,9 +46,9 @@ async function check(name, fn) {
   try { await fn(); report.checks.push(name); console.log(`PASS ${name}`); }
   catch (error) { report.failure = { check: name, message: error.message }; throw error; }
 }
-function publicationForm(name, { desc = 'Original work description.', source = 'html' } = {}) {
+function publicationForm(name, { desc = 'Original work description.', source = 'html', html=versions[0].html } = {}) {
   const form = new FormData(); form.set('name', name); form.set('desc', desc); form.set('source', source);
-  if (source === 'html') form.set('file', new File([versions[0].html], 'game.html', { type: 'text/html' }));
+  if (source === 'html') form.set('file', new File([html], 'game.html', { type: 'text/html' }));
   else form.set('url', 'https://example.com/work-edit-fixture');
   form.set('cover', new File([versions[0].cover], 'cover.png', { type: 'image/png' })); return form;
 }
@@ -149,6 +151,8 @@ try {
     Object.assign(report.ids, { textMetadata: textEdit.work.metadataId, coverMetadata: latest.metadataId, editedCover: latest.coverUrl });
   });
   await check('detail, creator listing and discover expose the edited metadata without adding a work', async () => {
+    assert.equal(ok(await request('/api/discover?' + new URLSearchParams({ q: textInput.name, author: owner }))).works.length,0,'Unreviewed metadata must not enter Feed.');
+    latest=await approveFixture(original.id,owner);
     const mine = ok(await request('/api/works?mine=1')).works; assert.equal(mine.length, 2);
     assert.deepEqual(publicMetadata(mine.find(work => work.id === original.id)), publicMetadata(latest));
     const discovered = ok(await request('/api/discover?' + new URLSearchParams({ q: textInput.name, author: owner }))).works;
@@ -272,8 +276,9 @@ try {
     assert.equal(digest(await image(saved.coverUrl)), digest(versions[2].cover)); assert.equal(digest(await image(external.coverUrl)), digest(versions[0].cover));
   });
   await check('a simultaneous metadata edit and game upload share one CAS boundary and cannot overwrite each other', async () => {
-    const target = await createWork(`Edit versus release ${run}`), input = { name: `Edit won ${run}`, desc: 'Metadata wins only if the revision still matches.', cover: versions[2].cover };
-    const [edited, published] = await Promise.all([edit(target.id, target.revision, input), publishVersion(target.id, target.revision, versions[1], versions[1].cover)]);
+    const target = await createWork(`Edit versus release ${run}`, {html:versions[0].html+`\n<!-- distinct edit race ${run} -->`}), input = { name: `Edit won ${run}`, desc: 'Metadata wins only if the revision still matches.', cover: versions[2].cover };
+    const raceVersion={...versions[1],html:versions[1].html+`\n<!-- distinct release race ${run} -->`};
+    const [edited, published] = await Promise.all([edit(target.id, target.revision, input), publishVersion(target.id, target.revision, raceVersion, versions[1].cover)]);
     assert.equal([edited, published].filter(result => result.status === 200 || result.status === 201).length, 1, JSON.stringify([edited.body, published.body]));
     assert.equal([edited, published].filter(result => result.status === 409).length, 1, JSON.stringify([edited.body, published.body]));
     const saved = await current(target.id), entries = versionContent((await history(target.id)).versions); assert.equal(saved.revision, target.revision + 1);

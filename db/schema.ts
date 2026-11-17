@@ -34,6 +34,21 @@ export const versions = sqliteTable('ft_work_versions', {
   ordinal: integer('ordinal').notNull().default(1), releaseNotes: text('release_notes').notNull().default(''),
   contentHash: text('content_hash'), createdBy: text('created_by'),
 }, t => [index('ft_versions_work').on(t.workId),uniqueIndex('ft_versions_work_ordinal').on(t.workId,t.ordinal)]);
+// Identity claims deduplicate new uploads without merging legacy works.
+export const workFingerprints = sqliteTable('ft_work_fingerprints', {
+  ownerId: text('owner_id').notNull(), kind: text('kind').notNull(), fingerprint: text('fingerprint').notNull(),
+  workId: text('work_id').notNull().references(()=>works.id), versionId: text('version_id').notNull().references(()=>versions.id),
+  createdAt: text('created_at').notNull(),
+}, t=>[primaryKey({columns:[t.ownerId,t.kind,t.fingerprint]}),index('ft_work_fingerprints_work').on(t.workId)]);
+// Discovery eligibility is independent of direct links, immutable cards and
+// ownership. Only an approved current version with listed visibility is fed.
+export const workDiscovery = sqliteTable('ft_work_discovery', {
+  workId: text('work_id').primaryKey().references(()=>works.id), visibility: text('visibility').notNull().default('unlisted'),
+  reviewStatus: text('review_status').notNull().default('unsubmitted'), kind: text('kind').notNull().default('unspecified'),
+  playDescription: text('play_description').notNull().default(''), submittedVersionId: text('submitted_version_id').references(()=>versions.id),
+  approvedVersionId: text('approved_version_id').references(()=>versions.id), reviewNote: text('review_note').notNull().default(''),
+  reviewedBy: text('reviewed_by'), revision: integer('revision').notNull().default(1), updatedAt: text('updated_at').notNull(),
+}, t=>[index('ft_work_discovery_review').on(t.reviewStatus,t.updatedAt),index('ft_work_discovery_visibility').on(t.visibility,t.reviewStatus)]);
 export const versionOperations = sqliteTable('ft_version_operations', {
   id: text('id').primaryKey(), ownerId: text('owner_id').notNull(), workId: text('work_id').notNull().references(()=>works.id),
   action: text('action').notNull(), idempotencyKey: text('idempotency_key').notNull(), requestHash: text('request_hash').notNull(),

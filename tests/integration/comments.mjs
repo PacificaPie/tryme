@@ -12,7 +12,7 @@ async function request(path,{method='GET',user=owner,json,form,headers={}}={}){
 }
 function ok(response,status=200){assert.equal(response.status,status,JSON.stringify(response.body).slice(0,500));return response.body;}
 async function check(name,fn){await fn();report.checks.push(name);console.log(`PASS ${name}`);}
-async function createWork(name,user=owner){const form=new FormData();form.set('name',name);form.set('desc','Local comment boundary verification.');form.set('source','url');form.set('url','https://example.com/game');return ok(await request('/api/works',{method:'POST',user,form,headers:{'Idempotency-Key':randomUUID()}}),201).work;}
+async function createWork(name,user=owner){const form=new FormData();form.set('name',name);form.set('desc','Local comment boundary verification.');form.set('source','url');form.set('url','https://example.com/game/'+randomUUID());return ok(await request('/api/works',{method:'POST',user,form,headers:{'Idempotency-Key':randomUUID()}}),201).work;}
 const work=await createWork('Comment test'),secondWork=await createWork('Other work'),readerWork=await createWork('Reader owned work',reader);
 const path=`/api/works/${work.id}/comments`;
 const post=(body,{user=reader,parentId=null,key=randomUUID(),workId=work.id,extra={}}={})=>request(`/api/works/${workId}/comments`,{method:'POST',user,json:{body,parentId,...extra},headers:{'Idempotency-Key':key}});

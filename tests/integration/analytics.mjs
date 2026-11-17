@@ -32,7 +32,7 @@ const analytics = async (params = {}, user = owner) => ok(await request('/api/an
 const post = (path, json, user = owner, headers = {}) => request(path, { method: 'POST', json, user, headers });
 async function createWork(name, source = 'html', user = owner) {
   const form = new FormData(); form.set('name', name); form.set('desc', 'Local analytics contract verification.'); form.set('source', source);
-  if (source === 'html') form.set('file', new File([versions[0].html], 'fixture.html', { type: 'text/html' })); else form.set('url', 'https://example.com/analytics-fixture');
+  if (source === 'html') form.set('file', new File([versions[0].html+`\n<!-- distinct analytics fixture ${name} -->`], 'fixture.html', { type: 'text/html' })); else form.set('url', 'https://example.com/analytics-fixture');
   return ok(await request('/api/works', { method: 'POST', user, form, headers: { 'Idempotency-Key': randomUUID() } }), 201).work;
 }
 function expectMetrics(actual, expected, label = 'metrics') {
