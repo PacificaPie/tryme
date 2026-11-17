@@ -4,6 +4,8 @@ import { emptyState, pageSkeleton } from './empty-state.js';
 import { syncNavigation } from './navigation.js';
 import { mountDiscussion } from './discussion.js';
 import { createPlayClock } from './play-clock.js';
+import { mountGameDisplay } from './game-display.js';
+import { authHeaders, authURL, getAuthConfig } from './auth-client.js';
 import { mountAnalytics } from './analytics.js';
 import { renderVersioning, disposeVersioning, hasPendingVersionMutation } from './versioning.js';
 import { renderWorkEdit, disposeWorkEdit, hasPendingWorkEdit } from './work-edit.js';
@@ -30,7 +32,7 @@ let sessionQueues=new Set(),actionQueue=new Map();
 const socialState=new Map(),likePending=new Set(),likeRetry=new Map();
 class ApiError extends Error { constructor(message,status,code){super(message);this.status=status;this.code=code;} }
 async function api(path, options={}) {
-  const headers={...(options.headers||{})};
+  const headers={...await authHeaders(),...(options.headers||{})};
   if(options.method&&options.method!=='GET')headers['X-Funtrack-CSRF']='1';
   if(options.body && !(options.body instanceof FormData)) {headers['Content-Type']='application/json';options={...options,body:JSON.stringify(options.body)};}
   let response;
@@ -39,9 +41,9 @@ async function api(path, options={}) {
   if(!response.ok){const error=new ApiError(data.error?.message||"暂时无法完成，请重试。",response.status,data.error?.code);if(data.error?.current)error.current=data.error.current;throw error;}
   return data;
 }
-function signinURL(){return '/signin-with-chatgpt?return_to='+encodeURIComponent('/site.html'+(location.hash||'#/'));}
+function signinURL(){return authURL('sign-in','/site.html'+(location.hash||'#/'));}
 function signinLink(label=t("登录")){return `<a class="button primary" href="${esc(signinURL())}" target="_top">${esc(label)}</a>`;}
-function identity(){ $('#identity').innerHTML=me?`<a href="#/studio/works" class="avatar" aria-label="${t("打开创作中心")}">${esc([...me.name][0]||t("我"))}</a><span class="identity-name">${esc(me.name)}</span>`:`<a class="button quiet" href="${esc(signinURL())}" target="_top">${t("登录")}</a>`; }
+function identity(){ $('#identity').innerHTML=me?`<details class="account-menu"><summary class="avatar" aria-label="${t("账号菜单")}">${esc([...me.name][0]||t("我"))}</summary><div class="account-options"><span>${esc(me.name)}</span><a href="#/studio/works">${t("打开创作中心")}</a><a href="${esc(authURL('sign-out','/site.html#/feed'))}" target="_top">${t("退出登录")}</a></div></details><span class="identity-name">${esc(me.name)}</span>`:getAuthConfig().provider==='unknown'?'':`<a class="button quiet" href="${esc(signinURL())}" target="_top">${t("登录")}</a>`; }
 function notify(message){message=t(message);clearTimeout(noticeTimer);$('#notice').textContent=message;$('#notice').hidden=false;noticeTimer=setTimeout(()=>$('#notice').hidden=true,3500);}
 function urlFor(path){return '#'+path;}
 function go(path){if(location.hash==='#'+path)renderRoute();else location.hash=path;}
@@ -66,7 +68,7 @@ function empty(title,description,action=''){const path=route().path;return empty
 function studio(content,tab){return `<div class="page"><div class="studio"><nav class="studio-nav" aria-label="${t("创作中心")}">${[['works',t("我的作品")],['data',t("数据")],['feedback',t("互动")]].map(([id,name])=>`<a href="#/studio/${id}" class="${tab===id?'active':''}">${name}</a>`).join('')}</nav><div class="studio-main">${content}</div></div></div>`;}
 function cardsPage(content,tab='mine'){return `<div class="page cards-page"><nav class="cards-nav" aria-label="${t("名片")}"><a href="#/cards" class="${tab==='browse'?'active':''}">${t("浏览名片")}</a><a href="#/cards/me" class="${tab==='mine'?'active':''}">${t("我的名片")}</a></nav>${content}</div>`;}
 function cardProfile(card){return {signature:typeof card.signature==='string'?card.signature:'',headline:typeof card.headline==='string'?card.headline:'',website:safeExternal(card.website),backStyle:['ink','ivory','cobalt'].includes(card.backStyle)?card.backStyle:'ink'};}
-function pageError(error){if(error.status===401){me=null;identity();return `<div class="page narrow">${empty(t("登录后继续"),t("使用 ChatGPT 账号访问作品和创作中心。"),signinLink(t("使用 ChatGPT 登录")))}</div>`;}return `<div class="page narrow"><section class="error-state"><h2>${t("暂时没能加载")}</h2><p>${esc(t(error.message))}</p><button class="button" data-action="reload">${t("重试")}</button></section></div>`;}
+function pageError(error){if(error.status===401){me=null;identity();const standalone=getAuthConfig().provider==='clerk';return `<div class="page narrow">${empty(t("登录后继续"),t(standalone?"使用邮箱或已连接账号继续。":"使用 ChatGPT 账号访问作品和创作中心。"),signinLink(t(standalone?"登录":"使用 ChatGPT 登录")))}</div>`;}return `<div class="page narrow"><section class="error-state"><h2>${t("暂时没能加载")}</h2><p>${esc(t(error.message))}</p><button class="button" data-action="reload">${t("重试")}</button></section></div>`;}
 function head(title,subtitle='',action=''){return `<div class="page-head"><div><h1>${esc(title)}</h1>${subtitle?`<p>${esc(subtitle)}</p>`:''}</div>${action}</div>`;}
 function saveCardDraft(){write(storage.card,cardDraft);}
 function savePublish(){write(storage.publish,publishDraft);}
@@ -91,7 +93,7 @@ async function activateDrafts(user){
   if(canMigrate){if(!publishFile){publishFile=await fileStore('get','game',null,true);if(publishFile)await fileStore('put','game',publishFile);}if(!coverFile){coverFile=await fileStore('get','cover',null,true);if(coverFile)await fileStore('put','cover',coverFile);}}
   refreshCoverPreview();savePublish();saveCardDraft();saveFeedback();write(storage.preview,preview);write(storage.views,Object.fromEntries(galleryViews));if(!legacyOwner)write('funtrack.real.owner',user.id);write('funtrack.real.migrated:'+user.id,true);
 }
-async function loadMe(){try{me=(await api('/api/me')).user;}catch(e){if(e.status!==401)throw e;me=null;}authChecked=true;if(me)await activateDrafts(me);identity();}
+async function loadMe(){try{me=(await api('/api/me')).user;}catch(e){if(e.status!==401)throw e;me=null;}finally{identity();}authChecked=true;if(me)await activateDrafts(me);}
 
 function applyHTML(html,number){if(number!==routeNumber)return false;main.innerHTML=html;syncNavigation();const key=route().raw;requestAnimationFrame(()=>{if(number===routeNumber)window.scrollTo(0,scrolls.get(key)||0);});return true;}
 async function renderRoute(options={}){
@@ -433,6 +435,7 @@ async function flushSession(queue){
 }
 function endSession(reason='exit'){
   const session=activeSession;if(!session)return;activeSession=null;
+  session.display?.dispose();
   if(!session.ended){session.ended=true;enqueueSession(session.queue,'session_end',session.clock.finish());}session.queue.closed=true;if(!session.queue.pending.length&&!session.queue.sending)sessionQueues.delete(session.queue);
 }
 async function startGame(work){
@@ -444,8 +447,9 @@ async function startGame(work){
     const gameUrl=new URL(session.gameUrl,location.origin);if(gameUrl.origin!==location.origin)throw new Error(t("作品地址不正确，请重试。"));
     const bridge=uid();gameUrl.hash='bridge='+encodeURIComponent(bridge);
     const area=$('#play-area'),coverHTML=previousCover||area.innerHTML;
-    area.innerHTML=`<section class="game-shell"><div class="game-tools"><span>${esc(work.name)} · ${esc(work.version)}</span><button class="button quiet small" id="exit-game">${t("退出试玩")}</button></div><iframe id="game-frame" class="game-frame" sandbox="allow-scripts" referrerpolicy="no-referrer" title="${esc(work.name)}"></iframe><div id="game-result" class="game-result" hidden></div></section>`;
+    area.innerHTML=`<section class="game-shell"><div class="game-tools"><span class="game-title">${esc(work.name)} · ${esc(work.version)}</span><div class="game-tool-actions"><button class="button quiet small" id="expand-game" type="button" aria-controls="game-frame" aria-pressed="false">${t("全屏")}</button><button class="button quiet small" id="exit-game" type="button">${t("退出试玩")}</button></div></div><iframe id="game-frame" class="game-frame" sandbox="allow-scripts" referrerpolicy="no-referrer" title="${esc(work.name)}"></iframe><div id="game-result" class="game-result" hidden></div></section>`;
     const frame=$('#game-frame');activeSession={...session,queue,bridge,frame,work,started:false,completed:false,ended:false,coverHTML,clock:createPlayClock(()=>performance.now(),!document.hidden)};frame.src=gameUrl.href;
+    activeSession.display=mountGameDisplay($('.game-shell',area),{button:$('#expand-game'),labels:{enter:t("全屏"),exitNative:t("退出全屏"),exitExpanded:t("退出大屏")}});
     $('#exit-game').addEventListener('click',()=>restoreGameCover(work,coverHTML));
     buttons.filter(b=>b.isConnected).forEach(b=>{b.hidden=true;});
     area.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
@@ -459,7 +463,7 @@ function receiveGame(event){
   else if(message.type==='complete'&&session.started&&!session.completed&&!session.ended){
     session.completed=true;const result={};if(message.result&&typeof message.result==='object'){if(typeof message.result.score==='number'&&Number.isFinite(message.result.score))result.score=message.result.score;if(typeof message.result.label==='string')result.label=message.result.label.slice(0,120);}
     const timing=session.clock.finish();enqueueSession(session.queue,'game_complete',result);session.ended=true;enqueueSession(session.queue,'session_end',timing);session.queue.closed=true;
-    const area=$('#game-result');if(area){area.hidden=false;area.innerHTML=`<p>${t("本次试玩已结束")}${typeof result.score==='number'?` · ${esc(t("{score} 分",{score:result.score}))}`:''}</p><button class="button small" id="replay-game">${t("再玩一次")}</button><button class="button quiet small" id="to-feedback">${t("参与讨论")}</button>`;$('#replay-game').addEventListener('click',()=>startGame(session.work));$('#to-feedback').addEventListener('click',()=>{$('#comment-input')?.focus();$('#discussion')?.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'center'});});}
+    const area=$('#game-result');if(area){area.hidden=false;area.innerHTML=`<p>${t("本次试玩已结束")}${typeof result.score==='number'?` · ${esc(t("{score} 分",{score:result.score}))}`:''}</p><button class="button small" id="replay-game">${t("再玩一次")}</button><button class="button quiet small" id="to-feedback">${t("参与讨论")}</button>`;$('#replay-game').addEventListener('click',()=>startGame(session.work));$('#to-feedback').addEventListener('click',async()=>{await session.display?.exit({restoreFocus:false,restoreScroll:false});$('#comment-input')?.focus();$('#discussion')?.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'center'});});}
   }
 }
 function receiveGallery(event){
@@ -479,6 +483,7 @@ for(const type of ['wheel','touchstart'])window.addEventListener(type,()=>{if(cu
 window.addEventListener('online',()=>{actionQueue.forEach((_,id)=>flushAction(id));sessionQueues.forEach(flushSession);});
 window.addEventListener('pagehide',()=>{endSession('exit');actionQueue.forEach((_,id)=>flushAction(id));sessionQueues.forEach(queue=>{if(queue.pending.length)api('/api/sessions/'+encodeURIComponent(queue.id)+'/events',{method:'POST',body:{token:queue.token,events:queue.pending.slice(0,20)},keepalive:true}).catch(()=>{});});});
 document.addEventListener('click',async event=>{
+  const account=$('.account-menu');if(account&&(!account.contains(event.target)||event.target.closest('a')))account.open=false;
   const outbound=event.target.closest('[data-outbound]');if(outbound)postAction('outbound_click',{workId:outbound.dataset.outbound,versionId:outbound.dataset.version});
   const button=event.target.closest('[data-action="reload"]');if(button){authChecked=false;clearDiscovery();renderRoute();}
   const like=event.target.closest('[data-like]');if(like)toggleLike(like.dataset.like);

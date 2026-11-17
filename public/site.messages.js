@@ -1,5 +1,17 @@
 import { registerMessages } from './i18n.js';
 registerMessages({
+  "全屏":"Full screen",
+  "退出全屏":"Exit full screen",
+  "退出大屏":"Exit expanded view",
+  "账号菜单":"Account menu",
+  "退出登录":"Sign out",
+  "使用邮箱或已连接账号继续。":"Continue with your email or a connected account.",
+  "登录暂不可用，请稍后再试或联系站点管理员。":"Sign-in is unavailable. Try again later or contact the site administrator.",
+  "登录验证暂不可用，请稍后重试。":"Sign-in verification is unavailable. Try again shortly.",
+  "请先登录后继续。":"Sign in to continue.",
+  "登录会话需要刷新，请重新登录后重试。":"Your session needs refreshing. Sign in again and retry.",
+  "请先验证邮箱，再使用创作功能。":"Verify your email before using creator features.",
+  "请从配置的站点地址访问。":"Open Funtrack from its configured website address.",
   "发布作品后，评论会出现在这里。":"Comments on your published works will appear here.",
   "查看作品": "View work",
   "发布日期": "Published",

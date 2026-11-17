@@ -320,6 +320,9 @@ async function analytics(url:URL,user:User) {
 
 export async function handleAPI(request:Request) {
   try {
+    // The independent Worker intercepts this path with its Clerk configuration.
+    // Sites keeps its platform-owned sign-in; no secret is exposed here.
+    if(request.method==='GET'&&new URL(request.url).pathname==='/api/auth/config')return json({provider:'sites',configured:true,signInPath:'/signin-with-chatgpt',signOutPath:'/signout-with-chatgpt'});
     const workerResponse=await handleBuildWorker(request);if(workerResponse)return workerResponse;
     const user=authenticate(request.headers),url=new URL(request.url),parts=url.pathname.replace(/^\/api\/?/,'').split('/').filter(Boolean);
     if(['POST','PATCH'].includes(request.method))verifyWrite(request);
