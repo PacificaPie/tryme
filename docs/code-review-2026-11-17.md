@@ -6,9 +6,9 @@
 
 已读取 Notion 学习区的三篇索引及其指向、固定在 `career-archive@5e6cd5f9991ed852951c3edb1d038bd975c06b16` 的原始 HTML 讲义：
 
-- [工作目录与多人协作](https://app.notion.com/p/40ced61b626d812e810ce9a6a61eacb0)：明确变更范围、共享接口影响和验证方式；通过分支、审查、可追溯版本协作。
-- [从功能到数据建模](https://app.notion.com/p/40ced61b626d81918084d9c36430af22)：明确数据权威源、归属和生命周期；生产、存储、DTO、展示及历史兼容保持一致。
-- [设计模式的应用](https://app.notion.com/p/40ced61b626d81129501f336fbabc09c)：在真实变化点抽取共享规则，保持职责和接口清楚。MVP 不因文件行数或模式名称而机械拆分。
+- [工作目录与多人协作](https://app.notion.com/p/40ced61b626d812e810ce9a6a61eacb0)（[固定讲义](https://github.com/PacificaPie/career-archive/blob/5e6cd5f9991ed852951c3edb1d038bd975c06b16/learning/vibecoding-agent-engineering/01-工作目录与多人协作.html)）：明确变更范围、共享接口影响和验证方式；通过分支、审查、可追溯版本协作。
+- [从功能到数据建模](https://app.notion.com/p/40ced61b626d81918084d9c36430af22)（[固定讲义](https://github.com/PacificaPie/career-archive/blob/5e6cd5f9991ed852951c3edb1d038bd975c06b16/learning/vibecoding-agent-engineering/02-从功能到数据建模.html)）：明确数据权威源、归属和生命周期；生产、存储、DTO、展示及历史兼容保持一致。
+- [设计模式的应用](https://app.notion.com/p/40ced61b626d81129501f336fbabc09c)（[固定讲义](https://github.com/PacificaPie/career-archive/blob/5e6cd5f9991ed852951c3edb1d038bd975c06b16/learning/vibecoding-agent-engineering/03-设计模式的应用.html)）：在真实变化点抽取共享规则，保持职责和接口清楚。MVP 不因文件行数或模式名称而机械拆分。
 
 讲义中的行数阈值、依赖示意和面向初学者的简化表述不作为自动重构或放宽运行时校验的依据。
 
@@ -17,7 +17,7 @@
 1. **评论缺少版本上下文。** 追加可空 `version_id`，由服务端验证版本属于同一作品；版本名称来自不可变版本记录。新旧版本共用讨论区，回复保留自己所处页面版本。历史记录和旧客户端保持未知，不回填当前版本，也不将版本关联当作试玩证明。
 2. **互动入口无法直达较旧评论。** 链接携带评论 ID；有界 context 读取目标及根评论，在独立定位区展示，不污染普通列表分页。不存在、跨作品响应和加载失败有对应处理。
 3. **定位响应与普通列表响应的竞态。** 初版会在普通列表迟到时重建定位 DOM，丢失高亮/键盘焦点。复现后已修复，并让测试 DOM 按浏览器语义销毁旧节点，避免假测试掩盖问题。
-4. **切换账号后旧评论草稿误写到新账号。** 真实鉴权客户端、评论 UI 和 SQLite router 串联复现了 A 页面取到 B 的合法会话后先写入、再因回执不匹配报错。新评论请求携带固定的 `expectedAuthorId`，服务端在任何回执读取或写入前校验；不匹配拒绝写入，保留草稿及提交标识。此字段不是身份来源。
+4. **切换账号后旧评论草稿误写到新账号。** 真实生产 auth-client、fixture Clerk 会话对象、评论 UI 和 SQLite router 串联复现了 A 页面取到 B 的合法会话后先写入、再因回执不匹配报错；不是实际 Clerk 多账号云端验收。新评论请求携带固定的 `expectedAuthorId`，服务端在任何回执读取或写入前校验；不匹配拒绝写入，保留草稿及提交标识。此字段不是身份来源。
 5. **文档与实现的冲突。** API 总述更新为独立 Clerk 鉴权边界，去掉“没有贡献加权”的过期描述；数据文档明确新评论版本上下文不自动改变原有统计口径。迁移说明改为审阅手写追加 SQL，并说明生成器快照滞后。
 
 ## 未修发现与优先级
