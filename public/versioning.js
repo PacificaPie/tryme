@@ -1,6 +1,7 @@
 import {t,getLocale} from './i18n.js';
 import './creator-module.messages.js';
 import {newVersionDraft,editVersionDraft,rebaseVersionDraft,versionWork,localPreviewHTML} from './versioning-state.js';
+import {HTML_UPLOAD_HINT,htmlFileError,isGithubHTMLURL,importErrorText,repositoryImportBlocked,buildAvailabilityMarkup,createBuildAvailability} from './import-status.js';
 
 const contexts=new Map(),flashes=new Map();
 let active=null;
@@ -15,7 +16,7 @@ const remove=key=>{try{sessionStorage.removeItem(key);}catch{}};
 const historyPath=id=>'/studio/works/'+encodeURIComponent(id)+'/versions';
 const updatePath=id=>'/studio/works/'+encodeURIComponent(id)+'/update';
 const running=build=>Boolean(build&&phases.includes(build.status));
-const fileLink=value=>{try{const url=new URL(value);return url.hostname==='raw.githubusercontent.com'||url.hostname==='github.com'&&/\/blob\/.+\.html?$/i.test(url.pathname);}catch{return false;}};
+const fileLink=isGithubHTMLURL;
 const buildFor=ctx=>ctx.draft.build?.inputURL===ctx.draft.githubURL?.trim()?ctx.draft.build:null;
 const ready=ctx=>ctx.draft.source==='html'?Boolean(ctx.file):buildFor(ctx)?.status==='ready'||Boolean(ctx.file&&ctx.draft.githubImport?.url===ctx.draft.githubURL?.trim());
 const save=ctx=>write(ctx.storage,ctx.draft);
@@ -28,7 +29,7 @@ const fileOp=(ctx,action,kind,value)=>{
 };
 const invalidate=ctx=>{ctx.draft=editVersionDraft(ctx.draft,{},uuid());ctx.error='';save(ctx);};
 function disposePreview(){const dialog=q('#version-preview-dialog');if(dialog){dialog.close?.();dialog.remove();}}
-export function disposeVersioning(){if(active){active.disposed=true;clearTimeout(active.timer);active.pollRevision++;active=null;}disposePreview();q('#version-activate-dialog')?.remove();}
+export function disposeVersioning(){if(active){active.disposed=true;active.availability?.dispose();clearTimeout(active.timer);active.pollRevision++;active=null;}disposePreview();q('#version-activate-dialog')?.remove();}
 function visible(view){return active===view&&!view.disposed&&view.h.isCurrent();}
 function drawError(view,message){if(visible(view)){const el=q('#version-error');if(el)el.textContent=t(message);}}
 function successMessage(result){const later=result.current.versionId!==result.operation.toVersionId;if(result.operation.changed===false)return later?t('本次操作未切换版本；线上后来已有变化'):t('{version} 已是当前版本',{version:result.version.version});const message=t(result.operation.action==='publish'?'已发布 {version}':'已切换到 {version}',{version:result.version.version});return message+(later?t('；线上版本后来已有变化'):'');}
@@ -44,14 +45,15 @@ async function context(h,id,work){
 }
 function updateState(view){
   if(!visible(view)&&active?.ctx===view.ctx)view=active;
-  if(!visible(view))return;const ctx=view.ctx,d=ctx.draft,form=q('#version-update-form'),build=buildFor(ctx),busy=ctx.pending;
+  if(!visible(view))return;const ctx=view.ctx,d=ctx.draft,form=q('#version-update-form'),build=buildFor(ctx),busy=ctx.pending,availability=view.availability?.state||{status:'checking'},blocked=repositoryImportBlocked(availability,d.githubURL);
   if(!form)return;
   form.querySelectorAll('input,textarea').forEach(el=>el.disabled=busy);
   q('#version-html-field').hidden=d.source!=='html';q('#version-github-field').hidden=d.source!=='github';
   q('#version-github-url').disabled=busy||d.source!=='github'||running(build);
-  q('#version-import').disabled=busy||ctx.importPending||running(build)||!d.githubURL?.trim();
+  q('#version-import').disabled=busy||ctx.importPending||running(build)||!d.githubURL?.trim()||blocked;
   q('#version-import').textContent=t(ctx.importPending?'正在导入…':running(build)?'构建中…':fileLink(d.githubURL)?'读取文件':'导入并构建');
-  q('#version-import').classList.toggle('primary',d.source==='github'&&!ready(ctx));
+  q('#version-import').classList.toggle('primary',d.source==='github'&&!ready(ctx)&&!blocked);
+  q('#version-import-availability').innerHTML=buildAvailabilityMarkup(availability,{selected:d.source==='github',directFile:fileLink(d.githubURL),ready:d.source==='github'&&ready(ctx),disabled:busy||ctx.importPending});
   q('#version-file-name').textContent=ctx.file?.name||'';
   q('#version-source-status').textContent=ctx.importPending?t('正在读取 GitHub…'):build?t(labels[build.status]||build.status):ready(ctx)&&d.source==='github'?ctx.file.name:'';
   q('#version-build-panel').hidden=!build;
@@ -62,7 +64,7 @@ function updateState(view){
   q('#version-conflict').hidden=!conflict;q('#version-rebase').disabled=busy;
   q('#version-baseline').textContent=t('基于 {version}',{version:d.baseVersion});
   const submit=q('#version-submit');submit.disabled=busy||ctx.importPending||!ready(ctx)||Boolean(conflict);submit.textContent=t(busy?'正在发布…':d.attempted?'确认上次发布结果':'发布新版本');submit.classList.toggle('primary',d.source!=='github'||ready(ctx));
-  q('#version-error').textContent=t(ctx.error||(build?.status==='failed'?build.error||'构建失败':''));
+  q('#version-error').textContent=t(ctx.error||(d.source==='github'&&build?.status==='failed'?importErrorText(build):''));
 }
 async function pollBuild(view){
   if(!visible(view)&&active?.ctx===view.ctx)view=active;
@@ -74,13 +76,13 @@ async function pollBuild(view){
 }
 async function importBuild(view){
   const ctx=view.ctx,d=ctx.draft;if(ctx.pending||ctx.importPending||d.source!=='github'||running(buildFor(ctx)))return;
-  const url=d.githubURL?.trim();if(!url)return;const revision=++ctx.importRevision,isFile=fileLink(url);ctx.importPending=true;ctx.error='';
+  const url=d.githubURL?.trim();if(!url)return;if(repositoryImportBlocked(view.availability?.state,url)){updateState(view);return;}const revision=++ctx.importRevision,isFile=fileLink(url);ctx.importPending=true;ctx.error='';
   if(!isFile){if(d.githubRequest?.url!==url||['ready','failed','cancelled'].includes(buildFor(ctx)?.status))d.githubRequest={url,key:uuid()};d.githubImport=null;d.build=null;save(ctx);}
   const requestKey=d.githubRequest?.key;updateState(view);
   try{
     if(isFile){const result=await view.h.api('/api/imports/github',{method:'POST',body:{url}});if(revision!==ctx.importRevision||ctx.draft.source!=='github'||ctx.draft.githubURL?.trim()!==url)return;ctx.file=new File([result.html],result.filename,{type:'text/html'});ctx.draft.githubImport={url,commitSha:result.commitSha};ctx.draft.build=null;invalidate(ctx);await fileOp(ctx,'put','game',ctx.file);}
     else{const result=await view.h.api('/api/builds',{method:'POST',headers:{'Idempotency-Key':requestKey},body:{url}});if(ctx.draft.githubRequest?.key!==requestKey||ctx.draft.githubURL?.trim()!==url)return;ctx.draft.build={...result.build,inputURL:url};if(revision===ctx.importRevision&&ctx.draft.source==='github'&&!ctx.pending)invalidate(ctx);else save(ctx);pollBuild(view);}
-  }catch(error){if(revision===ctx.importRevision)ctx.error=error.message;}
+  }catch(error){if(revision===ctx.importRevision){ctx.error=importErrorText(error);if(['BUILD_RUNNER_OFFLINE','BUILD_RUNNER_UNCONFIGURED'].includes(error.code))view.availability?.markUnavailable(error.code);}}
   finally{if(revision===ctx.importRevision){ctx.importPending=false;updateState(view);}}
 }
 async function cancelBuild(view){
@@ -97,11 +99,12 @@ async function showPreview(view){
 }
 async function publishVersion(view){
   const ctx=view.ctx,d=ctx.draft;if(ctx.pending||ctx.importPending||!ready(ctx)||ctx.conflict)return;
+  if(!(d.source==='github'&&buildFor(ctx)?.status==='ready')&&htmlFileError(ctx.file)){ctx.error=htmlFileError(ctx.file);updateState(view);return;}
   const form=new FormData();form.set('releaseNotes',d.releaseNotes.trim());form.set('expectedRevision',String(d.expectedRevision));
   const build=d.source==='github'?buildFor(ctx):null;if(build?.status==='ready')form.set('buildId',build.id);else form.set('file',new File([ctx.file],ctx.file.name,{type:'text/html'}));if(ctx.cover)form.set('cover',ctx.cover);
   const key=d.key;d.attempted=true;ctx.pending=true;ctx.error='';save(ctx);updateState(view);
   try{await ctx.fileWrites;const result=await view.h.api('/api/works/'+encodeURIComponent(ctx.id)+'/versions',{method:'POST',headers:{'Idempotency-Key':key},body:form});remove(ctx.storage);await Promise.all([fileOp(ctx,'delete','game'),fileOp(ctx,'delete','cover')]);contexts.delete(ctx.storage);ctx.pending=false;complete(view,result);}
-  catch(error){ctx.pending=false;ctx.error=error.message;if(error.code==='VERSION_CONFLICT'){ctx.conflict=error.current||{revision:null};d.attempted=false;save(ctx);}updateState(view);if(error.status===401&&visible(view))q('#version-error').innerHTML=view.h.esc(t(error.message))+' <a href="'+view.h.esc(view.h.signinURL())+'" target="_top">'+t('重新登录')+'</a>';}
+  catch(error){ctx.pending=false;ctx.error=importErrorText(error);if(error.code==='VERSION_CONFLICT'){ctx.conflict=error.current||{revision:null};d.attempted=false;save(ctx);}updateState(view);if(error.status===401&&visible(view))q('#version-error').innerHTML=view.h.esc(t(error.message))+' <a href="'+view.h.esc(view.h.signinURL())+'" target="_top">'+t('重新登录')+'</a>';}
 }
 async function rebase(view){
   const ctx=view.ctx;if(ctx.pending)return;
@@ -110,11 +113,15 @@ async function rebase(view){
 }
 async function mountUpdate(view,work){
   const {h}=view,ctx=view.ctx=await context(h,work.id,work);if(!visible(view))return;const d=ctx.draft,e=h.esc;
-  h.render(`<div class="page narrow version-page"><a class="back" href="#${historyPath(work.id)}">← ${t('版本历史')}</a><div class="page-head"><div><h1>${e(t('更新 {name}',{name:work.name}))}</h1><p id="version-baseline"></p></div></div><form id="version-update-form" class="form"><fieldset class="field source-picker"><legend>${t('新版本文件')}</legend><div class="segmented">${[['html','本地 HTML'],['github','GitHub']].map(([value,label])=>`<label><input type="radio" name="source" value="${value}" ${d.source===value?'checked':''}>${t(label)}</label>`).join('')}</div></fieldset><div class="field" id="version-html-field"><input id="version-file" aria-label="${t('新版本 HTML 文件')}" type="file" accept=".html,.htm,text/html"><p id="version-file-name" class="file-selected"></p></div><div class="field" id="version-github-field"><div class="github-input"><input id="version-github-url" name="githubURL" type="url" aria-label="${t('GitHub 链接')}" placeholder="https://github.com/owner/repository" value="${e(d.githubURL)}"><button class="button" id="version-import" type="button">${t('导入并构建')}</button></div><p id="version-source-status" role="status"></p><section id="version-build-panel" class="build-panel" hidden><progress id="version-build-progress" max="5" aria-label="${t('构建进度')}"></progress><button id="version-build-cancel" type="button" class="button quiet small">${t('取消构建')}</button><details class="build-details"><summary>${t('构建记录')}</summary><p id="version-build-source"></p><pre id="version-build-logs"></pre></details></section></div><div class="field"><label for="version-notes">${t('更新说明')}</label><textarea id="version-notes" name="releaseNotes" maxlength="1000" required>${e(d.releaseNotes)}</textarea></div><details class="version-options"><summary>${t('封面')}</summary><div class="cover-picker"><input id="version-cover" type="file" accept="image/png,image/jpeg,image/webp" aria-label="${t('替换封面')}"><span id="version-cover-name"></span><button type="button" class="button quiet small" id="version-cover-reset">${t('沿用当前封面')}</button></div></details><section class="version-conflict" id="version-conflict" hidden><p>${t('线上版本已变化，你选择的文件和说明已保留。')}</p><button type="button" class="button small" id="version-rebase">${t('按当前版本继续')}</button></section><p id="version-error" class="error" role="alert"></p><div class="form-footer"><button id="version-submit" class="button primary" type="submit">${t('发布新版本')}</button><details class="version-secondary"><summary>${t('更多')}</summary><button id="version-preview" class="button quiet" type="button">${t('预览试玩')}</button><a class="button quiet" href="#${historyPath(work.id)}">${t('保存草稿并返回')}</a></details></div></form></div>`);
-  const form=q('#version-update-form');form.addEventListener('input',event=>{const field=event.target.name;if(!['source','githubURL','releaseNotes'].includes(field)||ctx.pending)return;if(field!=='releaseNotes'){ctx.importRevision++;ctx.importPending=false;view.pollRevision++;clearTimeout(view.timer);}ctx.draft=editVersionDraft(ctx.draft,{[field]:event.target.value},uuid());ctx.error='';save(ctx);updateState(view);if(field==='source')pollBuild(view);});
-  q('#version-file').addEventListener('change',async event=>{const file=event.target.files[0];if(!file||ctx.pending)return;if(!/\.html?$/i.test(file.name)||file.size>1048576){ctx.error='请选择不超过 1 MB 的 HTML 文件。';event.target.value='';updateState(view);return;}ctx.file=file;ctx.draft.githubImport=null;invalidate(ctx);updateState(view);await fileOp(ctx,'put','game',file);});
+  h.render(`<div class="page narrow version-page"><a class="back" href="#${historyPath(work.id)}">← ${t('版本历史')}</a><div class="page-head"><div><h1>${e(t('更新 {name}',{name:work.name}))}</h1><p id="version-baseline"></p></div></div><form id="version-update-form" class="form"><fieldset class="field source-picker"><legend>${t('新版本文件')}</legend><div class="segmented">${[['html','本地 HTML'],['github','GitHub']].map(([value,label])=>`<label><input type="radio" name="source" value="${value}" ${d.source===value?'checked':''}>${t(label)}</label>`).join('')}</div></fieldset><div id="version-import-availability" class="import-availability" aria-live="polite"></div><div class="field" id="version-html-field"><input id="version-file" aria-label="${t('新版本 HTML 文件')}" type="file" accept=".html,.htm,text/html"><small>${t(HTML_UPLOAD_HINT)}</small><p id="version-file-name" class="file-selected"></p></div><div class="field" id="version-github-field"><div class="github-input"><input id="version-github-url" name="githubURL" type="url" aria-label="${t('GitHub 链接')}" placeholder="https://github.com/owner/repository" value="${e(d.githubURL)}"><button class="button" id="version-import" type="button">${t('导入并构建')}</button></div><p id="version-source-status" role="status"></p><section id="version-build-panel" class="build-panel" hidden><progress id="version-build-progress" max="5" aria-label="${t('构建进度')}"></progress><button id="version-build-cancel" type="button" class="button quiet small">${t('取消构建')}</button><details class="build-details"><summary>${t('构建记录')}</summary><p id="version-build-source"></p><pre id="version-build-logs"></pre></details></section></div><div class="field"><label for="version-notes">${t('更新说明')}</label><textarea id="version-notes" name="releaseNotes" maxlength="1000" required>${e(d.releaseNotes)}</textarea></div><details class="version-options"><summary>${t('封面')}</summary><div class="cover-picker"><input id="version-cover" type="file" accept="image/png,image/jpeg,image/webp" aria-label="${t('替换封面')}"><span id="version-cover-name"></span><button type="button" class="button quiet small" id="version-cover-reset">${t('沿用当前封面')}</button></div></details><section class="version-conflict" id="version-conflict" hidden><p>${t('线上版本已变化，你选择的文件和说明已保留。')}</p><button type="button" class="button small" id="version-rebase">${t('按当前版本继续')}</button></section><p id="version-error" class="error" role="alert"></p><div class="form-footer"><button id="version-submit" class="button primary" type="submit">${t('发布新版本')}</button><details class="version-secondary"><summary>${t('更多')}</summary><button id="version-preview" class="button quiet" type="button">${t('预览试玩')}</button><a class="button quiet" href="#${historyPath(work.id)}">${t('保存草稿并返回')}</a></details></div></form></div>`);
+  const form=q('#version-update-form');form.addEventListener('input',event=>{const field=event.target.name;if(!['source','githubURL','releaseNotes'].includes(field)||ctx.pending)return;if(field!=='releaseNotes'){ctx.importRevision++;ctx.importPending=false;view.pollRevision++;clearTimeout(view.timer);}ctx.draft=editVersionDraft(ctx.draft,{[field]:event.target.value},uuid());ctx.error='';save(ctx);updateState(view);if(field==='source'){pollBuild(view);if(event.target.value==='github')view.availability?.refresh();}});
+  q('#version-file').addEventListener('change',async event=>{const file=event.target.files[0];if(!file||ctx.pending)return;const error=htmlFileError(file);if(error){ctx.error=error;event.target.value='';updateState(view);return;}ctx.file=file;ctx.draft.githubImport=null;invalidate(ctx);updateState(view);await fileOp(ctx,'put','game',file);});
   q('#version-cover').addEventListener('change',async event=>{const file=event.target.files[0];if(!file||ctx.pending)return;if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>2097152){ctx.error='请选择不超过 2 MB 的 PNG、JPG 或 WebP 图片。';event.target.value='';updateState(view);return;}ctx.cover=file;invalidate(ctx);updateState(view);await fileOp(ctx,'put','cover',file);});
   q('#version-cover-reset').addEventListener('click',async()=>{ctx.cover=null;invalidate(ctx);updateState(view);await fileOp(ctx,'delete','cover');});
+  q('#version-import-availability').addEventListener('click',event=>{
+    if(event.target.closest('[data-import-check]'))view.availability?.refresh();
+    if(event.target.closest('[data-import-local]')&&!ctx.pending&&!ctx.importPending){const input=q('input[name="source"][value="html"]',form);input.checked=true;input.dispatchEvent(new Event('input',{bubbles:true}));q('#version-file').focus();}
+  });
   q('#version-import').addEventListener('click',()=>importBuild(view));q('#version-build-cancel').addEventListener('click',()=>cancelBuild(view));q('#version-preview').addEventListener('click',()=>showPreview(view));q('#version-rebase').addEventListener('click',()=>rebase(view));form.addEventListener('submit',event=>{event.preventDefault();publishVersion(view);});updateState(view);pollBuild(view);
 }
 
@@ -147,7 +154,7 @@ async function mountHistorical(view,data){
 export async function renderVersioning(route,h){
   const match=/^\/studio\/works\/([^/]+)\/(update|versions)(?:\/([^/]+))?$/.exec(route.path);if(!match)return false;
   const view={h,disposed:false,timer:null,pollRevision:0};active=view;const id=decodeURIComponent(match[1]);
-  if(match[2]==='update'){const {work}=await h.api('/api/works/'+encodeURIComponent(id));if(!visible(view))return true;if(work.authorId!==h.owner)throw new Error(t('只能更新自己的作品。'));if(work.source!=='html')throw new Error(t('外链作品暂不支持版本更新。'));await mountUpdate(view,work);}
+  if(match[2]==='update'){view.availability=createBuildAvailability(h.api,()=>{if(view.ctx)updateState(view);});view.availability.refresh();const {work}=await h.api('/api/works/'+encodeURIComponent(id));if(!visible(view))return true;if(work.authorId!==h.owner)throw new Error(t('只能更新自己的作品。'));if(work.source!=='html')throw new Error(t('外链作品暂不支持版本更新。'));await mountUpdate(view,work);}
   else{const data=await h.api('/api/works/'+encodeURIComponent(id)+'/versions'+(match[3]?'/'+encodeURIComponent(decodeURIComponent(match[3])):''));if(!visible(view))return true;if(match[3])await mountHistorical(view,data);else await mountHistory(view,data);}
   return true;
 }

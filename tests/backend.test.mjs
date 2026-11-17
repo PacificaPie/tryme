@@ -77,7 +77,7 @@ test('cover magic and HTML type, encoding and size are checked',()=>{
   rejects(()=>coverType(new TextEncoder().encode('<svg/>'),'image/png'),415);
   assert.equal(htmlSource(new TextEncoder().encode('<!doctype html><html></html>'),'text/html','game.html'),'<!doctype html><html></html>');
   rejects(()=>htmlSource(new Uint8Array([255]),'text/html','game.html'),422);
-  rejects(()=>htmlSource(new Uint8Array(1048577),'text/html','game.html'),413);
+  rejects(()=>htmlSource(new Uint8Array(8*1024*1024+1),'text/html','game.html'),413);
   rejects(()=>htmlSource(new TextEncoder().encode('<html/>'),'text/plain','game.html'),415);
 });
 test('event payload is bounded, normalized and whitelist only',()=>{

@@ -24,6 +24,7 @@ All endpoints require Sites-injected `oai-authenticated-user-id` and `oai-authen
 | POST `/api/works/:id/versions` | owner only; multipart `file` or ready owned `buildId`, `releaseNotes` ≤1000, optional `cover`, required `expectedRevision`, required `Idempotency-Key` | 201 `{version,operation,current:{versionId,revision}}`; completed-key replay200 |
 | POST `/api/works/:id/activate` | owner only; JSON `{versionId,expectedRevision}`; required `Idempotency-Key` | 200 `{version,operation,current:{versionId,revision}}`; already-current target records `changed:false` |
 | POST `/api/imports/github` | JSON `{url}`; public GitHub repository URL (root `index.html`), HTML blob link, or raw.githubusercontent.com HTML link | `{html,filename,sourceUrl,repository,commitSha,path}`; resolves a draft only, creates no work and writes no R2 object |
+| GET `/api/builds/capabilities` or `/api/builds/availability` | — | Authenticated read-only build capability status; legacy `online` field preserved; see below |
 | GET `/media/:versionId` or `/api/media/:versionId` | — | Version's cover bytes or 404 |
 | GET `/game/:versionId` | — | Isolated uploaded HTML, or 404; version must be HTML |
 | POST `/api/sessions` | `{workId,versionId}` | 201 `{id,token,gameUrl,expiresAt}`; HTML only; parent keeps token in memory |
@@ -52,9 +53,9 @@ Comments are visible to authorized viewers of the work within the Site's existin
 
 Write receipts and session `accepted` items additionally include `clientEventId`, matching the input event ID for client queue acknowledgement. Their `id` is the durable server record ID; `duplicates` contains the client event IDs. Clients must clear pending events using `clientEventId`, not the server ID.
 
-Uploads: self-contained `.html`/`.htm`, MIME `text/html`, UTF-8, at most 1 MiB; cover PNG/JPEG/WebP, at most 2 MiB, matching MIME and magic bytes. R2 writes must finish before a work/version is committed. An unsuccessful upload is never listed as published. HTML external dependencies are blocked by the game CSP. POST multipart body limit is 4 MiB.
+Uploads: self-contained `.html`/`.htm`, MIME `text/html`, UTF-8, at most 8 MiB (8,388,608 bytes); cover PNG/JPEG/WebP, at most 2 MiB, matching MIME and magic bytes. R2 writes must finish before a work/version is committed. An unsuccessful upload is never listed as published. HTML external dependencies are blocked by the game CSP. POST multipart body limit is 10,616,832 bytes: 8 MiB HTML + 2 MiB cover + 128 KiB for boundaries, headers and ordinary text fields. HTML limits use UTF-8 byte length, not string character count. Initial publication and version updates share these limits through `lib/funtrack/limits.mjs`.
 
-GitHub import uses anonymous requests to fixed GitHub API/raw hosts, resolves the requested branch/tag to a full commit SHA and returns a pinned source permalink. It does not clone repositories, run build tools, use private-repository credentials, or fetch arbitrary dependency URLs. Common external/runtime dependencies are rejected as unsupported; these checks are conservative compatibility checks, not proof that every JavaScript path is self-contained. The existing uploaded-game sandbox/CSP remains the security boundary. Redirects, ambiguous slash-containing branch links, invalid UTF-8, oversized responses and non-HTML files fail explicitly. Each upstream request has a 10-second timeout and a 1 MiB response limit. Anonymous GitHub quotas are shared by originating IP; rate-limit errors return 429 and the user may upload the file instead. The UI converts the returned HTML into a File and uses the normal review/upload flow; importing alone never publishes. Users must have rights to redistribute the selected content; a public repository is not by itself permission to rehost it. Returned provenance is shown for review, not persisted as a new Work field in this release.
+GitHub import uses anonymous requests to fixed GitHub API/raw hosts, resolves the requested branch/tag to a full commit SHA and returns a pinned source permalink. It does not clone repositories, run build tools, use private-repository credentials, or fetch arbitrary dependency URLs. Common external/runtime dependencies are rejected as unsupported; these checks are conservative compatibility checks, not proof that every JavaScript path is self-contained. The existing uploaded-game sandbox/CSP remains the security boundary. Redirects, ambiguous slash-containing branch links, invalid UTF-8, oversized responses and non-HTML files fail explicitly. Each direct-HTML upstream request has a 10-second timeout and an 8 MiB response limit, checked against both Content-Length and actual streamed bytes; decoded HTML is validated again by the same upload validator. Repository-identity metadata/feed requests retain their separate 1 MiB cap. Anonymous GitHub quotas are shared by originating IP; rate-limit errors return 429 and the user may upload the file instead. The UI converts the returned HTML into a File and uses the normal review/upload flow; importing alone never publishes. Users must have rights to redistribute the selected content; a public repository is not by itself permission to rehost it. Returned provenance is shown for review, not persisted as a new Work field in this release.
 
 Session events: types are only `play_start`, `game_complete`, `session_end`; max 20 events per batch. IDs are 8–128 URL-safe characters, seq is an integer 1–10000, elapsedMs is 0–3,600,000. Session expires after 60 minutes and belongs to the requesting user and exact work version. Duplicate event IDs, sequence numbers, and repeated start/end/completion are not counted again. Start must precede completion. An unplayed session may end without a start; ending never implies a start. `result` may contain a finite numeric `score` and `label` ≤120 characters. Server `receivedAt` is authoritative for receipt time. Accepted client events are self-reported, never verified engagement or verified human counts.
 
@@ -69,7 +70,7 @@ Analytics use server receipt timestamps and UTC date buckets. `scope:"work_perio
 
 `Operation = {id,action:'publish'|'activate',fromVersionId,toVersionId,previousRevision,revision,changed,createdAt}`. Works start at revision1. Actual pointer changes increment revision monotonically; a rollback does not decrement it, renumber history or copy files. New publication after v2→v1 is v3. Activating the current version is a recorded no-op with unchanged revision and updatedAt. Every activation, including a no-op, requires matching expectedRevision. createdAt remains the original work publication time and discovery ordering does not change.
 
-Update/activate are HTML-only; names, descriptions, source and URL editing are outside this phase. Omitted cover inherits the current version's immutable resource key; a rollback restores the target version's own cover. File validation is shared with initial publication (1 MiB HTML/2 MiB cover); ready buildId fetches a hash-checked artifact up to8 MiB without sending it inside the4 MiB multipart request. Invalid, incomplete or another owner's build fails before any pointer change. Draft preview is sandboxed and does not create gameplay events.
+Update/activate are HTML-only; names, descriptions, source and URL editing are outside this phase. Omitted cover inherits the current version's immutable resource key; a rollback restores the target version's own cover. File validation is shared with initial publication (8 MiB HTML/2 MiB cover); ready buildId fetches a hash-checked artifact up to 8 MiB without sending it inside the multipart request. Invalid, incomplete or another owner's build fails before any pointer change. Draft preview is sandboxed and does not create gameplay events.
 
 Operation idempotency is unique per owner/key across works and operation types. The request hash includes action, work, expected revision, fixed game hash/build ID, cover replacement or inheritance, and release notes. Completed-key lookup takes precedence over current revision checks. Replaying an old successful publish/activate returns its original immutable version/operation and never executes the pointer update again; current state is separate. Same key with different content returns409 IDEMPOTENCY_CONFLICT. Initial POST /api/works preserves historical keys and returns its original v1, even after later updates.
 
@@ -80,3 +81,40 @@ New resource keys are written before one D1 transaction inserts the immutable ve
 Existing sessions and event/feedback records retain their original version, including sessions completed after an update. Old game/media URLs remain readable under the existing Site access policy and sandbox CSP. Likes and public comments remain attached to workId. Saved card snapshots and explicitly previewed version references stay pinned. This phase adds no version deletion, artifact garbage collection, source conversion, automatic GitHub release or live reload of existing games.
 
 Session-end events may include `result:{timingVersion:1,activeMs}`: integer visible-play milliseconds between 0 and 3,600,000 and no greater than elapsedMs. Legacy end results remain null. Missing old timing is never backfilled. See [analytics definitions](analytics-contract.md).
+
+
+## Import capabilities and failures
+
+`GET /api/builds/capabilities` and the existing `/api/builds/availability` return the same additive shape, under normal Sites authentication and `Cache-Control: no-store`:
+
+```json
+{
+  "online": false,
+  "configured": true,
+  "status": "offline",
+  "heartbeatTtlSeconds": 90,
+  "lastHeartbeatAt": null,
+  "limits": {"htmlBytes":8388608,"coverBytes":2097152,"publicationBytes":10616832},
+  "imports": {"html":true,"repository":false},
+  "repositoryRequirements": ["public","vite","npm-lockfile","root-license"]
+}
+```
+
+`configured` means a sufficiently long runner secret is configured, not that a worker can build. `online` additionally requires a stored heartbeat newer than 90 seconds. `status` is `unconfigured`, `offline`, or `online`. A response is a point-in-time observation; creation checks availability again and may still reject if the heartbeat expires. These GET routes only read the latest heartbeat and never expire, claim, cancel or alter jobs. They expose no runner token, worker ID, lease or owner job data. `imports.html` is independent of the runner; it does not promise GitHub network availability or that an arbitrary HTML file is self-contained.
+
+Repository builds still require a public repository with a root Vite npm project, build script, package-lock v2/v3, registry dependencies and root LICENSE. The current builder does not execute arbitrary `build.mjs`-only projects or provide backend hosting. Users may build a self-contained HTML locally and upload it, or publish a deployed URL where a backend/runtime network is necessary.
+
+`POST /api/builds` retains idempotent job creation; offline creation returns 503 `BUILD_RUNNER_OFFLINE`, missing configuration returns 503 `BUILD_RUNNER_UNCONFIGURED`. Existing completed-key retries retain their original behavior. Owner-only build JSON now includes `errorCode` alongside the existing human-readable `error` when a job fails. Runner `POST /api/build-worker/:id/fail` accepts optional `code`; known codes are allowlisted, unknown/legacy codes become `BUILD_FAILED`. The code is stored in existing job metadata, requiring no migration. Expired jobs report `BUILD_TIMEOUT` or `BUILD_QUEUE_TIMEOUT`. Logs/errors remain redacted. Existing worker Bearer authentication and 10-minute lease rules are unchanged.
+
+| Category / stable codes | Meaning / next action |
+| --- | --- |
+| `BUILD_RUNNER_OFFLINE`, `BUILD_RUNNER_UNCONFIGURED` | Repository building is unavailable. Upload a locally bundled HTML, or retry when a worker is available; single-HTML GitHub import remains usable. |
+| `GITHUB_PRIVATE_REPOSITORY` | Upstream metadata explicitly reports non-public access. Use content you may publish through a supported public source or local HTML. |
+| `GITHUB_NOT_FOUND`, `GITHUB_INACCESSIBLE` | Content cannot be read anonymously (404; or 401/403 without rate-limit evidence). A 404 does not distinguish private from missing; check URL/access or upload authorized local HTML. |
+| `GITHUB_MULTIFILE_PROJECT` | A direct HTML import references other files/runtime resources. Use the supported repository builder, locally bundle to one HTML, or publish a deployed URL. |
+| `UNSUPPORTED_PROJECT`, `UNSUPPORTED_LOCKFILE`, `UNSUPPORTED_DEPENDENCY`, `LICENSE_REQUIRED`, `EXTERNAL_ASSET` | Builder compatibility/redistribution requirements were not met. Fix the specific requirement or supply a self-contained HTML; required network/backend behavior needs a deployed URL. |
+| `HTML_TOO_LARGE`, `GITHUB_FILE_TOO_LARGE`, `BUILD_ARTIFACT_TOO_LARGE`, `OUTPUT_TOO_LARGE` | HTML/artifact exceeds the applicable limit; final hosted HTML is at most 8 MiB. Compress/remove embedded assets, or use a deployed URL. `OUTPUT_TOO_LARGE` can also indicate aggregate intermediate-output limits. |
+| `BODY_TOO_LARGE`, `COVER_TOO_LARGE`, `ARCHIVE_TOO_LARGE` | Multipart envelope, cover, or repository archive exceeds its separate limit. Covers remain 2 MiB; the builder's compressed archive limit remains 16 MiB and unpacked contents 64 MiB. |
+| `GITHUB_RATE_LIMITED`, `GITHUB_TIMEOUT`, `GITHUB_UNAVAILABLE` | Upstream availability issue, distinct from project compatibility. Retry later or use local HTML. |
+
+The response's `error.message` remains useful detail; clients should classify by code rather than matching translated text. Capability endpoints and larger upload limits do not change the opaque-origin game sandbox, owner authorization, version CAS/idempotency, old version resources, or saved card references.

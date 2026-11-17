@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { ApiError, fail, eventId, requiredText, GAME_CSP, gameDocument } from './rules.mjs';
 import { resolveGithubRepository } from './github-repository.mjs';
-import { BUILD_MAX_BYTES, BUILD_METADATA_MAX_BYTES, BUILD_LEASE_MS, BUILD_HEARTBEAT_MS, buildWorkerId, buildProgress, buildLog, buildError, builtHTML, buildMetadata, verifyBuildWorker } from './build-rules.mjs';
+import { BUILD_MAX_BYTES, BUILD_METADATA_MAX_BYTES, BUILD_LEASE_MS, BUILD_HEARTBEAT_MS, buildCapabilities, buildFailureCode, buildWorkerId, buildProgress, buildLog, buildError, builtHTML, buildMetadata, verifyBuildWorker } from './build-rules.mjs';
 
 type Row=Record<string,any>;
 type User={id:string};
@@ -28,19 +28,22 @@ async function inputJSON(request:Request){
   if(!value||typeof value!=='object'||Array.isArray(value))fail(400,'INVALID_JSON','JSON 必须是对象');return value;
 }
 function buildJSON(row:Row){
-  return {id:row.id,url:row.source_url,repository:row.repository,commitSha:row.commit_sha,status:row.status,logs:row.logs||'',...(row.error?{error:row.error}:{}),...(row.artifact_bytes!==null?{artifactBytes:row.artifact_bytes}:{}),...(row.artifact_hash?{artifactHash:row.artifact_hash}:{}),...(row.metadata_json?{metadata:JSON.parse(row.metadata_json)}:{}),createdAt:row.created_at,updatedAt:row.updated_at};
+  const metadata=row.metadata_json?JSON.parse(row.metadata_json):null;
+  return {id:row.id,url:row.source_url,repository:row.repository,commitSha:row.commit_sha,status:row.status,logs:row.logs||'',...(row.error?{error:row.error,errorCode:buildFailureCode(metadata?.failureCode)}:{}),...(row.artifact_bytes!==null?{artifactBytes:row.artifact_bytes}:{}),...(row.artifact_hash?{artifactHash:row.artifact_hash}:{}),...(metadata?{metadata}:{}),createdAt:row.created_at,updatedAt:row.updated_at};
 }
 async function expireBuilds(){
   const now=iso(),queuedBefore=new Date(Date.now()-BUILD_LEASE_MS).toISOString();
   await db().batch([
-    sql(`UPDATE ft_build_jobs SET status='failed',error='构建超时，请重新导入',updated_at=? WHERE status IN ${RUNNING} AND lease_expires_at<=?`,now,now),
-    sql("UPDATE ft_build_jobs SET status='failed',error='等待构建器超时，请重新导入',updated_at=? WHERE status='queued' AND created_at<=?",now,queuedBefore),
+    sql(`UPDATE ft_build_jobs SET status='failed',error='构建超时，请重新导入',metadata_json=json_set(COALESCE(metadata_json,'{}'),'$.failureCode','BUILD_TIMEOUT'),updated_at=? WHERE status IN ${RUNNING} AND lease_expires_at<=?`,now,now),
+    sql("UPDATE ft_build_jobs SET status='failed',error='等待构建器超时，请重新导入',metadata_json=json_set(COALESCE(metadata_json,'{}'),'$.failureCode','BUILD_QUEUE_TIMEOUT'),updated_at=? WHERE status='queued' AND created_at<=?",now,queuedBefore),
   ]);
 }
-async function online(){
-  if(!runtime().FUNTRACK_BUILD_RUNNER_TOKEN||runtime().FUNTRACK_BUILD_RUNNER_TOKEN!.length<32)return false;
-  return Boolean(await first('SELECT id FROM ft_build_workers WHERE last_seen_at>? LIMIT 1',new Date(Date.now()-BUILD_HEARTBEAT_MS).toISOString()));
+async function capabilities(){
+  const configured=typeof runtime().FUNTRACK_BUILD_RUNNER_TOKEN==='string'&&runtime().FUNTRACK_BUILD_RUNNER_TOKEN!.length>=32;
+  const last=configured?await first('SELECT MAX(last_seen_at) last_seen_at FROM ft_build_workers'):null;
+  return buildCapabilities({configured,lastHeartbeatAt:last?.last_seen_at||null});
 }
+async function online(){return (await capabilities()).online;}
 async function ownBuild(id:string,owner:string){
   eventId(id);const row=await first('SELECT * FROM ft_build_jobs WHERE id=? AND owner_id=?',id,owner);
   if(!row)throw new ApiError(404,'BUILD_NOT_FOUND','构建任务不存在');return row;
@@ -49,7 +52,9 @@ async function createBuild(request:Request,user:User){
   const key=eventId(request.headers.get('idempotency-key')),input=await inputJSON(request),url=requiredText(input.url,'GitHub 链接',4096),requestHash=await digest(url);
   const prior=await first('SELECT * FROM ft_build_jobs WHERE owner_id=? AND idempotency_key=?',user.id,key);
   if(prior){if(prior.request_hash!==requestHash)fail(409,'IDEMPOTENCY_CONFLICT','同一次导入的仓库链接已变化');return json({build:buildJSON(prior)});}
-  await expireBuilds();if(!await online())throw new ApiError(503,'BUILD_RUNNER_OFFLINE','构建器暂未在线，请稍后再试');
+  await expireBuilds();const capability=await capabilities();
+  if(!capability.configured)throw new ApiError(503,'BUILD_RUNNER_UNCONFIGURED','构建服务尚未配置；可以上传已打包 HTML');
+  if(!capability.online)throw new ApiError(503,'BUILD_RUNNER_OFFLINE','构建器暂未在线；可以上传已打包 HTML，或稍后重试');
   const counts=await first(`SELECT COUNT(*) hourly,SUM(CASE WHEN status IN ${ACTIVE} THEN 1 ELSE 0 END) active FROM ft_build_jobs WHERE owner_id=? AND (created_at>? OR status IN ${ACTIVE})`,user.id,new Date(Date.now()-3600000).toISOString());
   if(Number(counts?.active)>=2||Number(counts?.hourly)>=10)throw new ApiError(429,'BUILD_LIMIT_REACHED','每次最多同时构建 2 个项目，每小时最多导入 10 次');
   const source=await resolveGithubRepository(url),id=crypto.randomUUID(),now=iso(),hourBefore=new Date(Date.now()-3600000).toISOString(),heartbeatAfter=new Date(Date.now()-BUILD_HEARTBEAT_MS).toISOString();
@@ -66,8 +71,9 @@ async function createBuild(request:Request,user:User){
 }
 export async function handleBuildAPI(request:Request,user:User):Promise<Response|null>{
   const parts=new URL(request.url).pathname.split('/').filter(Boolean);if(parts[0]!=='api'||parts[1]!=='builds')return null;
+  // This authenticated read path must not expire or otherwise mutate jobs.
+  if(request.method==='GET'&&parts.length===3&&['availability','capabilities'].includes(parts[2]))return json(await capabilities());
   await expireBuilds();
-  if(request.method==='GET'&&parts.length===3&&parts[2]==='availability')return json({online:await online()});
   if(request.method==='POST'&&parts.length===2)return createBuild(request,user);
   if(parts.length<3)return json({error:{code:'NOT_FOUND',message:'接口不存在'}},404);
   const row=await ownBuild(parts[2],user.id);
@@ -138,8 +144,8 @@ export async function handleBuildWorker(request:Request):Promise<Response|null>{
       const result=await sql(`UPDATE ft_build_jobs SET status=?,logs=substr(logs||CASE WHEN logs<>'' AND ?<>'' THEN char(10) ELSE '' END||?,-65536),updated_at=? WHERE id=? AND lease_id=? AND status=? AND lease_expires_at>?`,status,chunk,chunk,iso(),row.id,row.lease_id,row.status,iso()).run();
       if(!result.meta.changes)fail(409,'BUILD_LEASE_INVALID','任务状态已变化或租约过期');
     }else{
-      const error=buildError(input.error,runtime().FUNTRACK_BUILD_RUNNER_TOKEN);
-      const result=await sql(`UPDATE ft_build_jobs SET status='failed',error=?,updated_at=? WHERE id=? AND lease_id=? AND status IN ${RUNNING} AND lease_expires_at>?`,error,iso(),row.id,row.lease_id,iso()).run();
+      const error=buildError(input.error,runtime().FUNTRACK_BUILD_RUNNER_TOKEN),code=buildFailureCode(input.code);
+      const result=await sql(`UPDATE ft_build_jobs SET status='failed',error=?,metadata_json=json_set(COALESCE(metadata_json,'{}'),'$.failureCode',?),updated_at=? WHERE id=? AND lease_id=? AND status IN ${RUNNING} AND lease_expires_at>?`,error,code,iso(),row.id,row.lease_id,iso()).run();
       if(!result.meta.changes)fail(409,'BUILD_LEASE_INVALID','任务状态已变化或租约过期');
     }
     return json({build:buildJSON(await first('SELECT * FROM ft_build_jobs WHERE id=?',row.id) as Row)});

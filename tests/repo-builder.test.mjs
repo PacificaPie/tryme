@@ -38,3 +38,10 @@ test('one-shot runner reports ordered build state and artifact without passing c
   const result=await runWorker({siteOrigin:'https://example.chatgpt.site',runnerToken,siteAccessToken,once:true},{onLog:line=>logs.push(line),fetchImpl:async(url,options)=>{calls.push({url,options});assert.equal(new URL(url).origin,'https://example.chatgpt.site');assert.equal(options.redirect,'manual');assert.equal(options.headers.Authorization,'Bearer '+runnerToken);return Response.json(url.endsWith('/claim')?{build:job}:{});},build:async(received,options)=>{assert.deepEqual(received,job);assert(!('runnerToken'in options));for(const status of ['fetching','installing','building','packaging'])await options.onProgress(status,status);return {html:'<!doctype html><html></html>',metadata:{},filename:'index.html'};}});
   assert.equal(result.completed,1);assert(calls.at(-1).url.endsWith('/complete'));assert(calls.at(-1).options.body instanceof FormData);assert(!logs.join('\n').includes(runnerToken));assert(!logs.join('\n').includes(siteAccessToken));
 });
+
+test('runner forwards a stable failure code while redacting the error message',async()=>{
+  const calls=[],token='r'.repeat(40),job={id:'e68c2c64-9907-4672-873c-3e3ffda456b7',repository:'a/b',commitSha:'a'.repeat(40),leaseId:'lease'};
+  await runWorker({siteOrigin:'https://example.chatgpt.site',runnerToken:token,once:true},{onLog:()=>{},fetchImpl:async(url,options)=>{calls.push({url,options});return Response.json(url.endsWith('/claim')?{build:job}:{});},build:async()=>{throw Object.assign(new Error('Unsupported project '+token),{code:'UNSUPPORTED_PROJECT'});}});
+  const failure=calls.find(call=>call.url.endsWith('/fail'));
+  assert.deepEqual(JSON.parse(failure.options.body),{leaseId:'lease',error:'Unsupported project [REDACTED]',code:'UNSUPPORTED_PROJECT'});
+});

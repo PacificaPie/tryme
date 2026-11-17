@@ -77,7 +77,7 @@ test('invalid JSON/UTF-8 metadata is rejected and server diagnostics are not exp
 });
 
 test('missing repositories and API limits have stable errors',async()=>{
-  for(const [status,headers,code] of [[404,{},'GITHUB_NOT_FOUND'],[429,{},'GITHUB_RATE_LIMITED'],[403,{'x-ratelimit-remaining':'0'},'GITHUB_RATE_LIMITED'],[403,{},'GITHUB_UNAVAILABLE'],[500,{},'GITHUB_UNAVAILABLE']])await assert.rejects(resolveGithubRepository('https://github.com/example/game',fixture({override:()=>new Response('',{status,headers})})),errorCode(code));
+  for(const [status,headers,code] of [[404,{},'GITHUB_NOT_FOUND'],[429,{},'GITHUB_RATE_LIMITED'],[403,{'x-ratelimit-remaining':'0'},'GITHUB_RATE_LIMITED'],[403,{},'GITHUB_INACCESSIBLE'],[500,{},'GITHUB_UNAVAILABLE']])await assert.rejects(resolveGithubRepository('https://github.com/example/game',fixture({override:()=>new Response('',{status,headers})})),errorCode(code));
 });
 
 test('timeouts abort a stuck upstream request',async t=>{

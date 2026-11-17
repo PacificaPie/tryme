@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {resolveGithubHTML} from '../lib/funtrack/github-import.mjs';
 import {ApiError} from '../lib/funtrack/rules.mjs';
+import {HTML_MAX_BYTES} from '../lib/funtrack/limits.mjs';
 
 const sha='1234567890abcdef1234567890abcdef12345678';
 const root='https://api.github.com/repos/example/game';
@@ -68,10 +69,10 @@ test('does not follow redirects or accept a fetch implementation that already fo
 });
 
 test('size is bounded from both content length and streamed bytes',async()=>{
-  const largeHeader=fixture({override:url=>url===raw?new Response('',{headers:{'Content-Length':'1048577'}}):null});
+  const largeHeader=fixture({override:url=>url===raw?new Response('',{headers:{'Content-Length':String(HTML_MAX_BYTES+1)}}):null});
   await assert.rejects(resolveGithubHTML(blob,largeHeader),errorCode('GITHUB_FILE_TOO_LARGE'));
   let cancelled=false;
-  const streamed=fixture({override:url=>url===raw?new Response(new ReadableStream({start(controller){controller.enqueue(new Uint8Array(600000));controller.enqueue(new Uint8Array(600000));},cancel(){cancelled=true;}}),{headers:{'Content-Length':'1'}}):null});
+  const streamed=fixture({override:url=>url===raw?new Response(new ReadableStream({start(controller){controller.enqueue(new Uint8Array(HTML_MAX_BYTES));controller.enqueue(new Uint8Array(1));},cancel(){cancelled=true;}}),{headers:{'Content-Length':'1'}}):null});
   await assert.rejects(resolveGithubHTML(blob,streamed),errorCode('GITHUB_FILE_TOO_LARGE'));assert.equal(cancelled,true);
 });
 
@@ -100,4 +101,18 @@ test('timeouts abort the request without waiting for a stuck fetch',async t=>{
   const pending=resolveGithubHTML(blob,{fetchImpl:async(_url,options)=>{signal=options.signal;return new Promise(()=>{});}});
   const rejection=assert.rejects(pending,errorCode('GITHUB_TIMEOUT'));
   t.mock.timers.tick(10001);await rejection;assert.equal(signal.aborted,true);
+});
+
+test('GitHub HTML imports accept above 1 MiB and exactly 8 MiB, measuring UTF-8 bytes rather than characters',async()=>{
+  for(const size of [2*1024*1024,HTML_MAX_BYTES]){
+    const prefix='<!doctype html><html><!--',suffix='--></html>',source=prefix+'x'.repeat(size-prefix.length-suffix.length)+suffix;
+    const result=await resolveGithubHTML(blob,fixture({source}));
+    assert.equal(new TextEncoder().encode(result.html).byteLength,size);
+  }
+  const source='<!doctype html><html><!--'+'界'.repeat(Math.ceil(HTML_MAX_BYTES/3))+'--></html>';
+  assert(source.length<HTML_MAX_BYTES);
+  await assert.rejects(resolveGithubHTML(blob,fixture({source})),errorCode('GITHUB_FILE_TOO_LARGE'));
+});
+test('anonymous access denial has a distinct code and does not imply a repository is private',async()=>{
+  for(const status of [401,403])await assert.rejects(resolveGithubHTML(blob,fixture({override:()=>new Response('',{status})})),errorCode('GITHUB_INACCESSIBLE'));
 });

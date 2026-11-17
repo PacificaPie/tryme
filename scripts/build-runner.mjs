@@ -36,7 +36,7 @@ export async function runWorker(input,{fetchImpl=fetch,build=buildRepository,onL
         const result=await build(job,{signal:jobSignal,onProgress:async(status,log)=>{await request(encodeURIComponent(job.id)+'/progress',{leaseId:job.leaseId,status,log:safe(log)});onLog(status+': '+safe(log));}});
         const form=new FormData();form.set('leaseId',job.leaseId);form.set('file',new File([result.html],result.filename||'index.html',{type:'text/html'}));form.set('metadata',JSON.stringify(result.metadata));
         const outcome=await request(encodeURIComponent(job.id)+'/complete',form);completed++;onLog('Build ready: '+job.id+' ('+Buffer.byteLength(result.html)+' bytes)');
-      }catch(error){const message=safe(error.message);await request(encodeURIComponent(job.id)+'/fail',{leaseId:job.leaseId,error:message}).catch(failure=>onLog(safe('Failure report: '+failure.message)));onLog('Build failed: '+message);completed++;}
+      }catch(error){const message=safe(error.message);await request(encodeURIComponent(job.id)+'/fail',{leaseId:job.leaseId,error:message,code:error.code}).catch(failure=>onLog(safe('Failure report: '+failure.message)));onLog('Build failed: '+message);completed++;}
       finally{clearTimeout(deadline);}
       if(config.once)break;
     }

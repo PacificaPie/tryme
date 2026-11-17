@@ -67,7 +67,6 @@ registerMessages({
   "作品来源": "Source",
   "已有网站": "Live website",
   "游戏文件": "Game file",
-  "单个 HTML，最大 1 MB，图片、样式和脚本包含在文件里。": "One HTML file, up to 1 MB, with images, styles and scripts included.",
   "https://github.com/作者/仓库": "https://github.com/owner/repository",
   "公开 Vite 静态项目（根目录 npm 锁文件），或独立 HTML 文件链接。": "A public static Vite project with an npm lockfile at its root, or a standalone HTML file.",
   "预览试玩 ↗": "Preview game ↗",

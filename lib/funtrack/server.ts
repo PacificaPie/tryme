@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers';
+import { PUBLICATION_MAX_BYTES } from './limits.mjs';
 import { handleBuildAPI, handleBuildWorker, getBuildArtifact } from './build-service';
 import { resolveGithubHTML } from './github-import.mjs';
 import { publicationArtifact } from './publication-artifact.mjs';
@@ -90,7 +91,7 @@ function receipt(row:Row) { return {id:row.id,clientEventId:row.client_event_id,
 
 async function readPublicationForm(request:Request){
   const ct=request.headers.get('content-type')||'';if(!ct.startsWith('multipart/form-data;'))throw new ApiError(415,'FORM_REQUIRED','请使用文件上传表单');
-  try{return await new Response(await limitedBody(request,4194304),{headers:{'Content-Type':ct}}).formData();}catch(e){if(e instanceof ApiError)throw e;throw new ApiError(400,'INVALID_FORM','上传表单无效');}
+  try{return await new Response(await limitedBody(request,PUBLICATION_MAX_BYTES),{headers:{'Content-Type':ct}}).formData();}catch(e){if(e instanceof ApiError)throw e;throw new ApiError(400,'INVALID_FORM','上传表单无效');}
 }
 const readArtifact=(form:FormData,source:string,owner:string)=>publicationArtifact(form,source,owner,getBuildArtifact);
 const handleVersionAPI=createVersionService({db,bucket,ownWork,workJSON,hash,readForm:readPublicationForm,readArtifact,bodyJSON});
