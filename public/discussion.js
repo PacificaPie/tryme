@@ -1,7 +1,13 @@
 import {t,getLocale} from './i18n.js';
 import './creator-module.messages.js';
 const drafts=new Map(),discussions=new Map();
-const keyFor=(user,work)=>`funtrack.discussion:${user.id}:${work.id}`;
+export const discussionVersionId=work=>typeof work?.versionId==='string'&&work.versionId?work.versionId:null;
+export const discussionDraftKey=(user,work)=>`funtrack.discussion.v2:${encodeURIComponent(user.id)}:${encodeURIComponent(work.id)}:${encodeURIComponent(discussionVersionId(work)||'unknown')}`;
+export const commentVersionLabel=comment=>discussionVersionId(comment)&&typeof comment.version==='string'&&comment.version.trim()?comment.version:t('版本未知');
+export function commentHref(comment,from='/studio/feedback'){
+  const params=new URLSearchParams({from,comment:comment.id});
+  return '#/work/'+encodeURIComponent(comment.workId)+'?'+params;
+}
 function draftFor(key){
   if(drafts.has(key))return drafts.get(key);
   let value;try{value=JSON.parse(sessionStorage.getItem(key));}catch{}
@@ -27,14 +33,18 @@ function appendReplies(root,replies){
 }
 
 export function mountDiscussion(element,{work,user,api,esc,onCount=()=>{},notify=()=>{},beforeRootSubmit=()=>{},focusId=''}){
-  const key=keyFor(user,work),draft=draftFor(key),state=discussionFor(key);
-  element.innerHTML=`<div class="discussion-head"><h2>${t('讨论')} <span id="discussion-count"></span></h2></div><form class="comment-composer"><span class="comment-avatar" aria-hidden="true">${esc([...(user.name||t('我'))][0])}</span><div class="composer-main"><div class="reply-target" hidden><span></span><button type="button" aria-label="${t('取消回复')}">×</button></div><label class="skip-label" for="comment-input">${t('写评论')}</label><textarea id="comment-input" rows="1" maxlength="1000" placeholder="${t('说点什么…')}" required>${esc(draft.text)}</textarea><div class="composer-footer"><span class="composer-visibility">${t('公开评论')}</span><button type="submit" class="button primary small">${t('发布')}</button></div></div></form><p class="comment-status" role="status" aria-live="polite"></p><div class="comment-list"></div><button type="button" class="comments-more" hidden>${t('查看更多评论')}</button>`;
-  const form=element.querySelector('form'),input=element.querySelector('textarea'),submit=form.querySelector('[type=submit]'),list=element.querySelector('.comment-list'),more=element.querySelector('.comments-more'),status=element.querySelector('.comment-status'),target=element.querySelector('.reply-target'),cancel=target.querySelector('button');
+  // Capture the page's version once. A later publication cannot relabel a
+  // pending submission, a saved-card view, or an idempotent retry.
+  const expectedAuthorId=user.id,versionId=discussionVersionId(work),key=discussionDraftKey(user,work),draft=draftFor(key),state=discussionFor(key);
+  const focus={id:focusId,thread:null,loading:false,error:'',highlighted:false,closed:false};
+  let contextMarkup='';
+  element.innerHTML=`<div class="discussion-head"><h2>${t('讨论')} <span id="discussion-count"></span></h2></div><form class="comment-composer"><span class="comment-avatar" aria-hidden="true">${esc([...(user.name||t('我'))][0])}</span><div class="composer-main"><div class="reply-target" hidden><span></span><button type="button" aria-label="${t('取消回复')}">×</button></div><label class="skip-label" for="comment-input">${t('写评论')}</label><textarea id="comment-input" rows="1" maxlength="1000" placeholder="${t('说点什么…')}" required>${esc(draft.text)}</textarea><div class="composer-footer"><span class="composer-visibility">${t('公开评论')} · ${esc(commentVersionLabel(work))}</span><button type="submit" class="button primary small">${t('发布')}</button></div></div></form><p class="comment-status" role="status" aria-live="polite"></p><div class="comment-context" aria-label="${t('定位评论')}" hidden></div><div class="comment-list"></div><button type="button" class="comments-more" hidden>${t('查看更多评论')}</button>`;
+  const form=element.querySelector('form'),input=element.querySelector('textarea'),submit=form.querySelector('[type=submit]'),list=element.querySelector('.comment-list'),context=element.querySelector('.comment-context'),more=element.querySelector('.comments-more'),status=element.querySelector('.comment-status'),target=element.querySelector('.reply-target'),cancel=target.querySelector('button');
   const view={alive:()=>state.view===view&&element.isConnected,refresh:()=>{render();composer();revealFocus();},notify};state.view=view;
   const alive=view.alive;
   const refresh=()=>{if(state.view?.alive())state.view.refresh();};
   const notice=message=>{if(state.view?.alive())state.view.notify(t(message));};
-  const all=()=>state.roots.flatMap(root=>[root,...repliesFor(root)]);
+  const all=()=>[...state.roots,...(focus.thread?[focus.thread]:[])].flatMap(root=>[root,...repliesFor(root)]);
   function composer(){
     if(!alive())return;
     if(input.value!==draft.text)input.value=draft.text;
@@ -46,22 +56,54 @@ export function mountDiscussion(element,{work,user,api,esc,onCount=()=>{},notify
     if(state.likes.has(c.id)||(state.social.get(c.id)?.confirmedAt||0)>requestedAt)return;
     state.social.set(c.id,{liked:c.likedByMe===true,count:Number(c.likesCount)||0,confirmedAt:requestedAt});
   }
-  function item(c,reply=false){
+  function item(c,reply=false,focused=false){
     const pending=state.likes.has(c.id),retry=state.retryLikes.has(c.id),social=state.social.get(c.id),liked=social?social.liked:c.likedByMe,count=social?social.count:c.likesCount;
-    return `<article class="comment ${reply?'comment-reply':''}" id="comment-${esc(c.id)}" data-comment="${esc(c.id)}"><a class="comment-avatar" href="#/author/${encodeURIComponent(c.authorId)}" aria-label="${esc(c.authorName)}">${esc([...(c.authorName||t('访客'))][0])}</a><div class="comment-main"><div class="comment-byline"><a href="#/author/${encodeURIComponent(c.authorId)}">${esc(c.authorName)}</a>${c.isCreator?`<span class="author-badge">${t('作者')}</span>`:''}</div><p class="comment-body">${esc(c.body)}</p><div class="comment-meta"><time>${when(c.createdAt)}</time>${!reply?`<button type="button" data-reply="${esc(c.id)}" ${state.pending?'disabled':''}>${t('回复')}</button>`:''}</div></div><button type="button" class="comment-like ${liked?'liked':''}" data-comment-like="${esc(c.id)}" aria-label="${esc(t(retry?'重试点赞 {name} 的评论':liked?'取消点赞 {name} 的评论':'点赞 {name} 的评论',{name:c.authorName}))}" aria-pressed="${!!liked}" ${pending?'disabled':''}>${heart}<span>${retry?t('重试'):count||''}</span></button></article>`;
+    return `<article class="comment ${reply?'comment-reply':''}${focused&&c.id===focus.id?' comment-highlight':''}" id="${focused?'context-':''}comment-${esc(c.id)}" data-comment="${esc(c.id)}"${focused?' tabindex="-1"':''}><a class="comment-avatar" href="#/author/${encodeURIComponent(c.authorId)}" aria-label="${esc(c.authorName)}">${esc([...(c.authorName||t('访客'))][0])}</a><div class="comment-main"><div class="comment-byline"><a href="#/author/${encodeURIComponent(c.authorId)}">${esc(c.authorName)}</a>${c.isCreator?`<span class="author-badge">${t('作者')}</span>`:''}</div><p class="comment-body">${esc(c.body)}</p><div class="comment-meta"><time>${when(c.createdAt)}</time><span class="comment-version" aria-label="${esc(t('评论版本：{version}',{version:commentVersionLabel(c)}))}">${esc(commentVersionLabel(c))}</span>${!reply?`<button type="button" data-reply="${esc(c.id)}" ${state.pending?'disabled':''}>${t('回复')}</button>`:''}</div></div><button type="button" class="comment-like ${liked?'liked':''}" data-comment-like="${esc(c.id)}" aria-label="${esc(t(retry?'重试点赞 {name} 的评论':liked?'取消点赞 {name} 的评论':'点赞 {name} 的评论',{name:c.authorName}))}" aria-pressed="${!!liked}" ${pending?'disabled':''}>${heart}<span>${retry?t('重试'):count||''}</span></button></article>`;
+  }
+  function replaceContext(markup){
+    if(contextMarkup===markup)return;
+    const active=document.activeElement;
+    const id=context.contains(active)?active?.id:'';
+    contextMarkup=markup;context.innerHTML=markup;
+    // Restore a focused comment only if it was replaced, never after the user
+    // has deliberately moved to another control or into the composer.
+    if(id)context.querySelector('[id="'+CSS.escape(id)+'"]')?.focus({preventScroll:true});
+  }
+  function renderContext(){
+    context.hidden=!focus.id||focus.closed;
+    if(context.hidden)return;
+    const heading=`<div class="comment-context-head"><h3>${t('定位评论')}</h3><button type="button" class="text-link" data-close-context>${t('查看全部讨论')}</button></div>`;
+    if(focus.error){replaceContext(heading+`<p class="comment-status" role="status">${esc(t(focus.error))}</p><button type="button" class="comments-retry" data-focus-retry>${t('重新定位评论')}</button>`);return;}
+    if(!focus.thread){replaceContext(heading+`<div class="comment-loading" role="status">${t('正在定位评论…')}</div>`);return;}
+    replaceContext(heading+`<div class="comment-thread">${item(focus.thread,false,true)}${repliesFor(focus.thread).length?`<div class="comment-replies">${repliesFor(focus.thread).map(reply=>item(reply,true,true)).join('')}</div>`:''}</div>`);
   }
   function render(){
     if(!alive())return;
-    element.querySelector('#discussion-count').textContent=state.loaded?state.total:'';status.textContent=t(state.status);
+    element.querySelector('#discussion-count').textContent=state.loaded?state.total:'';status.textContent=t(state.status);renderContext();
     if(state.loaded)onCount(state.total);
     if(!state.loaded){list.innerHTML=state.error?`<button type="button" class="comments-retry">${t('重新加载评论')}</button>`:`<div class="comment-loading" role="status">${t('加载讨论…')}</div>`;more.hidden=true;return;}
     list.innerHTML=state.roots.length?state.roots.map(root=>`<div class="comment-thread">${item(root)}${repliesFor(root).length?`<div class="comment-replies">${repliesFor(root).map(reply=>item(reply,true)).join('')}</div>`:''}${root.repliesNextCursor?`<button type="button" class="replies-more" data-more-replies="${esc(root.id)}" ${state.replies.has(root.id)?'disabled':''}>${t(state.replies.has(root.id)?'加载中…':'展开更多回复')}${root.replyCount?' · '+root.replyCount:''}</button>`:''}</div>`).join(''):`<p class="discussion-empty">${t('还没有评论，来聊聊这件作品。')}</p>`;
     more.hidden=!state.cursor;more.disabled=state.loading;more.textContent=t(state.loading?'加载中…':'查看更多评论');
   }
   function revealFocus(){
-    if(!alive()||!focusId||!state.loaded)return;
-    const found=element.querySelector('[id="comment-'+CSS.escape(focusId)+'"]');
-    if(found){found.classList.add('comment-highlight');found.scrollIntoView({block:'center',behavior:scrollBehavior()});focusId='';}
+    if(!alive()||!focus.id||focus.closed||!focus.thread||focus.highlighted)return;
+    const found=context.querySelector('[id="context-comment-'+CSS.escape(focus.id)+'"]');
+    if(found){found.classList.add('comment-highlight');found.scrollIntoView({block:'center',behavior:scrollBehavior()});found.focus({preventScroll:true});focus.highlighted=true;}
+  }
+  async function loadContext(){
+    if(!focus.id||focus.loading||focus.closed)return;
+    focus.loading=true;focus.error='';refresh();
+    const requestedAt=performance.now(),controller=new AbortController();let timer;
+    try{
+      const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>{controller.abort();reject(new Error('暂时无法定位这条评论，请重试。'));},12000);});
+      const result=await Promise.race([api('/api/comments/'+encodeURIComponent(focus.id)+'/context',{signal:controller.signal}),timeout]);
+      if(!alive())return;
+      const root=result.thread,replies=root?.replies;
+      if(result.workId!==work.id||result.targetId!==focus.id||result.contextOnly!==true||!root||root.workId!==work.id||root.parentId!==null||!Array.isArray(replies)||replies.length>1||replies.some(c=>c.workId!==work.id||c.parentId!==root.id)||!(root.id===focus.id||replies.some(c=>c.id===focus.id)))throw new Error('暂时无法定位这条评论，请重试。');
+      syncSocial(root,requestedAt);replies.forEach(c=>syncSocial(c,requestedAt));
+      focus.thread={...root,replies:[...replies],localReplies:[]};
+    }catch(error){if(alive())focus.error=error.status===404?'这条评论不存在。':'暂时无法定位这条评论，请重试。';}
+    finally{clearTimeout(timer);focus.loading=false;refresh();}
   }
   function mergeRoot(incoming,requestedAt){
     syncSocial(incoming,requestedAt);(incoming.replies||[]).forEach(reply=>syncSocial(reply,requestedAt));
@@ -100,12 +142,13 @@ export function mountDiscussion(element,{work,user,api,esc,onCount=()=>{},notify
     const body=input.value.trim(),parentId=draft.parentId,submittedKey=draft.key;state.pending=true;state.status='';persist(key,draft);refresh();
     try{
       if(!parentId){await beforeRootSubmit();if(!alive())return;}
-      const result=await api('/api/works/'+encodeURIComponent(work.id)+'/comments',{method:'POST',headers:{'Idempotency-Key':submittedKey},body:{body,parentId}}),c=result.comment;
-      if(!c||typeof c.id!=='string'||c.workId!==work.id||c.authorId!==user.id||c.parentId!==parentId||c.body!==body||!Number.isInteger(result.commentsCount)||result.commentsCount<0)throw new Error('暂时没有收到评论保存结果，请重试。');
+      const result=await api('/api/works/'+encodeURIComponent(work.id)+'/comments',{method:'POST',headers:{'Idempotency-Key':submittedKey},body:{body,parentId,versionId,expectedAuthorId}}),c=result.comment;
+      if(!c||typeof c.id!=='string'||c.workId!==work.id||c.authorId!==expectedAuthorId||c.parentId!==parentId||c.body!==body||c.versionId!==versionId||!Number.isInteger(result.commentsCount)||result.commentsCount<0)throw new Error('暂时没有收到评论保存结果，请重试。');
       syncSocial(c,performance.now());
       if(parentId){
         const root=state.rootCache.get(parentId);
         if(root&&!repliesFor(root).some(reply=>reply.id===c.id)){root.localReplies ||= [];root.localReplies.push(c);root.replyCount=(root.replyCount||0)+1;}
+        if(focus.thread?.id===parentId&&!repliesFor(focus.thread).some(reply=>reply.id===c.id)){focus.thread.localReplies.push(c);focus.thread.replyCount=(focus.thread.replyCount||0)+1;}
       }else if(!state.roots.some(root=>root.id===c.id)){const root={...c,replies:[],localReplies:[],repliesNextCursor:null};state.roots.unshift(root);state.rootCache.set(c.id,root);state.localRoots.set(c.id,performance.now());}
       state.total=Math.max(state.total,result.commentsCount);
       if(draft.key===submittedKey){Object.assign(draft,{text:'',parentId:null,parentName:'',key:crypto.randomUUID()});persist(key,draft);}
@@ -117,12 +160,14 @@ export function mountDiscussion(element,{work,user,api,esc,onCount=()=>{},notify
     if(result.commentId!==id||typeof result.liked!=='boolean'||!Number.isInteger(result.likesCount)||result.likesCount<0)throw new Error('暂时没有收到点赞结果。');
     state.social.set(id,{liked:result.liked,count:result.likesCount,confirmedAt:performance.now()});
   }
-  list.addEventListener('click',async event=>{
+  async function handleCommentClick(event){
     if(!alive())return;
+    if(event.target.closest('[data-close-context]')){focus.closed=true;renderContext();list.scrollIntoView({block:'start',behavior:scrollBehavior()});return;}
+    if(event.target.closest('[data-focus-retry]')){loadContext();return;}
     const reply=event.target.closest('[data-reply]'),like=event.target.closest('[data-comment-like]'),expand=event.target.closest('[data-more-replies]');
     if(event.target.closest('.comments-retry')){load();return;}
     if(reply){
-      if(state.pending)return;const c=state.roots.find(c=>c.id===reply.dataset.reply);if(!c)return;
+      if(state.pending)return;const c=state.roots.find(c=>c.id===reply.dataset.reply)||(focus.thread?.id===reply.dataset.reply?focus.thread:null);if(!c)return;
       draft.parentId=c.id;draft.parentName=c.authorName;draft.key=crypto.randomUUID();persist(key,draft);composer();input.focus();form.scrollIntoView({block:'center',behavior:scrollBehavior()});return;
     }
     if(expand){
@@ -146,6 +191,7 @@ export function mountDiscussion(element,{work,user,api,esc,onCount=()=>{},notify
         if(confirmed)state.retryLikes.delete(c.id);else{state.retryLikes.set(c.id,desired);notice('点赞暂未确认，点击爱心重试。');}
       }finally{state.likes.delete(c.id);refresh();}
     }
-  });
-  more.addEventListener('click',()=>load(true));refresh();load();
+  }
+  list.addEventListener('click',handleCommentClick);context.addEventListener('click',handleCommentClick);
+  more.addEventListener('click',()=>load(true));refresh();load();loadContext();
 }

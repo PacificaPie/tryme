@@ -13,7 +13,7 @@ import { confirmCardDeletion, hasPendingCardDeletion } from './card-actions.js';
 import { signInState } from './sign-in-state.js';
 import { CARD_TEMPLATES, renderPortfolioCard, mountPortfolioCard } from './card-templates.js';
 import { syncNavigation } from './navigation.js';
-import { mountDiscussion } from './discussion.js';
+import { mountDiscussion, commentHref, commentVersionLabel } from './discussion.js';
 import { createPlayClock } from './play-clock.js';
 import { waitForPendingPlayStart } from './play-start-order.js';
 import { mountGameDisplay } from './game-display.js';
@@ -248,7 +248,7 @@ async function renderFeedback(r,number){
   let comments=data.comments,nextCursor=data.nextCursor,pending=false;
   const draw=()=>{
     if(number!==routeNumber)return;
-    $('#inbox-records').innerHTML=comments.length?comments.map(c=>`<article class="inbox-comment"><span class="comment-avatar" aria-hidden="true">${esc([...(c.authorName||t("创作者"))][0])}</span><div class="inbox-main"><header><span>${esc(c.authorName)}</span>${c.isCreator?`<span class="author-badge">${t("作者")}</span>`:''}<span>${c.parentId?t("回复"):t("评论")}</span><time>${date(c.createdAt)}</time></header><p>${esc(c.body)}</p><a class="inbox-work" href="#/work/${encodeURIComponent(c.workId)}?from=${encodeURIComponent(r.raw)}&discussion=1">${esc(c.workName)} ${t("· 查看讨论")}</a>${archivedBadge(c.workId)}</div></article>`).join(''):empty(t("还没有评论"),'');
+    $('#inbox-records').innerHTML=comments.length?comments.map(c=>`<article class="inbox-comment"><span class="comment-avatar" aria-hidden="true">${esc([...(c.authorName||t("创作者"))][0])}</span><div class="inbox-main"><header><span>${esc(c.authorName)}</span>${c.isCreator?`<span class="author-badge">${t("作者")}</span>`:''}<span>${c.parentId?t("回复"):t("评论")}</span><span class="comment-version" aria-label="${esc(t('评论版本：{version}',{version:commentVersionLabel(c)}))}">${esc(commentVersionLabel(c))}</span><time>${date(c.createdAt)}</time></header><p>${esc(c.body)}</p><a class="inbox-work" href="${esc(commentHref(c,r.raw))}">${esc(c.workName)} ${t("· 查看讨论")}</a>${archivedBadge(c.workId)}</div></article>`).join(''):empty(t("还没有评论"),'');
     $('#inbox-more').hidden=!nextCursor;
   };draw();
   $('#inbox-more').addEventListener('click',async()=>{

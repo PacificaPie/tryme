@@ -613,3 +613,9 @@ input[type=file]::file-selector-button:hover{background:var(--soft)}
 .account-options>span{display:block;padding:9px 10px;color:var(--muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .account-options>a{display:block;padding:10px;border-radius:6px;white-space:nowrap}
 .account-options>a:hover{background:var(--soft)}
+
+/* Version labels describe the comment context, never a claim that it was played. */
+.comment-meta{flex-wrap:wrap}.comment-version{font-size:11px;line-height:1.5;color:var(--text-secondary,var(--muted));white-space:nowrap}
+.comment-context{margin:24px 0 30px;padding:18px 20px;border:1px solid var(--border,var(--line));border-radius:12px;background:var(--soft)}
+.comment-context[hidden]{display:none}.comment-context-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:12px}.comment-context-head h3{font-size:12px;font-weight:550;color:var(--text-secondary,var(--muted))}.comment-context-head button{background:transparent;border:0;padding:6px 0;font-size:11px;white-space:normal;text-align:right}.comment-context .comment-thread{border-bottom:0;padding-bottom:0}.comment-context .comment-highlight{border-radius:8px}.comment-context .comment-status{margin:12px 0}.comment-context .comments-retry{margin:4px 0 0}
+@media(max-width:600px){.comment-context{padding:14px 12px}.comment-context-head{gap:12px}.comment-context .comment-replies{margin-left:20px}}

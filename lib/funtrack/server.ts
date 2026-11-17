@@ -240,16 +240,24 @@ async function addFeedback(request:Request,user:User) {
 
 // These queries deliberately never read ft_feedback. Legacy private messages
 // retain their owner-only inbox and are not part of the work's public discussion.
-const COMMENT_COLUMNS=`c.*,w.name AS work_name,w.author_id AS creator_id,
+const COMMENT_COLUMNS=`c.*,w.name AS work_name,w.author_id AS creator_id,v.version AS comment_version,
   (SELECT COUNT(*) FROM ft_comment_likes l WHERE l.comment_id=c.id) AS likes_count,
   EXISTS(SELECT 1 FROM ft_comment_likes l WHERE l.comment_id=c.id AND l.actor_id=?) AS liked_by_me,
   (SELECT COUNT(*) FROM ft_comments r WHERE r.parent_id=c.id) AS reply_count`;
-const COMMENT_QUERY=`SELECT ${COMMENT_COLUMNS} FROM ft_comments c JOIN ft_works w ON w.id=c.work_id`;
-function commentJSON(c:Row) {return {id:c.id,workId:c.work_id,workName:c.work_name,authorId:c.author_id,authorName:c.author_name,isCreator:c.author_id===c.creator_id,body:c.body,parentId:c.parent_id,createdAt:c.created_at,likesCount:Number(c.likes_count||0),likedByMe:Boolean(c.liked_by_me),replyCount:Number(c.reply_count||0)};}
+const COMMENT_JOINS=` JOIN ft_works w ON w.id=c.work_id LEFT JOIN ft_work_versions v ON v.id=c.version_id AND v.work_id=c.work_id`;
+const COMMENT_QUERY=`SELECT ${COMMENT_COLUMNS} FROM ft_comments c${COMMENT_JOINS}`;
+function commentJSON(c:Row) {return {id:c.id,workId:c.work_id,workName:c.work_name,versionId:c.version_id??null,version:c.comment_version??null,authorId:c.author_id,authorName:c.author_name,isCreator:c.author_id===c.creator_id,body:c.body,parentId:c.parent_id,createdAt:c.created_at,likesCount:Number(c.likes_count||0),likedByMe:Boolean(c.liked_by_me),replyCount:Number(c.reply_count||0)};}
 async function getComment(id:unknown,user:User) {
   if(typeof id!=='string'||id.length>128)throw new ApiError(404,'COMMENT_NOT_FOUND','评论不存在');
   const comment=await first(COMMENT_QUERY+' WHERE c.id=?',user.id,id);
   if(!comment)throw new ApiError(404,'COMMENT_NOT_FOUND','评论不存在');return comment;
+}
+async function commentContext(user:User,id:string) {
+  const target=await getComment(id,user),root=target.parent_id===null?target:await getComment(target.parent_id,user);
+  if(root.work_id!==target.work_id||root.parent_id!==null)throw new ApiError(404,'COMMENT_NOT_FOUND','评论不存在');
+  // This bounded slice is separate from normal pagination. Its replies are
+  // only the requested target, never a claim to be a contiguous thread prefix.
+  return json({workId:target.work_id,targetId:target.id,contextOnly:true,thread:{...commentJSON(root),replies:target.parent_id===null?[]:[commentJSON(target)],repliesNextCursor:null}});
 }
 async function workComments(url:URL,user:User,workId:string) {
   await getWork(workId);
@@ -265,7 +273,7 @@ async function workComments(url:URL,user:User,workId:string) {
       SELECT r.*,ROW_NUMBER() OVER (PARTITION BY r.parent_id ORDER BY r.seq ASC) AS thread_rank,
         COUNT(*) OVER (PARTITION BY r.parent_id) AS thread_count
       FROM ft_comments r WHERE r.parent_id IN (${rootRows.map(()=>'?').join(',')})
-    ) c JOIN ft_works w ON w.id=c.work_id WHERE c.thread_rank<=4 ORDER BY c.parent_id,c.seq ASC`,user.id,...rootRows.map(c=>c.id));
+    ) c${COMMENT_JOINS} WHERE c.thread_rank<=4 ORDER BY c.parent_id,c.seq ASC`,user.id,...rootRows.map(c=>c.id));
     const grouped=new Map<string,Row[]>();for(const reply of replies){const list=grouped.get(reply.parent_id)||[];list.push(reply);grouped.set(reply.parent_id,list);}
     for(const root of comments){const list=grouped.get(root.id)||[];root.replies=list.slice(0,3).map(commentJSON);root.replyCount=Number(list[0]?.thread_count||0);root.repliesNextCursor=list.length>3?encodeCommentCursor(list[2].seq,`comment:${root.id}:replies`):null;}
   }
@@ -294,20 +302,29 @@ async function commentInbox(url:URL,user:User) {
   return json({comments:page.map(commentJSON),commentsCount:Number(result[1].results[0]?.n||0),nextCursor:result[0].results.length>limit?encodeCommentCursor(page[page.length-1].seq,scope):null});
 }
 async function addComment(request:Request,user:User,workId:string) {
-  const w=await getWork(workId),input=commentInput(await bodyJSON(request)),key=eventId(request.headers.get('idempotency-key'));
-  const requestHash=await hash(JSON.stringify({workId,body:input.body,parentId:input.parentId}));
+  const body=await bodyJSON(request),expectedAuthorId=body.expectedAuthorId;
+  // This is a stale-page guard, never an alternate source of identity. Check
+  // before receipt lookup so switching accounts cannot adopt an old draft/key.
+  if(expectedAuthorId!==undefined&&(typeof expectedAuthorId!=='string'||!expectedAuthorId.trim()||expectedAuthorId.length>256||expectedAuthorId!==user.id))throw new ApiError(409,'AUTH_SESSION_CHANGED','登录账号已变化，请回到原账号后重试。');
+  const w=await getWork(workId),input=commentInput(body),key=eventId(request.headers.get('idempotency-key'));
+  const content={workId,body:input.body,parentId:input.parentId};
+  const requestHash=await hash(JSON.stringify({...content,versionId:input.versionId}));
+  // An old client can safely retry a pre-migration receipt only without adding
+  // a version. Never attach today's version to a historical unknown comment.
+  const legacyHash=input.versionId===null?await hash(JSON.stringify(content)):null;
   async function response(comment:Row,duplicate:boolean){
-    if(comment.request_hash!==requestHash)throw new ApiError(409,'IDEMPOTENCY_CONFLICT','评论提交内容已变化，请使用新的提交标识');
+    if(comment.request_hash!==requestHash&&!(input.versionId===null&&comment.version_id===null&&comment.request_hash===legacyHash))throw new ApiError(409,'IDEMPOTENCY_CONFLICT','评论提交内容已变化，请使用新的提交标识');
     const count=await first('SELECT COUNT(*) n FROM ft_comments WHERE work_id=?',workId);
     return json({comment:commentJSON(comment),commentsCount:Number(count?.n||0),duplicate},duplicate?200:201);
   }
   const prior=await first(COMMENT_QUERY+' WHERE c.author_id=? AND c.idempotency_key=?',user.id,user.id,key);if(prior)return response(prior,true);
+  if(input.versionId!==null&&!await first('SELECT id FROM ft_work_versions WHERE id=? AND work_id=?',input.versionId,workId))throw new ApiError(422,'INVALID_COMMENT_VERSION','评论版本不属于当前作品，请刷新作品后重试');
   if(input.parentId){const parent=await first('SELECT id,work_id,parent_id FROM ft_comments WHERE id=?',input.parentId);validateCommentParent(parent,workId);}
   await rateLimit(user,'ft_comments','created_at',30);
   const id=uuid();
   await db().batch([
-    sql(`INSERT INTO ft_comments (id,work_id,author_id,author_name,body,parent_id,created_at,idempotency_key,request_hash)
-      VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(author_id,idempotency_key) DO NOTHING`,id,w.id,user.id,(await userProfile(user)).name,input.body,input.parentId,iso(),key,requestHash),
+    sql(`INSERT INTO ft_comments (id,work_id,version_id,author_id,author_name,body,parent_id,created_at,idempotency_key,request_hash)
+      VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(author_id,idempotency_key) DO NOTHING`,id,w.id,input.versionId,user.id,(await userProfile(user)).name,input.body,input.parentId,iso(),key,requestHash),
     ...input.parentId?[]:[recommendations.creditStatement(user.id,w.id,'comment',id)],
   ]);
   const comment=await first(COMMENT_QUERY+' WHERE c.author_id=? AND c.idempotency_key=?',user.id,user.id,key);if(!comment)throw new Error('Comment insertion failed');
@@ -379,6 +396,7 @@ export async function handleAPI(request:Request) {
       if(parts[0]==='works'&&parts.length===3&&parts[2]==='like')return await workLike(request,user,parts[1]);
       if(parts[0]==='works'&&parts.length===3&&parts[2]==='comments')return await workComments(url,user,parts[1]);
       if(parts[0]==='comments'&&parts.length===1)return await commentInbox(url,user);
+      if(parts[0]==='comments'&&parts.length===3&&parts[2]==='context')return await commentContext(user,parts[1]);
       if(parts[0]==='comments'&&parts.length===3&&parts[2]==='replies')return await commentReplies(url,user,parts[1]);
       if(parts[0]==='comments'&&parts.length===3&&parts[2]==='like')return await commentLike(request,user,parts[1]);
       if(parts[0]==='analytics'&&parts.length===1)return await analytics(url,user);

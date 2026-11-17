@@ -43,7 +43,7 @@ test('new collection template preserves existing card template values',()=>{
   rejects(()=>cardTemplate('custom-html'),422);
 });
 test('comment content is bounded plain text and replies may target only a same-work root',()=>{
-  assert.deepEqual(commentInput({body:'  <b>作品不错</b>  ',authorId:'spoofed'}),{body:'<b>作品不错</b>',parentId:null});
+  assert.deepEqual(commentInput({body:'  <b>作品不错</b>  ',authorId:'spoofed'}),{body:'<b>作品不错</b>',parentId:null,versionId:null});
   assert.equal(commentInput({body:'x'.repeat(1000),parentId:'root-comment'}).body.length,1000);
   for(const input of [{body:' '},{body:'x'.repeat(1001)},{body:9},{body:'ok',parentId:1}])rejects(()=>commentInput(input),422);
   validateCommentParent({work_id:'work-a',parent_id:null},'work-a');

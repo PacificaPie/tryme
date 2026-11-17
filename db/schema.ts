@@ -107,6 +107,8 @@ export const contributionCredits = sqliteTable('ft_contribution_credits', {
 export const comments = sqliteTable('ft_comments', {
   seq: integer('seq').primaryKey({autoIncrement:true}), id: text('id').notNull().unique(),
   workId: text('work_id').notNull().references(()=>works.id), authorId: text('author_id').notNull(), authorName: text('author_name').notNull(),
+  // Page context only: a version association does not prove a completed play.
+  versionId: text('version_id').references(()=>versions.id),
   body: text('body').notNull(), parentId: text('parent_id').references(():AnySQLiteColumn=>comments.id), createdAt: text('created_at').notNull(),
   idempotencyKey: text('idempotency_key').notNull(), requestHash: text('request_hash').notNull(),
 }, t=>[uniqueIndex('ft_comments_author_key').on(t.authorId,t.idempotencyKey),index('ft_comments_work_seq').on(t.workId,t.seq),
