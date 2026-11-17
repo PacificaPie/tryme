@@ -144,3 +144,22 @@ button,.button,[data-action-menu]>summary{transition:background var(--motion-fas
 
 @media(max-width:720px){.work-row[data-archived=false]{position:relative;padding-right:42px}.work-row[data-archived=false]>.row-actions{position:absolute;right:0;top:22px;margin:0}}
 .card-delete-dialog .button.danger:not(:disabled):hover{background:var(--danger);border-color:var(--danger);color:var(--surface);filter:brightness(.96)}
+
+/* Feed ordering shares the site's quiet disclosure rather than an OS select. */
+.discovery-page .feed-sort{gap:10px;flex-shrink:0}
+.feed-sort-menu>summary{display:flex;align-items:center;justify-content:space-between;gap:14px;width:auto;min-width:108px;height:40px;padding:0 12px;border:1px solid var(--border);border-radius:12px;background:var(--surface);font-size:12px;font-weight:500;letter-spacing:0;line-height:1.4;white-space:nowrap}
+.feed-sort-menu>summary:hover,.feed-sort-menu[open]>summary{background:var(--surface-hover);border-color:color-mix(in srgb,var(--text-secondary) 35%,var(--border))}
+.feed-sort-menu svg,.discovery-page .feed-refresh svg{display:block;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.sort-chevron{width:16px;height:16px;color:var(--text-tertiary);transition:transform var(--motion-fast) var(--ease-out)}
+.feed-sort-menu[open] .sort-chevron{transform:rotate(180deg)}
+.feed-sort-options{width:184px}
+.feed-sort-options>button{justify-content:space-between;gap:16px;font-size:13px}
+.feed-sort-options>button[aria-pressed=true]{background:color-mix(in srgb,var(--focus) 9%,var(--surface-raised));color:var(--text);font-weight:600}
+.sort-check{width:17px;height:17px;opacity:0;color:var(--focus)}
+[aria-pressed=true]>.sort-check{opacity:1}
+.discovery-page .feed-refresh{width:40px;height:40px;border-radius:12px;font-size:inherit;flex-shrink:0}
+.discovery-page .feed-refresh svg{width:19px;height:19px}
+.discovery-page .feed-refresh[aria-busy=true]{animation:none}
+.discovery-page .feed-refresh[aria-busy=true] svg{animation:refresh-turn 1s linear infinite}
+@media(max-width:720px){.discovery-page .feed-sort{gap:6px}.feed-sort-menu>summary{min-height:44px}.discovery-page .feed-refresh{width:44px;height:44px}.feed-sort-options>button{min-height:44px}}
+@media(prefers-reduced-motion:reduce){.discovery-page .feed-refresh[aria-busy=true] svg{animation:none}.sort-chevron{transition:none}}

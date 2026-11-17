@@ -4,7 +4,7 @@ registerMessages({
   '创作者': 'Creator', '← 名片': '← Creator cards', '查看名片': 'View card',
   '发现作品': 'Explore', '搜索作品或创作者': 'Search works or creators',
   '作品类型': 'Work type', '全部': 'All', '网页游戏': 'Web games', '外链作品': 'External',
-  '作品排序': 'Sort works', '推荐': 'Recommended', '最新发布': 'Newest', '最多点赞': 'Most liked', '最多讨论': 'Most discussed',
+  '作品排序': 'Sort works', '作品排序：{sort}': 'Sort works: {sort}', '推荐': 'Recommended', '最新发布': 'Newest', '最多点赞': 'Most liked', '最多讨论': 'Most discussed',
   '刷新作品': 'Refresh works', '加载更多': 'Load more', '正在加载…': 'Loading…', '重试加载': 'Retry loading',
   '暂时没能加载作品': 'Could not load works', '重试': 'Retry', '没有找到作品': 'No works found',
   '还没有作品': 'No works yet', '还没有公开作品': 'No public works yet',

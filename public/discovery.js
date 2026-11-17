@@ -17,8 +17,13 @@ export async function mountDiscovery(root, options) {
   const alive=()=>!disposed&&root.isConnected;
   const cacheKey=()=>JSON.stringify([userId,authorId,query]);
   const authorName=authorCard?.name||t('创作者');
+  const sortOptions=[['recommended','推荐'],['newest','最新发布'],['likes','最多点赞'],['comments','最多讨论']];
+  const sortLabel=()=>t(sortOptions.find(([id])=>id===query.sort)[1]);
+  const chevron='<svg class="sort-chevron" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>';
+  const check='<svg class="sort-check" viewBox="0 0 20 20" aria-hidden="true"><path d="m4 10 4 4 8-8"/></svg>';
+  const refreshIcon='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M20 12a8 8 0 1 0-2.3 5.7M20 7l-3.4-3.4"/></svg>';
   const searchIcon='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg>';
-  root.innerHTML=authorId?`<a class="back" href="#/cards">${t('← 名片')}</a><div class="author-heading"><span class="large-avatar" aria-hidden="true">${esc([...authorName][0])}</span><div><h1 id="author-name">${esc(authorName)}</h1>${authorCard?.bio?`<p>${esc(authorCard.bio)}</p>`:''}</div>${authorCard?`<a class="button" href="#/card/${encodeURIComponent(authorCard.id)}">${t('查看名片')}</a>`:''}</div>`:`<div class="feed-heading"><h1>${t('发现作品')}</h1><label class="feed-search">${searchIcon}<input id="work-search" type="search" maxlength="100" placeholder="${esc(t('搜索作品或创作者'))}" aria-label="${esc(t('搜索作品或创作者'))}" value="${esc(query.q)}"></label></div><div class="feed-controls"><div class="filters" aria-label="${esc(t('作品类型'))}">${[['all','全部'],['html','网页游戏'],['url','外链作品']].map(([id,label])=>`<button class="filter ${query.source===id?'active':''}" data-filter="${id}" aria-pressed="${query.source===id}">${t(label)}</button>`).join('')}</div><div class="feed-sort"><select id="work-sort" aria-label="${esc(t('作品排序'))}">${[['recommended','推荐'],['newest','最新发布'],['likes','最多点赞'],['comments','最多讨论']].map(([id,label])=>`<option value="${id}" ${query.sort===id?'selected':''}>${t(label)}</option>`).join('')}</select><button class="feed-refresh" aria-label="${esc(t('刷新作品'))}" title="${esc(t('刷新作品'))}">↻</button></div></div>`;
+  root.innerHTML=authorId?`<a class="back" href="#/cards">${t('← 名片')}</a><div class="author-heading"><span class="large-avatar" aria-hidden="true">${esc([...authorName][0])}</span><div><h1 id="author-name">${esc(authorName)}</h1>${authorCard?.bio?`<p>${esc(authorCard.bio)}</p>`:''}</div>${authorCard?`<a class="button" href="#/card/${encodeURIComponent(authorCard.id)}">${t('查看名片')}</a>`:''}</div>`:`<div class="feed-heading"><h1>${t('发现作品')}</h1><label class="feed-search">${searchIcon}<input id="work-search" type="search" maxlength="100" placeholder="${esc(t('搜索作品或创作者'))}" aria-label="${esc(t('搜索作品或创作者'))}" value="${esc(query.q)}"></label></div><div class="feed-controls"><div class="filters" aria-label="${esc(t('作品类型'))}">${[['all','全部'],['html','网页游戏'],['url','外链作品']].map(([id,label])=>`<button class="filter ${query.source===id?'active':''}" data-filter="${id}" aria-pressed="${query.source===id}">${t(label)}</button>`).join('')}</div><div class="feed-sort"><details class="feed-sort-menu" data-action-menu><summary id="work-sort" aria-label="${esc(t('作品排序：{sort}',{sort:sortLabel()}))}"><span id="work-sort-label">${esc(sortLabel())}</span>${chevron}</summary><div class="action-menu-panel feed-sort-options" role="group" aria-label="${esc(t('作品排序'))}">${sortOptions.map(([id,label])=>`<button type="button" data-sort="${id}" aria-pressed="${query.sort===id}"><span>${t(label)}</span>${check}</button>`).join('')}</div></details><button type="button" class="feed-refresh" aria-label="${esc(t('刷新作品'))}" title="${esc(t('刷新作品'))}">${refreshIcon}</button></div></div>`;
   root.insertAdjacentHTML('beforeend',`<div id="discovery-results"></div><p class="feed-status" role="status" aria-live="polite"></p><div class="feed-pagination"><button class="button" id="load-works" hidden>${t('加载更多')}</button></div>`);
   const results=root.querySelector('#discovery-results'),status=root.querySelector('.feed-status'),more=root.querySelector('#load-works');
   function resetLayout(){impressions?.dispose();impressions=null;layout?.dispose();layout=null;grid=null;tileState.clear();}
@@ -94,7 +99,16 @@ export async function mountDiscovery(root, options) {
   const search=root.querySelector('#work-search');
   const schedule=()=>{if(composing)return;clearTimeout(timer);timer=setTimeout(()=>{if(alive())change({q:search.value});},250);};
   search?.addEventListener('input',schedule);search?.addEventListener('compositionstart',()=>composing=true);search?.addEventListener('compositionend',()=>{composing=false;schedule();});
-  root.querySelector('#work-sort')?.addEventListener('change',event=>change({sort:event.target.value}));
+  const sortMenu=root.querySelector('.feed-sort-menu'),sortTrigger=root.querySelector('#work-sort');
+  root.querySelectorAll('[data-sort]').forEach(button=>button.addEventListener('click',()=>{
+    sortMenu.open=false;sortTrigger.focus();
+    // Reselecting the current order is a dismissal, not another network request.
+    if(button.dataset.sort===query.sort)return;
+    change({sort:button.dataset.sort});
+    root.querySelector('#work-sort-label').textContent=sortLabel();
+    sortTrigger.setAttribute('aria-label',t('作品排序：{sort}',{sort:sortLabel()}));
+    root.querySelectorAll('[data-sort]').forEach(option=>option.setAttribute('aria-pressed',String(option.dataset.sort===query.sort)));
+  }));
   root.querySelectorAll('[data-filter]').forEach(button=>button.addEventListener('click',()=>change({source:button.dataset.filter})));
   root.querySelector('.feed-refresh')?.addEventListener('click',()=>{clearTimeout(timer);if(search&&search.value.trim()!==query.q)change({q:search.value});else load();});
   results.addEventListener('click',event=>{if(event.target.closest('[data-retry]'))load();if(event.target.closest('[data-clear]')){if(search)search.value='';change({q:'',source:'all'});}});

@@ -13,6 +13,7 @@ class Element {
     this.hidden=this.attributes.has('hidden');this.disabled=this.attributes.has('disabled');this.value=this.attributes.get('value')||'';
   }
   setAttribute(name,value){this.attributes.set(name,String(value));if(name==='class')this.classes=new Set(String(value).split(/\s+/));if(name.startsWith('data-'))this.dataset[name.slice(5).replace(/-([a-z])/g,(_,letter)=>letter.toUpperCase())]=String(value);}
+  focus(){this.focused=true;}
   getAttribute(name){return this.attributes.get(name)??null;}
   set innerHTML(value){this._html=value;this.nodes=this.parse(value);}
   get innerHTML(){return this._html;}
@@ -86,4 +87,21 @@ test('changing a filter aborts the prior query; its late success cannot overwrit
   assert.equal(status,'Only the new filter failed');assert.match(html,/暂时没能加载作品/);assert(f.retry());
   old.resolve(empty());await settle();
   assert.equal(f.results().innerHTML,html);assert.equal(f.status().textContent,status);assert.equal(f.results().getAttribute('aria-busy'),'false');assert.equal(f.timers.size,0);
+});
+
+
+test('sort selection updates its label and URL once, retains filters, and ignores a late previous response',async t=>{
+  const f=fixture(t),panel=await f.mount();t.after(()=>panel.dispose());
+  const search=f.root.querySelector('#work-search');search.value=' rain ';
+  f.root.querySelectorAll('[data-filter]').find(b=>b.dataset.filter==='html').fire('click');
+  const previous=f.calls.at(-1),sort=f.root.querySelectorAll('[data-sort]').find(b=>b.dataset.sort==='likes');
+  sort.fire('click');
+  const current=f.calls.at(-1),params=new URL(current.url,'https://funtrack.test').searchParams;
+  assert.equal(previous.signal.aborted,true);assert.equal(params.get('sort'),'likes');assert.equal(params.get('q'),'rain');assert.equal(params.get('source'),'html');
+  assert.equal(f.queries.at(-1).sort,'likes');assert.equal(f.root.querySelector('#work-sort-label').textContent,'最多点赞');
+  assert.equal(sort.getAttribute('aria-pressed'),'true');assert.equal(f.root.querySelectorAll('[data-sort]').filter(b=>b.getAttribute('aria-pressed')==='true').length,1);
+  assert.equal(f.root.querySelector('.feed-sort-menu').open,false);assert.equal(f.root.querySelector('#work-sort').focused,true);
+  const count=f.calls.length;sort.fire('click');assert.equal(f.calls.length,count);
+  current.resolve(empty());await settle();const html=f.results().innerHTML;
+  previous.reject(new Error('Late obsolete sorting error'));await settle();assert.equal(f.results().innerHTML,html);assert.equal(f.status().textContent,'');
 });
