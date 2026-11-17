@@ -1,5 +1,5 @@
 /* Timing is shared across routes, controls, feedback and async work. */
-:root{--motion-instant:100ms;--motion-fast:140ms;--motion-base:220ms;--motion-enter:300ms;--ease-out:cubic-bezier(.2,.7,.2,1);--ease-in-out:cubic-bezier(.4,0,.2,1)}
+:root{--motion-instant:100ms;--motion-fast:160ms;--motion-base:240ms;--motion-enter:280ms;--ease-out:cubic-bezier(.22,1,.36,1);--ease-in-out:cubic-bezier(.4,0,.2,1)}
 body{line-height:1.6}
 button,.button{font-weight:500}
 input,textarea,select{color:var(--text);background:var(--surface);border-color:var(--border)}
@@ -7,23 +7,24 @@ input::placeholder,textarea::placeholder{color:var(--text-tertiary)}
 input:not([type=checkbox]):not([type=radio]):not([type=file]):focus,textarea:focus,select:focus{border-color:var(--focus);box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 12%,transparent)}
 button:disabled,.button:disabled{opacity:.48}
 a,button,summary{-webkit-tap-highlight-color:transparent}
-button:active:not(:disabled),.button:active:not(:disabled){transform:translateY(1px) scale(.985)}
+button:active:not(:disabled),.button:active:not(:disabled){transform:scale(.97)}
 .button.primary{box-shadow:0 1px 2px #0000000a}
-.page{animation:surface-enter var(--motion-base) var(--ease-out) both}
+.page{animation:page-settle var(--motion-base) var(--ease-out)}
+@keyframes page-settle{from{opacity:.4}to{opacity:1}}
 .page-head{align-items:center}
 .page-head h1,.work-summary h1{text-wrap:balance}
 .work-entry .cover,.creator-card,.template,.select-work{transition:box-shadow var(--motion-base) var(--ease-out),border-color var(--motion-fast),background var(--motion-fast)}
 .select-work.selected,.template.selected{border-color:var(--focus);box-shadow:0 0 0 1px var(--focus)}
 .filter{transition:background var(--motion-fast),color var(--motion-fast)}
-.account-options,.work-row-more[open]>div,.an-date-form{animation:popover-arrive var(--motion-fast) var(--ease-out)}
-@keyframes popover-arrive{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
+.account-options,.appearance-options,[data-action-menu][open]>.action-menu-panel,.an-date-form{animation:popover-arrive var(--motion-fast) var(--ease-out)}
+@keyframes popover-arrive{from{opacity:0;transform:translateY(-4px) scale(.97)}to{opacity:1;transform:none}}
 dialog[open]{animation:dialog-arrive 180ms var(--ease-out)}
 dialog::backdrop{background:#10151f66;backdrop-filter:blur(4px)}
 @keyframes dialog-arrive{from{opacity:0;transform:translateY(6px) scale(.985)}to{opacity:1;transform:none}}
 .notice{max-width:min(520px,calc(100vw - 32px));text-wrap:pretty;line-height:1.6}
 .comment-thread,.comment-reply{animation:content-arrive var(--motion-base) var(--ease-out)}
 @keyframes content-arrive{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
-.feed-arriving>.work-entry{animation:content-arrive var(--motion-enter) var(--ease-out) both;animation-delay:calc(var(--enter-index,0) * 28ms)}
+.feed-arriving>.work-entry{animation:content-arrive var(--motion-enter) var(--ease-out) both;animation-delay:calc(min(var(--enter-index,0),5) * 16ms)}
 .feed-refresh[aria-busy=true]{animation:refresh-turn 1.2s linear infinite}
 @keyframes refresh-turn{to{transform:rotate(360deg)}}
 .feed-loading-caption{display:flex;align-items:center;gap:12px;color:var(--text-tertiary);font-size:12px;min-height:40px;margin-bottom:14px}
@@ -81,8 +82,8 @@ dialog::backdrop{background:#10151f66;backdrop-filter:blur(4px)}
 .work-summary .detail-social{flex-wrap:wrap}
 .game-title{font-variant-numeric:tabular-nums}
 @media(hover:hover) and (pointer:fine){
-  .button.primary:not(:disabled):hover{box-shadow:0 3px 10px #00000014;transform:translateY(-1px)}
-  .button.primary:not(:disabled):active{transform:translateY(1px) scale(.985)}
+  .button.primary:not(:disabled):hover{box-shadow:0 3px 10px #00000014;transform:none}
+  .button.primary:not(:disabled):active{transform:scale(.97)}
   .related-work:hover{background:var(--surface-hover);border-radius:7px}
   .work-entry:hover .cover-action{box-shadow:0 4px 14px #00000014}
 }
@@ -104,3 +105,42 @@ dialog::backdrop{background:#10151f66;backdrop-filter:blur(4px)}
   .route-skeleton{opacity:1}
   .feed-arriving>.work-entry{animation:none;opacity:1;transform:none}
 }
+
+/* Stable content, local feedback: no card zoom or whole-page translation. */
+button,.button,[data-action-menu]>summary{transition:background var(--motion-fast),color var(--motion-fast),box-shadow var(--motion-fast),transform var(--motion-instant) var(--ease-out)}
+.creator-card:hover,.card-builder-page .select-work:hover,.card-builder-page .template:hover,.related-work:hover,.feed-grid .work-entry:hover .cover{transform:none}
+.creator-card:hover .creator-covers img,.work-entry:hover .cover img{transform:none}
+.creator-card-link{display:block;border-radius:inherit}
+.creator-card{position:relative;overflow:visible}
+.creator-card-actions{display:flex;align-items:center;gap:4px;padding:0 14px 12px;min-height:48px;transition:opacity var(--motion-fast),transform var(--motion-fast) var(--ease-out)}
+.creator-card-actions>a,.creator-card-actions>button{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:7px 10px;border:0;border-radius:9px;background:transparent;font:inherit;font-size:12px;color:var(--text-secondary);cursor:pointer}
+.creator-card-actions>a:hover,.creator-card-actions>button:hover{background:var(--surface-hover);color:var(--text)}
+.danger-text,.creator-card-actions>.danger-text,.card-management>.danger-text{color:var(--danger)}
+.button.danger{background:var(--danger);border-color:var(--danger);color:var(--surface)}
+.creator-card-actions>.danger-text{margin-left:auto}
+.card-management{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:12px;margin-top:24px}
+.card-management>p{flex-basis:100%;text-align:center;margin:0}
+.share-dialog{width:min(460px,calc(100vw - 32px));max-width:calc(100vw - 32px)}
+.share-message{width:100%;resize:none;min-height:128px;line-height:1.8;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--soft);font:inherit;font-size:14px;overflow-wrap:anywhere}
+.share-dialog-actions{flex-wrap:wrap;gap:8px}
+.share-dialog .share-status{min-height:24px;margin:14px 0 0}
+.card-delete-dialog>p{line-height:1.8;font-size:13px}
+.card-delete-dialog .delete-card-name{font-weight:600;color:var(--text)}
+.card-delete-dialog .form-footer{justify-content:flex-end}
+@media(hover:hover) and (pointer:fine){
+  .creator-card-actions{opacity:0;transform:translateY(3px);pointer-events:none}
+  .creator-card:hover .creator-card-actions,.creator-card:focus-within .creator-card-actions{opacity:1;transform:none;pointer-events:auto}
+}
+@media(pointer:coarse){.creator-card-actions>a,.creator-card-actions>button,.action-menu-panel>a,.action-menu-panel>button{min-height:44px}}
+@media(max-width:720px){.work-row .row-actions{grid-column:2;justify-self:end;margin-top:-8px}.share-dialog{padding:22px}.card-management{gap:8px}.creator-card-actions{padding-inline:8px}}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-delay:0ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+  .creator-card-actions,button:active:not(:disabled),.button:active:not(:disabled){transform:none!important}
+}
+/* A one-work card must not let the image's intrinsic ratio cover its footer. */
+.creator-covers{grid-template-rows:minmax(0,1fr);overflow:hidden;border-radius:inherit}
+.creator-covers>img{min-width:0;min-height:0;max-height:100%;object-fit:cover}
+@media(max-width:720px){.creator-card-actions{opacity:1;transform:none;pointer-events:auto}.creator-card-actions>a,.creator-card-actions>button{min-height:44px}}
+
+@media(max-width:720px){.work-row[data-archived=false]{position:relative;padding-right:42px}.work-row[data-archived=false]>.row-actions{position:absolute;right:0;top:22px;margin:0}}
+.card-delete-dialog .button.danger:not(:disabled):hover{background:var(--danger);border-color:var(--danger);color:var(--surface);filter:brightness(.96)}

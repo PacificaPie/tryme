@@ -6,8 +6,10 @@ import {discoveryPath,discoveryState,changeVisibility,renderDiscoverySettings,di
 import './site.messages.js';
 import { changeArchive, isArchived, archivedWorksPath } from './archive-controls.js';
 import { emptyState, pageSkeleton, loadingMark } from './empty-state.js';
-import { beginRouteLoading, mountMenus } from './experience.js';
+import { beginRouteLoading, mountMenus } from './experience.js?v=20261117-creator-actions';
 import './experience.messages.js';
+import { cardShareText, openShareDialog } from './sharing.js';
+import { confirmCardDeletion, hasPendingCardDeletion } from './card-actions.js';
 import { signInState } from './sign-in-state.js';
 import { CARD_TEMPLATES, renderPortfolioCard, mountPortfolioCard } from './card-templates.js';
 import { syncNavigation } from './navigation.js';
@@ -80,7 +82,7 @@ function commentIcon(){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path
 function empty(title,description,action=''){const path=route().path;return emptyState({kind:path.includes('feedback')?'activity':path.startsWith('/cards')?'cards':'works',title,description,action});}
 function studio(content,tab){return `<div class="page"><div class="studio"><nav class="studio-nav" aria-label="${t("创作中心")}">${[['works',t("我的作品")],['data',t("数据")],['feedback',t("互动")]].map(([id,name])=>`<a href="#/studio/${id}" class="${tab===id?'active':''}">${name}</a>`).join('')}</nav><div class="studio-main">${content}</div></div></div>`;}
 function cardsPage(content,tab='mine'){return `<div class="page cards-page ${tab==='mine'?'card-builder-page':''}">${content}</div>`;}
-function cardBuilderTop(saved=null){return `<div class="card-builder-top"><a class="back" href="#/cards">← ${t("返回名片")}</a>${saved?`<details class="version-secondary"><summary>${t("更多")}</summary><a class="text-link" href="#/card/${encodeURIComponent(saved.id)}">${t("我的已保存名片")} ↗</a></details>`:''}</div>`;}
+function cardBuilderTop(saved=null){return `<div class="card-builder-top"><a class="back" href="#/cards">← ${t("返回名片")}</a>${saved?`<a class="text-link" href="#/card/${encodeURIComponent(saved.id)}">${t("我的已保存名片")} ↗</a>`:''}</div>`;}
 function cardProfile(card){return {signature:typeof card.signature==='string'?card.signature:'',headline:typeof card.headline==='string'?card.headline:'',website:safeExternal(card.website),backStyle:['ink','ivory','cobalt'].includes(card.backStyle)?card.backStyle:'ink'};}
 function pageError(error){if(error.status===401){me=null;identity();const standalone=getAuthConfig().provider==='clerk';return signInState(signinLink(t(standalone?"登录 / 注册":"使用 ChatGPT 登录")));}return `<div class="page narrow"><section class="error-state"><h2>${t("暂时没能加载")}</h2><p>${esc(t(error.message))}</p><button class="button" data-action="reload">${t("重试")}</button></section></div>`;}
 function head(title,subtitle='',action=''){return `<div class="page-head"><div><h1>${esc(title)}</h1>${subtitle?`<p>${esc(subtitle)}</p>`:''}</div>${action}</div>`;}
@@ -154,8 +156,12 @@ async function renderDiscover(r,number){
 }
 
 async function renderCreators(number){
-  const {cards}=await api('/api/cards'),own=cards.find(card=>card.authorId===me.id);
-  applyHTML(cardsPage(`${head(t("创作者名片"),'',cards.length?`<a class="button primary" href="#/cards/me">${t("制作名片")}</a>`:'')}${own?`<a class="cards-owned-link" href="#/card/${encodeURIComponent(own.id)}">${t("我的已保存名片")} ↗</a>`:''}${cards.length?`<div class="creator-grid">${cards.map(c=>`<a class="creator-card" href="#/card/${encodeURIComponent(c.id)}"><div class="creator-covers">${c.works.slice(0,3).map(w=>safeCover(w.coverUrl)?`<img src="${esc(safeCover(w.coverUrl))}" alt="" loading="lazy">`:'<span></span>').join('')}</div><footer><div><h2>${esc(c.name)}</h2>${c.headline||c.bio?`<p>${esc(c.headline||c.bio)}</p>`:''}</div><span aria-hidden="true">↗</span></footer></a>`).join('')}</div>`:empty(t("还没有名片"),t("选几件自己的作品，制作第一张名片。"),`<a class="button primary" href="#/cards/me">${t("制作名片")}</a>`)}`,'browse'),number);
+  const {cards}=await api('/api/cards');
+  const tiles=cards.map(c=>{
+    const shared=location.origin+publicCardPath(c.id),own=c.authorId===me.id;
+    return `<article class="creator-card"><a class="creator-card-link" href="#/card/${encodeURIComponent(c.id)}"><div class="creator-covers">${c.works.slice(0,3).map(w=>safeCover(w.coverUrl)?`<img src="${esc(safeCover(w.coverUrl))}" alt="" loading="lazy">`:'<span></span>').join('')}</div><footer><div><h2>${esc(c.name)}</h2>${c.headline||c.bio?`<p>${esc(c.headline||c.bio)}</p>`:''}</div><span aria-hidden="true">↗</span></footer></a><div class="creator-card-actions" aria-label="${esc(t('名片操作'))}"><button type="button" data-share-url="${esc(shared)}" data-share-title="${esc(c.name)}" data-share-text="${esc(cardShareText(c,own))}">${t('分享名片')}</button>${own?`<a href="#/cards/me">${t('重新制作')}</a><button type="button" class="danger-text" data-delete-card="${esc(c.id)}" data-card-name="${esc(c.name)}">${t('删除名片')}</button>`:''}</div></article>`;
+  }).join('');
+  applyHTML(cardsPage(`${head(t("创作者名片"),'',cards.length?`<a class="button primary" href="#/cards/me">${t("制作名片")}</a>`:'')}${cards.length?`<div class="creator-grid">${tiles}</div>`:empty(t("还没有名片"),t("选几件自己的作品，制作第一张名片。"),`<a class="button primary" href="#/cards/me">${t("制作名片")}</a>`)}`,'browse'),number);
 }
 
 async function renderWork(r,number,countView=true,autoPlay=true){
@@ -167,7 +173,7 @@ async function renderWork(r,number,countView=true,autoPlay=true){
   if(typeof work.likedByMe!=='boolean'){try{const live=(await api('/api/works/'+encodeURIComponent(id))).work;syncSocial(live);}catch{}}else syncSocial(work);
   const action=work.source==='url'?`<a class="button primary play-launch" href="${esc(href)}" target="_blank" rel="noopener noreferrer" data-outbound="${esc(id)}" data-version="${esc(work.versionId)}">${t("打开作品 ↗")}</a>`:`<button class="button primary play-launch" data-action="start-game" data-work="${esc(id)}">${playIcon()}${t("开始试玩")}</button>`;
   const pinned=r.params.get('card')?t('名片中的版本'):canonicalPath(from.split('?')[0])==='/cards/me/preview'?t('名片预览版本'):'';
-  const ownerActions=work.authorId===me.id&&!pinned?`<div class="owner-work-actions"><a href="#/studio/works/${encodeURIComponent(work.id)}/edit?from=${encodeURIComponent('/work/'+encodeURIComponent(work.id))}">${t("编辑作品信息")}</a><a href="#/studio/data?work=${encodeURIComponent(work.id)}">${t("数据")}</a></div>`:'';
+  const ownerActions=work.authorId===me.id&&!pinned?`<div class="owner-work-actions"><a href="#/studio/works/${encodeURIComponent(work.id)}/edit?from=${encodeURIComponent(r.raw)}">${t("编辑作品信息")}</a><a href="#/studio/data?work=${encodeURIComponent(work.id)}">${t("数据")}</a></div>`:'';
   if(!applyHTML(`<div class="page work-page">
     <a class="back" href="#${esc(from)}">${t("← 返回")}</a>
     <div class="work-detail">
@@ -202,13 +208,13 @@ async function renderWork(r,number,countView=true,autoPlay=true){
 function publicationHelpers(number){return {api,esc,owner:me.id,notify,isCurrent:()=>number===routeNumber,render:html=>applyHTML(html,number),onChanged:()=>clearDiscovery(),reload:()=>renderRoute()};}
 async function renderMyWorks(r,number){
   const archived=r.params.get('state')==='archived',works=await readMine(archived?'archived':'active');
-  const actions=archived?'':`<div class="works-page-actions">${works.length?`<a class="button primary" href="#/publish">${t("＋ 发布作品")}</a>`:''}<details class="archive-navigation"><summary>${t("更多")}</summary><a href="#${archivedWorksPath}">${t('查看归档作品')}</a></details></div>`;
+  const actions=archived?'':`<div class="works-page-actions">${works.length?`<a class="button primary" href="#/publish">${t("＋ 发布作品")}</a>`:''}<a class="button quiet" href="#${archivedWorksPath}">${t('查看归档作品')}</a></div>`;
   const rows=works.map(w=>{
     const d=discoveryState(w),id=encodeURIComponent(w.id),archivedWork=isArchived(w);
     const management=archivedWork
       ? `<a href="#/studio/works/${id}/versions">${t("版本历史")}</a>`
       : `<a href="#/studio/works/${id}/edit">${t("编辑作品信息")}</a>${w.source==='html'?`<a href="#/studio/works/${id}/update">${t("更新版本")}</a><a href="#/studio/works/${id}/versions">${t("版本历史")}</a>`:''}<a href="#${discoveryPath(w.id)}">${t('展示设置')}</a>${d.canHide?`<button type="button" data-discovery-visibility="hide" data-work-id="${esc(w.id)}">${t('从 Feed 隐藏')}</button>`:d.canRestore?`<button type="button" data-discovery-visibility="restore" data-work-id="${esc(w.id)}">${t('恢复到 Feed')}</button>`:''}`;
-    return `<article class="work-row" data-work-row-id="${esc(w.id)}" data-archived="${archivedWork}">${cover(w,workHref(w),false)}<div><a href="${esc(workHref(w))}"><h3>${esc(w.name)}</h3></a><p>${esc(w.desc)}</p><span class="tiny muted">${esc(w.version)} · ${w.source==='url'?t("外链"):'HTML'} · ${date(w.createdAt)}</span><span class="discovery-status work-discovery-status">${esc(t(d.label))}</span></div><div class="row-actions">${archivedWork?`<button type="button" class="button small" data-work-archive="restore" data-work-id="${esc(w.id)}">${t('恢复作品')}</button>`:''}<details class="work-row-more"><summary>${t("更多")}</summary>${archivedWork&&w.source!=='html'?'':management}<a href="#/studio/data?work=${id}">${t("数据")}</a><a href="#/studio/feedback?work=${id}">${t("互动")}</a><a href="${esc(workHref(w))}">${t("打开作品")}</a>${!archivedWork?`<span class="archive-menu-separator" role="separator"></span><button type="button" data-work-archive="archive" data-work-id="${esc(w.id)}">${t('归档作品')}</button>`:''}</details></div></article>`;
+    return `<article class="work-row" data-work-row-id="${esc(w.id)}" data-archived="${archivedWork}">${cover(w,workHref(w),false)}<div><a href="${esc(workHref(w))}"><h3>${esc(w.name)}</h3></a><p>${esc(w.desc)}</p><span class="tiny muted">${esc(w.version)} · ${w.source==='url'?t("外链"):'HTML'} · ${date(w.createdAt)}</span><span class="discovery-status work-discovery-status">${esc(t(d.label))}</span></div><div class="row-actions">${archivedWork?`<button type="button" class="button small" data-work-archive="restore" data-work-id="${esc(w.id)}">${t('恢复作品')}</button>`:''}<details class="work-row-more" data-action-menu><summary aria-label="${esc(t('管理 {name}',{name:w.name}))}"><span aria-hidden="true">···</span></summary><div class="action-menu-panel">${archivedWork&&w.source!=='html'?'':management}<a href="#/studio/data?work=${id}">${t("数据")}</a><a href="#/studio/feedback?work=${id}">${t("互动")}</a><a href="${esc(workHref(w))}">${t("打开作品")}</a>${!archivedWork?`<span class="archive-menu-separator" role="separator"></span><button type="button" data-work-archive="archive" data-work-id="${esc(w.id)}">${t('归档作品')}</button>`:''}</div></details></div></article>`;
   }).join('');
   const none=archived?empty(t('还没有归档作品'),t('归档的作品会保留在这里，可以随时恢复。'),`<a class="button primary" href="#/studio/works">${t('返回我的作品')}</a>`):empty(t("发布你的第一件作品"),t("上传一个 HTML 小游戏，或放入已经部署好的作品链接。"),`<a class="button primary" href="#/publish">${t("发布作品")}</a>`);
   if(!applyHTML(studio(`${archived?`<a class="back" href="#/studio/works">${t('← 我的作品')}</a>`:''}${head(t(archived?'已归档作品':'我的作品'),works.length?`${works.length} ${t("件已发布作品")}`:'',actions)}${archived&&works.length?`<p class="archive-note">${t('归档后仍可查看历史和数据；编辑或更新前请先恢复。')}</p>`:''}${rows||none}`,'works'),number))return;
@@ -480,11 +486,11 @@ function initializeGallery(gallery){
 async function saveCard(){
   if(cardPending||!preview)return;if(!isPinnedPreview(preview)){go('/cards/me/template');return;}cardPending=true;cardError='';const button=$('#save-card');button.disabled=true;button.textContent=t("正在保存…");const saving=preview;
   try{const {card}=await api('/api/cards',{method:'POST',headers:{'Idempotency-Key':saving.saveKey},body:{workIds:saving.workIds,workRefs:previewReferences(saving),template:saving.template,name:saving.name,bio:saving.bio,...cardProfile(saving)}});cardPending=false;me={...me,name:card.name,bio:card.bio,...cardProfile(card)};identity();if(route().path==='/cards/me/preview')go('/card/'+encodeURIComponent(card.id)+'?saved=1');else notify(t("名片已保存。"));}
-  catch(error){cardPending=false;cardError=error.message;if($('#save-card')){$('#save-card').disabled=false;$('#save-card').textContent=t("重试保存");$('#card-error').textContent=t(error.message);}}
+  catch(error){cardPending=false;if(error.code==='CARD_DELETED'){preview=null;write(storage.preview,null);cardError='';notify(error.message);if(route().path==='/cards/me/preview')go('/cards/me/template');return;}cardError=error.message;if($('#save-card')){$('#save-card').disabled=false;$('#save-card').textContent=t("重试保存");$('#card-error').textContent=t(error.message);}}
 }
 async function renderCard(r,number,countView=true){
   const {card}=await api('/api/cards/'+encodeURIComponent(decodeURIComponent(r.path.split('/')[2]))),own=card.authorId===me.id,shared=location.origin+publicCardPath(card.id);
-  if(!applyHTML(`<div class="page card-view"><div class="card-view-top"><a class="back" href="#/cards">← ${t("名片")}</a>${r.params.has('saved')?`<span class="saved-label" role="status">${t("已保存")}</span>`:''}<button class="button small" data-share-url="${esc(shared)}" data-share-title="${esc(card.name)}">${t("分享名片")}</button></div>${cardMarkup(card,r.raw,card.id)}<details class="card-secondary"><summary>${t("更多")}</summary>${own?`<a class="text-link" href="#/cards/me">${t("重新制作")}</a>`:''}<button class="button quiet small" data-copy-url="${esc(shared)}">${t("复制名片链接")}</button><p class="tiny muted">${t("访问范围沿用当前站点设置。")}</p></details></div>`,number))return;
+  if(!applyHTML(`<div class="page card-view"><div class="card-view-top"><a class="back" href="#/cards">← ${t("名片")}</a>${r.params.has('saved')?`<span class="saved-label" role="status">${t("已保存")}</span>`:''}<button class="button small" data-share-url="${esc(shared)}" data-share-title="${esc(card.name)}" data-share-text="${esc(cardShareText(card,own))}">${t("分享名片")}</button></div>${cardMarkup(card,r.raw,card.id)}<div class="card-management">${own?`<a class="text-link" href="#/cards/me">${t("重新制作")}</a>`:''}<button class="button quiet small" data-copy-url="${esc(shared)}">${t("复制名片链接")}</button>${own?`<button type="button" class="button quiet small danger-text" data-delete-card="${esc(card.id)}" data-card-name="${esc(card.name)}">${t('删除名片')}</button>`:''}<p class="tiny muted">${t("朋友无需登录即可查看名片，试玩时再登录。")}</p></div></div>`,number))return;
   mountCard(card,r.raw);if(countView){postAction('card_view',{cardId:card.id});visitRecorded=true;}
 }
 
@@ -507,27 +513,9 @@ async function toggleLike(id){
     if(confirmed)likeRetry.delete(id);else{likeRetry.set(id,desired);notify(error.status===401?t("请重新登录后重试。"):t("暂时没能保存点赞，点击重试。"));}
   }finally{if(account===draftOwner){likePending.delete(id);refreshSocial(id);}}
 }
-function manualShare(url,title=''){
-  const old=$('#share-link-dialog');if(old)old.remove();
-  const dialog=document.createElement('dialog');dialog.id='share-link-dialog';dialog.className='share-dialog';dialog.setAttribute('aria-labelledby','share-title');
-  dialog.innerHTML=`<div class="share-dialog-head"><h2 id="share-title">${t("分享链接")}</h2><button class="share-close" type="button" aria-label="${t("关闭")}">×</button></div>${title?`<p class="share-item-title">${esc(title)}</p>`:''}<input readonly aria-label="${t("可分享的链接")}" value="${esc(url)}"><div class="share-dialog-actions"><button class="button primary share-copy" type="button">${t("复制链接")}</button>${typeof navigator.share==='function'?`<button class="button quiet share-native" type="button">${t("更多分享方式")}</button>`:''}</div><p class="share-status" role="status" aria-live="polite"></p>`;
-  document.body.appendChild(dialog);dialog.addEventListener('close',()=>dialog.remove(),{once:true});
-  $('.share-close',dialog).addEventListener('click',()=>{if(typeof dialog.close==='function')dialog.close();else dialog.remove();});
-  $('.share-copy',dialog).addEventListener('click',async()=>{
-    const button=$('.share-copy',dialog),status=$('.share-status',dialog);button.disabled=true;
-    try{await navigator.clipboard.writeText(url);button.textContent=t("已复制");status.className='share-status success';status.textContent=t("链接已复制。");}
-    catch{const input=$('input',dialog);input.focus();input.select();button.textContent=t("复制链接");status.className='share-status';status.textContent=t("请选中上方链接手动复制。");}
-    finally{button.disabled=false;}
-  });
-  $('.share-native',dialog)?.addEventListener('click',async()=>{
-    try{await navigator.share({title:title||'Funtrack',url});}
-    catch(error){if(error?.name!=='AbortError'){$('.share-status',dialog).className='share-status';$('.share-status',dialog).textContent=t("未能打开系统分享，请复制链接。");}}
-  });
-  if(typeof dialog.showModal==='function')dialog.showModal();else dialog.setAttribute('open','');
-  $('.share-copy',dialog).focus();return dialog;
-}
+function manualShare(url,title='',text=''){return openShareDialog({url,title,text});}
 async function copyLink(url){try{await navigator.clipboard.writeText(url);notify(t("链接已复制。"));return true;}catch{manualShare(url);return false;}}
-function shareLink(title,url){return manualShare(url,title);}
+function shareLink(title,url,text=''){return manualShare(url,title,text);}
 
 function postAction(type,fields){const item=frozenAction(uid(),type,fields);actionQueue.set(item.eventId,{body:item,attempts:0,timer:null});flushAction(item.eventId);}
 async function flushAction(id){const item=actionQueue.get(id);if(!item||item.sending)return;item.sending=true;try{const result=await api('/api/events',{method:'POST',body:item.body,keepalive:true});if(result.receipt?.clientEventId===id||result.duplicate)actionQueue.delete(id);else throw new Error('Missing receipt');}catch(error){if([400,403,404,422].includes(error.status)){actionQueue.delete(id);return;}item.attempts++;clearTimeout(item.timer);item.timer=setTimeout(()=>flushAction(id),Math.min(30000,700*2**Math.min(item.attempts,6)));}finally{item.sending=false;}}
@@ -624,7 +612,8 @@ document.addEventListener('click',async event=>{
   const outbound=event.target.closest('[data-outbound]');if(outbound)postAction('outbound_click',{workId:outbound.dataset.outbound,versionId:outbound.dataset.version});
   const button=event.target.closest('[data-action="reload"]');if(button){authChecked=false;clearDiscovery();renderRoute();}
   const like=event.target.closest('[data-like]');if(like)toggleLike(like.dataset.like);
-  const share=event.target.closest('[data-share-url]');if(share)shareLink(share.dataset.shareTitle,share.dataset.shareUrl);
+  const share=event.target.closest('[data-share-url]');if(share)shareLink(share.dataset.shareTitle,share.dataset.shareUrl,share.dataset.shareText);
+  const remove=event.target.closest('[data-delete-card]');if(remove){const originRoute=routeNumber;confirmCardDeletion({id:remove.dataset.deleteCard,name:remove.dataset.cardName},{api,notify,onDeleted:()=>{if(preview){preview={...preview,saveKey:uid()};write(storage.preview,preview);}cardError='';if(originRoute===routeNumber)go('/cards');}});}
   const copy=event.target.closest('[data-copy-url]');if(copy)copyLink(copy.dataset.copyUrl);
 });
 function renderChrome(){
@@ -641,7 +630,7 @@ function renderChrome(){
 }
 $('#locale-toggle').addEventListener('click',()=>{
   if(activeSession&&!activeSession.ended){notify(t('结束试玩后可切换语言'));return;}
-  if(publishPending||cardPending||startPending||hasPendingVersionMutation()||hasPendingWorkEdit()||hasPendingPublicationControl()){notify(t('正在提交，请稍后切换语言'));return;}
+  if(publishPending||cardPending||startPending||hasPendingCardDeletion()||hasPendingVersionMutation()||hasPendingWorkEdit()||hasPendingPublicationControl()){notify(t('正在提交，请稍后切换语言'));return;}
   setLocale(getLocale()==='en'?'zh-CN':'en');
 });
 window.addEventListener('funtrack:localechange',()=>{

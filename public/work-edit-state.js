@@ -25,6 +25,11 @@ export function coverFileError(file) {
   return '';
 }
 export function workEditReturnPath(value, workId) {
-  if (value === '/work/' + encodeURIComponent(workId)) return value;
-  return '/studio/works';
+  if (typeof value !== 'string') return '/studio/works';
+  const [path, query = ''] = value.split('?');
+  const params = new URLSearchParams(query);
+  // Only return to this live work; never turn an edit into a snapshot or autoplay.
+  if (path !== '/work/' + encodeURIComponent(workId) || params.has('card')) return '/studio/works';
+  params.delete('play');
+  return path + (params.size ? '?' + params : '');
 }

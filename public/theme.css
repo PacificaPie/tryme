@@ -46,7 +46,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
 .site-header nav a.active:after,.nav-indicator.line{background:var(--text)}
 .nav-indicator.pill{background:var(--soft)}
 .avatar,.large-avatar,.comment-avatar,.author-badge{background:var(--soft);color:var(--text-secondary)}
-.account-options,.work-row-more[open],.version-row-more[open],.share-dialog,.version-preview-dialog{background:var(--surface-raised);border-color:var(--border);color:var(--text);box-shadow:var(--shadow-popover)}
+.account-options,.action-menu-panel,.share-dialog,.version-preview-dialog{background:var(--surface-raised);border-color:var(--border);color:var(--text);box-shadow:var(--shadow-popover)}
 .share-box input{background:var(--surface);color:var(--text)}
 .share-dialog::backdrop,.version-preview-dialog::backdrop{background:var(--backdrop)}
 .share-dialog p,.share-dialog .share-item-title,.share-close,.detail-description,.detail-meta,.tile-desc,.work-row p,.stat dt,.stat small,.data-note,.feedback-record header,.field>label,.field>legend,.file-selected,.sample-links,.steps span,.select-work .select-copy small,.template-copy p,.empty-state p,.illustrated-empty p,.creator-card p,.author-heading p,.work-facts dd,.comment-body,.comment-status,.personalization>summary,.card-secondary>summary,.saved-label{color:var(--text-secondary)}

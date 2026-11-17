@@ -61,6 +61,7 @@ export const versionOperations = sqliteTable('ft_version_operations', {
   createdAt: text('created_at').notNull(),
 }, t=>[uniqueIndex('ft_version_operations_owner_key').on(t.ownerId,t.idempotencyKey),index('ft_version_operations_work_created').on(t.workId,t.createdAt)]);
 export const cards = sqliteTable('ft_cards', {
+  deletedAt: text('deleted_at'),
   id: text('id').primaryKey(), authorId: text('author_id').notNull(), snapshotJson: text('snapshot_json').notNull(), createdAt: text('created_at').notNull(),
   idempotencyKey: text('idempotency_key'), requestHash: text('request_hash'),
 }, t => [index('ft_cards_owner_created').on(t.authorId,t.createdAt),uniqueIndex('ft_cards_owner_key').on(t.authorId,t.idempotencyKey)]);

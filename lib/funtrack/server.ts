@@ -208,7 +208,7 @@ async function ingestEvent(request:Request,user:User) {
   const input=await bodyJSON(request),clientId=eventId(input.eventId),type=input.type;let workId:null|string=null,cardId:null|string=null,versionId:null|string=null;
   const prior=await first('SELECT * FROM ft_events WHERE actor_id=? AND client_event_id=?',user.id,clientId);
   if(type==='work_view'||type==='outbound_click'){const w=await getWork(input.workId);if(type==='outbound_click'&&w.source!=='url')throw new ApiError(422,'INVALID_EVENT','该作品没有外链');workId=w.id;versionId=input.versionId===undefined&&prior&&prior.work_id===w.id?prior.version_id:await targetVersion(input.versionId,w);}
-  else if(type==='card_view'){const card=await first('SELECT id FROM ft_cards WHERE id=?',String(input.cardId||''));if(!card)throw new ApiError(404,'CARD_NOT_FOUND','名片不存在');cardId=card.id;}
+  else if(type==='card_view'){const card=await first('SELECT id FROM ft_cards WHERE id=? AND deleted_at IS NULL',String(input.cardId||''));if(!card)throw new ApiError(404,'CARD_NOT_FOUND','名片不存在');cardId=card.id;}
   else throw new ApiError(422,'INVALID_EVENT','事件类型无效');
   function response(row:Row,duplicate:boolean){if(row.event_type!==type||row.work_id!==workId||row.card_id!==cardId||(input.versionId!==undefined&&row.version_id!==versionId))throw new ApiError(409,'EVENT_CONFLICT','事件标识已用于不同内容');return json({receipt:receipt(row),duplicate});}
   if(prior)return response(prior,true);await rateLimit(user,'ft_events','received_at',240);
@@ -334,7 +334,7 @@ async function createCard(request:Request,user:User) {
   // A pre-upgrade request without the new details can still replay its original
   // immutable snapshot. New detail values must never reuse that old request key.
   const legacyHash=!workRefs&&!details.signature&&!details.headline&&!details.website&&details.backStyle==='ink'?await hash(JSON.stringify({name,bio,template:input.template,workIds:input.workIds})):null;
-  async function replay(){if(!key)return null;const row=await first('SELECT * FROM ft_cards WHERE author_id=? AND idempotency_key=?',user.id,key);if(!row)return null;if(row.request_hash!==requestHash&&row.request_hash!==legacyHash)throw new ApiError(409,'IDEMPOTENCY_CONFLICT','名片提交内容已变化，请使用新的提交标识');return json({card:cardSnapshot(JSON.parse(row.snapshot_json))});}
+  async function replay(){if(!key)return null;const row=await first('SELECT * FROM ft_cards WHERE author_id=? AND idempotency_key=?',user.id,key);if(!row)return null;if(row.deleted_at)throw new ApiError(409,'CARD_DELETED','这张名片已删除，请重新生成预览后保存。');if(row.request_hash!==requestHash&&row.request_hash!==legacyHash)throw new ApiError(409,'IDEMPOTENCY_CONFLICT','名片提交内容已变化，请使用新的提交标识');return json({card:cardSnapshot(JSON.parse(row.snapshot_json))});}
   const prior=await replay();if(prior)return prior;
   const works=[];for(let i=0;i<input.workIds.length;i++){
     const w=await ownWork(input.workIds[i],user);requireActiveWork(w);
@@ -383,8 +383,8 @@ export async function handleAPI(request:Request) {
       if(parts[0]==='comments'&&parts.length===3&&parts[2]==='like')return await commentLike(request,user,parts[1]);
       if(parts[0]==='analytics'&&parts.length===1)return await analytics(url,user);
       if(parts[0]==='feedback'&&parts.length===1){const workId=url.searchParams.get('work');if(workId)await ownWork(workId,user);return json({feedback:(await rows(`SELECT f.*,w.name work_name FROM ft_feedback f JOIN ft_works w ON w.id=f.work_id WHERE w.author_id=?${workId?' AND w.id=?':''} ORDER BY f.created_at DESC LIMIT 200`,...workId?[user.id,workId]:[user.id])).map(feedbackJSON)});}
-      if(parts[0]==='cards'&&parts.length===1)return json({cards:(await rows('SELECT c.snapshot_json FROM ft_cards c WHERE c.id=(SELECT d.id FROM ft_cards d WHERE d.author_id=c.author_id ORDER BY d.rowid DESC LIMIT 1) ORDER BY c.created_at DESC LIMIT 200')).map(c=>cardSnapshot(JSON.parse(c.snapshot_json)))});
-      if(parts[0]==='cards'&&parts.length===2){const c=parts[1]==='me'?await first('SELECT snapshot_json FROM ft_cards WHERE author_id=? ORDER BY rowid DESC LIMIT 1',user.id):await first('SELECT snapshot_json FROM ft_cards WHERE id=?',parts[1]);if(!c)throw new ApiError(404,'CARD_NOT_FOUND','还没有已保存的名片');return json({card:cardSnapshot(JSON.parse(c.snapshot_json))});}
+      if(parts[0]==='cards'&&parts.length===1)return json({cards:(await rows('SELECT c.snapshot_json FROM ft_cards c WHERE c.deleted_at IS NULL AND c.id=(SELECT d.id FROM ft_cards d WHERE d.author_id=c.author_id ORDER BY d.rowid DESC LIMIT 1) ORDER BY c.created_at DESC LIMIT 200')).map(c=>cardSnapshot(JSON.parse(c.snapshot_json)))});
+      if(parts[0]==='cards'&&parts.length===2){const c=parts[1]==='me'?await first('SELECT snapshot_json,deleted_at FROM ft_cards WHERE author_id=? ORDER BY rowid DESC LIMIT 1',user.id):await first('SELECT snapshot_json,deleted_at FROM ft_cards WHERE id=?',parts[1]);if(!c||c.deleted_at)throw new ApiError(404,'CARD_NOT_FOUND','还没有已保存的名片');return json({card:cardSnapshot(JSON.parse(c.snapshot_json))});}
       if(parts[0]==='media'&&parts.length===2)return mediaResponse(request,parts[1]);
     }
     if(request.method==='POST') {
@@ -399,6 +399,14 @@ export async function handleAPI(request:Request) {
       if(parts[0]==='events'&&parts.length===1)return await ingestEvent(request,user);
       if(parts[0]==='feedback'&&parts.length===1)return await addFeedback(request,user);
       if(parts[0]==='cards'&&parts.length===1)return await createCard(request,user);
+      if(parts[0]==='cards'&&parts.length===3&&parts[2]==='delete'){
+        const card=await first('SELECT id FROM ft_cards WHERE id=? AND author_id=?',parts[1],user.id);
+        if(!card)throw new ApiError(404,'CARD_NOT_FOUND','名片不存在');
+        // Tombstone only this snapshot: keep historical events and work references.
+        // Repeated requests are safe, including after a lost response.
+        await sql('UPDATE ft_cards SET deleted_at=COALESCE(deleted_at,?) WHERE id=? AND author_id=?',iso(),card.id,user.id).run();
+        return json({cardId:card.id,deleted:true});
+      }
     }
     return json({error:{code:'NOT_FOUND',message:'接口不存在'}},404);
   }catch(e){return errorResponse(e);}
