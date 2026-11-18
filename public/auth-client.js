@@ -122,6 +122,7 @@ export function createAuthClient({
     config = Object.freeze({
       provider: data.provider, configured: data.configured,
       environment: data.environment === 'test' ? 'test' : 'production',
+      wechat: Object.freeze({ enabled: data.provider === 'clerk' && data.configured && data.wechat?.enabled === true }),
       ...(data.provider === 'clerk' ? { publishableKey: data.publishableKey, signInPath: '/auth/sign-in.html', signOutPath: '/auth/sign-out.html' } : {}),
     });
     if (!config.configured) throw authError('AUTH_NOT_CONFIGURED');

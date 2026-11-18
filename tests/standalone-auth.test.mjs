@@ -54,7 +54,7 @@ test('anonymous config is no-store, contains only public settings, and does not 
   const { handler, calls } = fixture();
   const configured = await handler(request('/api/auth/config'), env);
   assert.equal(configured.status, 200);assert.match(configured.headers.get('cache-control'), /no-store/);
-  assert.deepEqual(await configured.json(), { provider: 'clerk', configured: true, publishableKey: key(), signInPath: '/auth/sign-in.html', signOutPath: '/auth/sign-out.html', environment: 'production' });
+  assert.deepEqual(await configured.json(), { provider: 'clerk', configured: true, publishableKey: key(), signInPath: '/auth/sign-in.html', signOutPath: '/auth/sign-out.html', environment: 'production', wechat: { enabled: false } });
   const unconfigured = await (await handler(request('/api/auth/config'), {})).json();
   assert.equal(unconfigured.configured, false);assert.equal(unconfigured.publishableKey, null);assert.equal(unconfigured.error.code, 'AUTH_NOT_CONFIGURED');
   assert.equal(unconfigured.error.message, '登录暂不可用，请稍后再试或联系站点管理员。');

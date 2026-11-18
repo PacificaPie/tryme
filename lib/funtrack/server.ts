@@ -26,7 +26,7 @@ import { analyticsResponse } from './analytics';
 import { ApiError, fail, authenticate, verifyWrite, requiredText, eventId, safeURL, coverType, htmlSource, sessionEvents, GAME_CSP, gameDocument, likedState, cardDetails, cardTemplate, commentInput, validateCommentParent, commentPageLimit, encodeCommentCursor, decodeCommentCursor, discoverQuery, encodeDiscoverCursor, decodeDiscoverCursor, workCategory } from './rules.mjs';
 
 type Row = Record<string, any>;
-type User = { id: string; name: string; email: string };
+type User = { id: string; name: string; email: string | null };
 const iso = () => new Date().toISOString();
 const uuid = () => crypto.randomUUID();
 const bindings = () => env as unknown as { DB?: D1Database; BUCKET?: R2Bucket; BROWSER?: Fetcher; FUNTRACK_AUTO_COVER_ENABLED?: string; FUNTRACK_VIDEO_PREVIEW_ENABLED?: string; FUNTRACK_COVER_REVIEW_ENABLED?: string };

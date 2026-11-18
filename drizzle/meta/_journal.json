@@ -134,6 +134,13 @@
       "when": 1795090000000,
       "tag": "0018_cover_drafts",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1795100000000,
+      "tag": "0020_wechat_independent_identities",
+      "breakpoints": true
     }
   ]
 }
