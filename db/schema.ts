@@ -10,6 +10,19 @@ export const profiles = sqliteTable('ft_profiles', {
 export const creatorFollows = sqliteTable('ft_creator_follows', {
   followerId: text('follower_id').notNull(), creatorId: text('creator_id').notNull(), createdAt: text('created_at').notNull(),
 }, t=>[primaryKey({columns:[t.followerId,t.creatorId]}),check('ft_creator_follows_not_self',sql`${t.followerId} <> ${t.creatorId}`),index('ft_creator_follows_creator').on(t.creatorId,t.createdAt,t.followerId),index('ft_creator_follows_follower').on(t.followerId,t.createdAt,t.creatorId)]);
+// Recipient-scoped inbox facts. Target IDs stay independent of source lifetime;
+// missing/deleted content is projected as unavailable, without cached body text.
+export const notifications = sqliteTable('ft_notifications', {
+  seq: integer('seq').primaryKey({autoIncrement:true}), recipientId: text('recipient_id').notNull(),
+  actorId: text('actor_id').notNull(), kind: text('kind').notNull(), targetId: text('target_id').notNull(),
+  workId: text('work_id'), createdAt: text('created_at').notNull(), readAt: text('read_at'),
+  active: integer('active').notNull().default(1),
+}, t=>[uniqueIndex('ft_notifications_event').on(t.recipientId,t.kind,t.actorId,t.targetId),
+  index('ft_notifications_inbox').on(t.recipientId,t.active,t.seq),index('ft_notifications_unread').on(t.recipientId,t.active,t.readAt,t.seq),
+  index('ft_notifications_group').on(t.recipientId,t.kind,t.targetId,t.seq),
+  check('ft_notifications_not_self',sql`${t.recipientId} <> ${t.actorId}`),
+  check('ft_notifications_kind',sql`${t.kind} IN ('work_like','comment_like','comment','reply','follow')`),
+  check('ft_notifications_active',sql`${t.active} IN (0,1)`)]);
 export const profileAvatars = sqliteTable('ft_profile_avatars', {
   id: text('id').primaryKey(), ownerId: text('owner_id').notNull(), objectKey: text('object_key').notNull(), mime: text('mime').notNull(),
   byteSize: integer('byte_size').notNull(), createdAt: text('created_at').notNull(),

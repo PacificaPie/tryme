@@ -23,7 +23,7 @@ const otherCard={id:'81160f2c-1946-4d96-a85c-bfdaf5940fe8',authorId:'someone-els
 
 function siteFixture(){
   const requests=[],renders=[],mounts=[],workspaces=[],identity={innerHTML:''},directory={isConnected:true},context=vm.createContext({
-    t,esc,avatarMarkup,emptyState,cardShareText,publicCardPath,URL,
+    notificationCenter:{setUser(){}},t,esc,avatarMarkup,emptyState,cardShareText,publicCardPath,URL,
     me:{id:'my/id',name:'Profile <name>',avatarUrl:'/avatars/moon.svg'},routeNumber:1,creatorPanel:null,
     route:()=>({path:'/cards'}),location:{origin:'https://funtrack.test'},
     api:url=>{const pending=deferred();requests.push({url,...pending});return pending.promise;},

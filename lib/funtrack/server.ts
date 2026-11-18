@@ -1,5 +1,6 @@
 import { createPublishDraftService, publicationChoices } from './publish-draft-service.mjs';
 import { captureVideoPreview } from './video-preview-capture.mjs';
+import { createNotificationService } from './notification-service.mjs';
 import { env } from 'cloudflare:workers';
 import { PUBLICATION_MAX_BYTES } from './limits.mjs';
 import { createCoverDraftService } from './cover-draft-service.mjs';
@@ -57,6 +58,7 @@ async function bodyJSON(request:Request):Promise<Row> {
   if(!request.headers.get('content-type')?.toLowerCase().startsWith('application/json'))throw new ApiError(415,'JSON_REQUIRED','请使用 JSON 请求');
   try {const body=JSON.parse(new TextDecoder().decode(await limitedBody(request,65536)));if(!body||typeof body!=='object'||Array.isArray(body))throw new Error();return body;}catch(e){if(e instanceof ApiError)throw e;throw new ApiError(400,'INVALID_JSON','JSON 格式无效');}
 }
+const notificationAPI=createNotificationService({db,bodyJSON,json});
 const WORK_QUERY=`SELECT w.*,v.version,v.game_key,CASE WHEN m.id IS NOT NULL THEN m.cover_key ELSE v.cover_key END cover_key,CASE WHEN m.id IS NOT NULL THEN m.cover_mime ELSE v.cover_mime END cover_mime,v.provenance_json,${DISCOVERY_COLUMNS} FROM ft_works w JOIN ft_work_versions v ON v.id=w.current_version_id LEFT JOIN ft_work_metadata m ON m.id=w.current_metadata_id AND m.work_id=w.id${DISCOVERY_JOIN}`;
 function workJSON(w:Row) { return {id:w.id,authorId:w.author_id,authorName:w.author_name,authorAvatarUrl:w.author_avatar_url||'',name:w.name,desc:w.description,source:w.source,category:w.work_category||'other',versionId:w.current_version_id,version:w.version,metadataId:w.current_metadata_id||null,coverUrl:w.cover_key?`/media/${w.current_metadata_id||w.current_version_id}`:'',...(w.url?{url:w.url}:{}),...(w.provenance_json?{build:JSON.parse(w.provenance_json)}:{}),createdAt:w.created_at,revision:w.revision,updatedAt:w.updated_at||w.created_at,archivedAt:w.archived_at||null,discovery:discoveryJSON(w)}; }
 async function getWork(id:unknown):Promise<Row> { if(typeof id!=='string'||id.length>128)throw new ApiError(404,'WORK_NOT_FOUND','作品不存在');const w=await first(WORK_QUERY+' WHERE w.id=?',id);if(!w)throw new ApiError(404,'WORK_NOT_FOUND','作品不存在');const profile=await first('SELECT * FROM ft_profiles WHERE id=?',w.author_id);return {...w,author_name:profile?.name||w.author_name,author_avatar_url:profile?.avatar_url||''}; }
@@ -446,6 +448,7 @@ export async function handleAPI(request:Request) {
     const user=authenticate(request.headers),url=new URL(request.url),parts=url.pathname.replace(/^\/api\/?/,'').split('/').filter(Boolean);
     if(['POST','PATCH'].includes(request.method))verifyWrite(request);
     const cardCoverResponse=await cardCovers.handle(request,user);if(cardCoverResponse)return cardCoverResponse;
+    const notificationResponse=await notificationAPI(request,user);if(notificationResponse)return notificationResponse;
     const creatorResponse=await creators.handle(request,user);if(creatorResponse)return creatorResponse;
     const publishDraftResponse=await publishDrafts.handle(request,user);if(publishDraftResponse)return publishDraftResponse;
     const draftCoverResponse=await coverDrafts.handle(request,user);if(draftCoverResponse)return draftCoverResponse;
