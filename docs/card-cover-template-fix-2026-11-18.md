@@ -15,18 +15,18 @@
 
 新增 owner-only `GET/POST /api/cards/:id/cover-updates`，JSON 快照内新增可选封面引用；没有数据库 schema 变更、数据迁移、历史快照重写或鉴权放宽。更新流程只提供存在的新图片，不把删除当前作品图片解释为清空历史名片图片。
 
-本分支从 `77be1fa` 独立建立；不包含上传重构、微信登录、AI 录制或 Draft PR #10 的整体变更。原诊断中的草稿提示／历史预览候选问题不混入此次修复。
+名片补丁从 `77be1fa` 独立建立。发布前发现 PR #20 的上传修复已上线，因此同步其已发布代码 `5d4f5af` 作为部署基线，保留发布前审核开关；名片补丁本身不修改上传流程、微信登录、AI 录制或 Draft PR #10。原诊断中的草稿提示／历史预览候选问题不混入此次修复。
 
 ## 验证
 
 - 新增 API 回归覆盖：空封面补齐、新旧链接分别读取、只改封面而不改 v1/说明、公开图片字节、隐藏内部字段、重复提交与丢失响应重试、并发、跨账号、匿名、CSRF、伪造或跨作品引用、删除、归档、当前卡切换、名称编辑不误判图片更新。
 - 前端回归覆盖：空选择禁用、重复点击、错误重试保留键与引用、修改选择换键、账号／路由变化丢弃迟到结果、响应身份核对、旧名片更新入口引导回当前卡。
-- 完整自动测试 590/590 通过；脚本与 TypeScript 检查通过；独立 production 目标构建通过，正式资源绑定 dry-run 通过。
+- 名片补丁独立测试 590/590 通过；与当前线上上传修复集成后完整测试 602/602 通过；脚本与 TypeScript 检查通过；独立 production 目标构建通过，正式资源绑定 dry-run 通过。
 - 本地 Chrome 使用真实前端、真实 router/SQL 与内存 DB/R2，测试身份仅存在于 `127.0.0.1:4879` 的测试服务器。已走通空封面对比、取消全选、保存新版、主页新卡、旧链接保留与“封面已是最新”状态。桌面与 390px 视口检查完成，实际布局宽度无横向溢出，六模板缩略图均已查看，无新增浏览器 error 日志。
 - 可重复浏览器 fixture：`node tests/fixtures/card-covers-browser-server.mjs`。它不连接正式数据或云服务。截图保存在本地忽略目录 `.preview/card-fixes/`。
 
 ## 发布与回退
 
-沿用已配置的独立 Cloudflare production Worker，使用 `wrangler.standalone.production.jsonc` 构建与 `dist-standalone/server/wrangler.json` 发布；保留现有域名、资源和 Clerk secret。发布前基线版本为 `e2bc3911-3631-4844-960e-12d4b602ecd1`，实际发布前再次检查是否变化。
+沿用已配置的独立 Cloudflare production Worker，使用 `wrangler.standalone.production.jsonc` 构建与 `dist-standalone/server/wrangler.json` 发布；保留现有域名、资源和 Clerk secret。最初基线 `e2bc3911-3631-4844-960e-12d4b602ecd1` 已被 PR #20 的 `c3154ddb-7607-4947-b8fa-64eefd439f44` 替换，本次基于后者重新构建。上传任务已应用的迁移 0019 原样保留，本补丁无需追加迁移。实际发布前再次检查版本是否变化。
 
 回退需注意：旧服务不知道新 `coverMetadataId`。如果发布后已有封面更新的新名片，不应直接回退到完全不识别该字段的旧服务，否则新卡公开图片可能缺失。优先用保留 `public-sharing.mjs` 新封面引用读取兼容性的回退补丁，关闭新写入／恢复 UI；旧卡本身始终未改写。
