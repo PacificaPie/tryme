@@ -1,5 +1,6 @@
 import { mountFeedLayout } from './feed-layout.js';
 import { mountFeedImpressions } from './feed-impressions.js';
+import { mountVideoPreviews } from './video-preview.js';
 import { emptyState, loadingMark } from './empty-state.js';
 import { t, getLocale, registerMessages } from './i18n.js';
 import './discovery-messages.js';
@@ -15,7 +16,7 @@ export async function mountDiscovery(root, options) {
   const guest=!userId;
   let query={q:initial.q||'',source:['html','url'].includes(initial.source)?initial.source:'all',sort:['recommended','newest','likes','comments'].includes(initial.sort)?initial.sort:authorId?'newest':'recommended',following:!authorId&&initial.following==='1'?'1':'0'};
   let works=[],cursor=null,total=0,pending=false,loaded=false,error='',request=0,timer,slowTimer,slow=false,controller=null,composing=false,disposed=false;
-  let grid=null,layout=null,impressions=null,tileState=new Map(),restored=false;
+  let grid=null,layout=null,impressions=null,previews=null,tileState=new Map(),restored=false;
   const alive=()=>!disposed&&root.isConnected;
   const cacheKey=()=>JSON.stringify([userId,authorId,query]);
   const authorName=authorCard?.name||t('创作者');
@@ -31,7 +32,7 @@ export async function mountDiscovery(root, options) {
   if(guest)root.insertAdjacentHTML('beforeend',`<p class="muted guest-feed-note">${t('先随便逛逛，登录后即可试玩、发布作品和制作名片。')}</p>`);
   root.insertAdjacentHTML('beforeend',`<div id="discovery-results"></div><p class="feed-status" role="status" aria-live="polite"></p><div class="feed-pagination"><button class="button" id="load-works" hidden>${t('加载更多')}</button></div>`);
   const results=root.querySelector('#discovery-results'),status=root.querySelector('.feed-status'),more=root.querySelector('#load-works');
-  function resetLayout(){impressions?.dispose();impressions=null;layout?.dispose();layout=null;grid=null;tileState.clear();}
+  function resetLayout(){previews?.dispose();previews=null;impressions?.dispose();impressions=null;layout?.dispose();layout=null;grid=null;tileState.clear();}
   function createTile(work,index){
     const template=document.createElement('template');template.innerHTML=workTile(work,{social:!guest}).trim();
     const tile=template.content.firstElementChild;tile.dataset.workId=work.id;tile.setAttribute('role','listitem');tile.setAttribute('aria-posinset',String(index+1));tile.setAttribute('aria-setsize',String(total));
@@ -79,6 +80,7 @@ export async function mountDiscovery(root, options) {
       if(grid.children[index]!==tile){grid.insertBefore(tile,grid.children[index]||null);changed=true;}
     });
     if(!layout)layout=mountFeedLayout(grid,{host:root});else if(changed)layout.refresh();
+    if(!previews&&works.some(work=>work.preview))previews=mountVideoPreviews(grid);else if(changed)previews?.refresh();
     if(!guest&&!authorId&&query.following!=='1'){if(!impressions)impressions=mountFeedImpressions(grid,{api,userId,sort:query.sort,host:root});else impressions.refresh();}
     more.hidden=!cursor;more.disabled=pending;more.textContent=t(pending?'正在加载…':error?'重试加载':'加载更多');
   }

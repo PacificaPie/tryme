@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers';
 import { PUBLICATION_MAX_BYTES } from './limits.mjs';
 import { createAutoCoverService } from './auto-cover-service.mjs';
 import { captureHostedHTML } from './auto-cover-capture.mjs';
+import { createVideoPreviewService } from './video-preview-service.mjs';
 import { handleBuildAPI, handleBuildWorker, getBuildArtifact } from './build-service';
 import { resolveGithubHTML } from './github-import.mjs';
 import { publicationArtifact } from './publication-artifact.mjs';
@@ -25,11 +26,13 @@ type Row = Record<string, any>;
 type User = { id: string; name: string; email: string };
 const iso = () => new Date().toISOString();
 const uuid = () => crypto.randomUUID();
-const bindings = () => env as unknown as { DB?: D1Database; BUCKET?: R2Bucket; BROWSER?: Fetcher; FUNTRACK_AUTO_COVER_ENABLED?: string };
+const bindings = () => env as unknown as { DB?: D1Database; BUCKET?: R2Bucket; BROWSER?: Fetcher; FUNTRACK_AUTO_COVER_ENABLED?: string; FUNTRACK_VIDEO_PREVIEW_ENABLED?: string };
 function db(): D1Database { const d=bindings().DB; if(!d)throw new ApiError(503,'STORAGE_UNAVAILABLE','数据库暂不可用'); return d; }
 function bucket(): R2Bucket { const b=bindings().BUCKET; if(!b)throw new ApiError(503,'STORAGE_UNAVAILABLE','文件存储暂不可用'); return b; }
 const sql=(query:string,...values:any[])=>db().prepare(query).bind(...values);
 const autoCovers=createAutoCoverService({db,bucket,configured:()=>bindings().FUNTRACK_AUTO_COVER_ENABLED==='1'&&typeof bindings().BROWSER?.fetch==='function',capture:(html:string)=>captureHostedHTML(bindings().BROWSER,html)});
+const autoPreviews=createVideoPreviewService({db,bucket,configured:()=>bindings().FUNTRACK_VIDEO_PREVIEW_ENABLED==='1'&&typeof bindings().BROWSER?.fetch==='function',capture:async()=>{throw new Error('Video capture runs only in the scheduled worker');}});
+async function onPublished(workId:string,versionId:string,ownerId:string){await Promise.all([autoCovers.enqueue(workId,versionId,ownerId),autoPreviews.enqueue(workId,versionId,ownerId)]);}
 const first=(query:string,...values:any[])=>sql(query,...values).first<Row>();
 async function rows(query:string,...values:any[]):Promise<Row[]> { return (await sql(query,...values).all<Row>()).results; }
 export function json(value:unknown,status=200) { return Response.json(value,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}}); }
@@ -63,7 +66,7 @@ async function withWorkStats(works:Row[],user:User|null) {
   const byId=new Map(counts.map(row=>[row.work_id,row]));
   const commentsById=new Map(commentCounts.map(row=>[row.work_id,row.n]));
   const profilesById=new Map(profiles.map(row=>[row.id,row]));
-  return works.map(work=>({...work,authorName:profilesById.get(work.authorId)?.name||work.authorName,authorAvatarUrl:profilesById.get(work.authorId)?.avatar_url||'',likesCount:Number(byId.get(work.id)?.n||0),likedByMe:Boolean(byId.get(work.id)?.liked),commentsCount:Number(commentsById.get(work.id)||0)}));
+  return autoPreviews.decorate(works.map(work=>({...work,authorName:profilesById.get(work.authorId)?.name||work.authorName,authorAvatarUrl:profilesById.get(work.authorId)?.avatar_url||'',likesCount:Number(byId.get(work.id)?.n||0),likedByMe:Boolean(byId.get(work.id)?.liked),commentsCount:Number(commentsById.get(work.id)||0)})),user?.id);
 }
 function likeJSON(workId:string,row:Row) {return {workId,liked:Boolean(row.liked),likesCount:Number(row.n||0)};}
 async function discover(url:URL,user:User|null,mine=false) {
@@ -108,7 +111,7 @@ async function discover(url:URL,user:User|null,mine=false) {
   const works=await withWorkStats(page.map(workJSON),user);
   // Explicit DTO: no identity IDs, external play URLs, version/artifact paths,
   // provenance, moderation state or viewer-specific data cross this boundary.
-  const publicWorks=()=>works.map((w:Row)=>({id:w.id,name:w.name,desc:w.desc,source:w.source,authorName:w.authorName,authorAvatarUrl:safeAvatarURL(w.authorAvatarUrl),coverUrl:w.coverUrl?`/api/public/works/${encodeURIComponent(w.id)}/cover`:'',likesCount:w.likesCount,commentsCount:w.commentsCount}));
+  const publicWorks=()=>works.map((w:Row)=>({id:w.id,name:w.name,desc:w.desc,source:w.source,authorName:w.authorName,authorAvatarUrl:safeAvatarURL(w.authorAvatarUrl),coverUrl:w.coverUrl?`/api/public/works/${encodeURIComponent(w.id)}/cover`:'',...(w.preview?{preview:w.preview}:{}),likesCount:w.likesCount,commentsCount:w.commentsCount}));
   return json({works:user?works:publicWorks(),nextCursor,total:Number(results[1].results[0]?.n||0),sort:query.sort,asOf,...(recommended?{rankingVersion:RECOMMENDATION_VERSION}:{})});
 }
 async function publicFeedAPI(request:Request) {
@@ -117,6 +120,7 @@ async function publicFeedAPI(request:Request) {
     const response=await discover(new URL(request.url),null);
     return request.method==='HEAD'?new Response(null,{status:response.status,headers:response.headers}):response;
   }
+  if(route.kind==='preview')return autoPreviews.media(request,route.workId,route.previewId);
   // Recheck visibility on every read, including old bookmarked cover URLs.
   const w=await first(WORK_QUERY+' WHERE w.id=? AND '+DISCOVERY_ELIGIBLE,route.workId);
   if(!w?.cover_key||!['image/png','image/jpeg','image/webp'].includes(w.cover_mime))throw new ApiError(404,'MEDIA_NOT_FOUND','封面不存在');
@@ -150,7 +154,7 @@ const handleArchiveAPI=createArchiveService({db,ownWork,workJSON,bodyJSON});
 const publicSharing=createPublicSharingService({db,bucket,origin:()=>(env as unknown as {APP_ORIGIN?:string}).APP_ORIGIN||''});
 const creators=createCreatorService({db,bucket,bodyJSON,readForm:readPublicationForm,json});
 const handleWorkEditAPI=createWorkEditService({db,bucket,ownWork,workJSON,hash,readForm:readPublicationForm});
-const handleVersionAPI=createVersionService({db,bucket,ownWork,workJSON,hash,readForm:readPublicationForm,readArtifact,bodyJSON,onPublished:(workId:string,versionId:string,ownerId:string)=>autoCovers.enqueue(workId,versionId,ownerId)});
+const handleVersionAPI=createVersionService({db,bucket,ownWork,workJSON,hash,readForm:readPublicationForm,readArtifact,bodyJSON,onPublished});
 
 async function publish(request:Request,user:User) {
   const key=eventId(request.headers.get('idempotency-key'));
@@ -162,7 +166,7 @@ async function publish(request:Request,user:User) {
   const fingerprint=gameBytes?await hash(gameBytes):url!;
   const requestHash=await hash(JSON.stringify({name,description,source,url,...(buildId?{buildId}:{}),game:gameBytes?fingerprint:null,cover:coverBytes?await hash(coverBytes):null,coverMime}));
   const initialQuery=`SELECT w.*,v.id initial_version_id,v.version,v.game_key,v.cover_key,v.cover_mime,v.provenance_json,i.name initial_name,i.description initial_description,${DISCOVERY_COLUMNS} FROM ft_works w JOIN ft_work_versions v ON v.work_id=w.id AND v.ordinal=1 LEFT JOIN ft_work_metadata i ON i.id=w.initial_metadata_id AND i.work_id=w.id${DISCOVERY_JOIN}`;
-  async function initialResponse(found:Row,status=200){if(found.request_hash!==requestHash)throw new ApiError(409,'IDEMPOTENCY_CONFLICT','同一次提交的内容已变化，请创建新的提交标识');await autoCovers.enqueue(found.id,found.initial_version_id,user.id);return json({work:workJSON({...found,name:found.initial_name??found.name,description:found.initial_description??found.description,current_metadata_id:found.initial_metadata_id,current_version_id:found.initial_version_id,revision:1,updated_at:found.created_at}),current:{versionId:found.current_version_id,revision:found.revision}},status);}
+  async function initialResponse(found:Row,status=200){if(found.request_hash!==requestHash)throw new ApiError(409,'IDEMPOTENCY_CONFLICT','同一次提交的内容已变化，请创建新的提交标识');await onPublished(found.id,found.initial_version_id,user.id);return json({work:workJSON({...found,name:found.initial_name??found.name,description:found.initial_description??found.description,current_metadata_id:found.initial_metadata_id,current_version_id:found.initial_version_id,revision:1,updated_at:found.created_at}),current:{versionId:found.current_version_id,revision:found.revision}},status);}
   async function replay(){const found=await first(initialQuery+' WHERE w.author_id=? AND w.idempotency_key=?',user.id,key);return found?initialResponse(found):null;}
   const prior=await replay();if(prior)return prior;
   await duplicates.assertNew(user.id,source,fingerprint);
@@ -421,6 +425,9 @@ export async function handleAPI(request:Request) {
     if(['POST','PATCH'].includes(request.method))verifyWrite(request);
     const creatorResponse=await creators.handle(request,user);if(creatorResponse)return creatorResponse;
     const autoCoverResponse=await autoCovers.handle(request,user);if(autoCoverResponse)return autoCoverResponse;
+    const autoPreviewResponse=await autoPreviews.handle(request,user);if(autoPreviewResponse)return autoPreviewResponse;
+    const previewMatch=/^\/api\/works\/([A-Za-z0-9_-]{8,128})\/preview\/([A-Za-z0-9_-]{8,128})$/.exec(url.pathname);
+    if(previewMatch&&['GET','HEAD'].includes(request.method))return await autoPreviews.media(request,previewMatch[1],previewMatch[2],user);
     const archiveResponse=await handleArchiveAPI(request,user);if(archiveResponse)return archiveResponse;
     const discoveryResponse=await handleDiscoveryAPI(request,user);if(discoveryResponse)return discoveryResponse;
     const editResponse=await handleWorkEditAPI(request,user);if(editResponse)return editResponse;
