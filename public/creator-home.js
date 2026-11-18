@@ -18,6 +18,7 @@ registerMessages({
   '还没有公开名片': 'No public card yet', '重新制作': 'Make a new card', '删除名片': 'Delete card',
   '个人网址': 'Website', '墨黑': 'Ink', '象牙白': 'Ivory', '钴蓝': 'Cobalt',
   '全部作品': 'All works', '返回': 'Back',
+  '更新名片封面':'Update card covers',
 });
 
 const escape = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
@@ -41,8 +42,8 @@ function externalWebsite(value) {
 
 export function creatorProfilePath(id) { return '/site#/author/' + encodeURIComponent(String(id)); }
 
-// A consistent cover object lets every template share this home-page entry.
-// The actual card's renderer and interactions remain in the card viewer.
+// Lightweight template miniatures share saved content, not a generic layout.
+// They remain one accessible link; full 3D interaction stays in the card viewer.
 export function creatorCardPreview(card, { esc = escape, safeCover = localCover } = {}) {
   const works = Array.isArray(card?.works) ? card.works : [];
   const appearance = ['ink', 'ivory', 'cobalt'].includes(card?.backStyle) ? card.backStyle : 'ink';
@@ -51,7 +52,7 @@ export function creatorCardPreview(card, { esc = escape, safeCover = localCover 
     const source = safeCover(work?.coverUrl);
     return source ? `<img src="${esc(source)}" alt="" loading="lazy">` : `<span class="creator-card-cover-placeholder">${esc(work?.name || '')}</span>`;
   };
-  return `<span class="creator-card-object" data-card-paper="${appearance}" aria-hidden="true"><span class="creator-card-object-top"><span>TRYME</span><span>${esc(t('名片封面'))}</span></span><span class="creator-card-object-art" data-count="${Math.min(works.length, 3)}">${works.slice(0, 3).map(image).join('')}</span><span class="creator-card-object-person">${avatarMarkup({ name: card?.name, avatarUrl: card?.avatarUrl }, { className: 'creator-card-object-avatar' })}<span class="creator-card-object-name">${esc(card?.name || t('创作者'))}</span></span>${card?.headline ? `<span class="creator-card-object-headline">${esc(card.headline)}</span>` : ''}<span class="creator-card-object-bottom"><span>${esc(template ? t(template.name) : t('创作者名片'))}</span><span>${localeNumber(works.length)}</span></span></span>`;
+  return `<span class="creator-card-object" data-card-paper="${appearance}" data-card-template="${template?.id||'wall'}" aria-hidden="true"><span class="creator-card-object-top"><span>TRYME</span><span>${esc(t('名片封面'))}</span></span><span class="creator-card-object-art" data-count="${Math.min(works.length, 3)}">${works.slice(0, 3).map(image).join('')}</span><span class="creator-card-object-person">${avatarMarkup({ name: card?.name, avatarUrl: card?.avatarUrl }, { className: 'creator-card-object-avatar' })}<span class="creator-card-object-name">${esc(card?.name || t('创作者'))}</span></span>${card?.headline ? `<span class="creator-card-object-headline">${esc(card.headline)}</span>` : ''}<span class="creator-card-object-bottom"><span>${esc(template ? t(template.name) : t('创作者名片'))}</span><span>${localeNumber(works.length)}</span></span></span>`;
 }
 
 export function creatorHomeMarkup({ creator, card, me, esc = escape, safeCover, profileURL = '', backHref = '#/feed' }) {
@@ -71,7 +72,7 @@ export function creatorHomeMarkup({ creator, card, me, esc = escape, safeCover, 
     const href = '#/card/' + encodeURIComponent(card.id);
     const label = t('{name} 的名片', { name: card.name });
     const cardActions = own
-      ? `<div class="creator-home-card-actions creator-card-owner-actions"><a class="text-link" href="#/cards/me">${t('重新制作')}</a><button type="button" class="button quiet small danger-text" data-delete-card="${esc(card.id)}" data-card-name="${esc(card.name)}">${t('删除名片')}</button></div>`
+      ? `<div class="creator-home-card-actions creator-card-owner-actions"><a class="text-link" href="#/cards/me">${t('重新制作')}</a><a class="text-link" href="#/cards/covers/${encodeURIComponent(card.id)}">${t('更新名片封面')}</a><button type="button" class="button quiet small danger-text" data-delete-card="${esc(card.id)}" data-card-name="${esc(card.name)}">${t('删除名片')}</button></div>`
       : `<div class="creator-home-card-actions creator-card-visitor-actions"><a class="text-link" href="#${esc(cardRemixPath(card.id))}">${t('用同款制作')}</a></div>`;
     exhibit = `<section class="creator-home-card" aria-label="${esc(t('名片陈列'))}"><a class="creator-card-stage" href="${esc(href)}" aria-label="${esc(label)}">${creatorCardPreview(card, { esc, safeCover })}</a><div class="creator-card-caption"><div><h2>${esc(label)}</h2><p>${esc(template ? t(template.name) : t('创作者名片'))} · ${esc(t('名片中有 {count} 件作品', { count: localeNumber(Array.isArray(card.works) ? card.works.length : 0) }))}</p></div><a class="text-link" href="${esc(href)}">${t('看看名片')} <span aria-hidden="true">↗</span></a></div>${cardActions}</section>`;
   } else if (own) exhibit = `<section class="creator-home-card creator-home-card-empty" aria-label="${esc(t('名片陈列'))}"><span class="creator-card-empty-paper" aria-hidden="true"><span>TRYME</span><b>＋</b></span><h2>${t('制作我的名片')}</h2><p>${t('选几件作品，制作一张属于你的名片。')}</p><a class="button" href="#/cards/me">${t('制作名片')}</a></section>`;
