@@ -21,6 +21,7 @@ class Element {
   get content(){return {firstElementChild:this.nodes[0]||null};}
   insertBefore(node,before){node.remove();const index=this.nodes.indexOf(before);this.nodes.splice(index<0?this.nodes.length:index,0,node);node.parentNode=this;}
   remove(){if(this.parentNode){const nodes=this.parentNode.nodes;nodes.splice(nodes.indexOf(this),1);this.parentNode=null;}}
+  replaceWith(node){if(this.parentNode){const parent=this.parentNode,index=parent.nodes.indexOf(this);parent.nodes[index]=node;node.parentNode=parent;this.parentNode=null;}}
   parse(html){return [...html.matchAll(/<([a-z][\w:-]*)(\s[^>]*|)>/gi)].map(match=>new Element(match[1],match[2]));}
   insertAdjacentHTML(_position,html){this._html+=html;this.nodes.push(...this.parse(html));}
   matches(selector){return selector[0]==='#'?this.attributes.get('id')===selector.slice(1):selector[0]==='.'?this.classes.has(selector.slice(1)):selector[0]==='['?this.attributes.has(selector.slice(1,-1)):this.tag===selector;}
@@ -50,6 +51,19 @@ function fixture(t){
   const results=()=>root.querySelector('#discovery-results'),status=()=>root.querySelector('.feed-status'),retry=()=>results().querySelector('[data-retry]'),refresh=()=>root.querySelector('.feed-refresh');
   return{root,calls,queries,social,timers,frames,tick,mount,results,status,retry,refresh};
 }
+
+test('Feed automatically fills a completed cover and retains pagination, likes, title and restored cache',async t=>{
+  const f=fixture(t),rendered=[];
+  const options={userId:null,workTile:work=>{rendered.push({...work});return `<article data-rendered-work="${work.id}"></article>`;}};
+  const panel=await f.mount(options);
+  const work={id:'pending-cover',source:'html',coverUrl:'',name:'Current name',likesCount:4};
+  f.calls[0].resolve({works:[work],total:20,nextCursor:'page-two'});await settle();
+  f.tick(15000);assert.equal(f.calls.length,2);assert(f.calls[1].url.startsWith('/api/public/discover?'));
+  f.calls[1].resolve({works:[{...work,coverUrl:'/api/public/works/pending-cover/cover',name:'Stale name',likesCount:0}],total:1,nextCursor:null});await settle();
+  assert.equal(rendered.at(-1).coverUrl,'/api/public/works/pending-cover/cover');assert.equal(rendered.at(-1).name,'Current name');assert.equal(rendered.at(-1).likesCount,4);
+  assert.equal(f.root.querySelector('#load-works').hidden,false);assert.equal(f.status().textContent,'');
+  panel.dispose();await f.mount(options,new Element());assert.equal(f.calls.length,2);assert.equal(rendered.at(-1).coverUrl,'/api/public/works/pending-cover/cover');
+});
 
 test('guest Feed uses public reads, keeps search/sort/pagination and gates following without private or impression calls',async t=>{
   const f=fixture(t),tiles=[];let prompts=0;
