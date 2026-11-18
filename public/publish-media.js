@@ -69,10 +69,14 @@ export function createPublishMediaController({api,saved,onChange=()=>{},onPersis
   get choices(){return {draftId:state.id,...Object.fromEntries(['coverChoice','coverCaptureId','videoChoice','videoCaptureId'].map(k=>[k,state[k]||'']))};},
   sync(next){
    const ident=JSON.stringify([next.source,next.url||'',next.buildId||'']);if(ident===identity&&next.file===fileRef)return;
+   // Reselecting a file creates a new File object even when its bytes have not
+   // changed. Keep the resumable draft until its content fingerprint is known.
+   // A different fingerprint still revokes every prior candidate and choice.
+   const previous=state.key?{...state}:null;
    identity=ident;fileRef=next.file;input=next;stop();const g=generation;
    state={status:'preparing',key:'',id:'',coverChoice:manual?'manual':'',videoChoice:''};emit();
    void publishSourceKey(next).then(key=>{if(!current(g))return;if(!key){state.status='empty';emit();return;}
-    const restore=saved?.key===key?saved:null;saved=null;state={...state,...restore,key,id:restore?.id||uuid(),status:'preparing'};emit();void prepare(g,restore);
+    const restore=previous?.key===key?previous:saved?.key===key?saved:null;saved=null;state={...state,...restore,key,id:restore?.id||uuid(),status:'preparing'};emit();void prepare(g,restore);
    }).catch(()=>{if(current(g)){state.status='failed';emit();}});
   },
   manual(value){manual=value;state.coverChoice=value?'manual':'';emit();},

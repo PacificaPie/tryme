@@ -86,3 +86,13 @@ test('damaged temporary media cannot become a public permanent resource',async t
  const row=f.database.prepare('SELECT object_key FROM ft_publish_captures WHERE id=?').get(c.id);f.objects.set(row.object_key,new Uint8Array([1]));
  assert.equal((await f.publish({extra:{...skip(d),coverChoice:'candidate',coverCaptureId:c.id}})).error.code,'DRAFT_CHANGED');assert.equal(f.count('ft_works'),0);
 });
+
+test('interrupted capture lease reports a retryable timeout without spending another attempt',async t=>{
+ const f=fixture(t),d=await draft(f);let finish,clock=new Date();
+ const s=service(f,{now:()=>clock,captureCover:async()=>new Promise(resolve=>finish=()=>resolve({bytes:jpeg,mime:'image/jpeg'}))}),id=randomUUID();
+ const pending=capture(f,s,d,'cover',id);while(!finish)await new Promise(r=>setTimeout(r,0));
+ clock=new Date(clock.getTime()+46000);
+ const replay=await capture(f,s,d,'cover',id);assert.equal(replay.status,'failed');assert.equal(replay.reason,'CAPTURE_TIMEOUT');assert.equal(f.count('ft_publish_captures'),1);
+ finish();assert.equal((await pending).status,'failed');
+ assert.equal((await capture(f,service(f),d)).status,'ready');
+});

@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import {createPublishMediaController,publishSourceKey} from '../public/publish-media.js';
 const flush=()=>new Promise(r=>setTimeout(r,2));
 async function until(fn){for(let n=0;n<100;n++){if(fn())return;await flush();}assert.fail('state did not settle');}
-function setup(extra={}){const calls=[];let persisted;
- const api=async(path,o)=>{calls.push({path,o});if(path==='/api/publish-drafts')return {id:o.body.get('id'),expiresAt:new Date(Date.now()+86400000).toISOString(),cover:null,video:null};const {id,kind}=o.body;return {id,kind,status:'ready',url:path.replace('/capture','/media/'+id)};};
+function setup(extra={}){const calls=[],drafts=new Map();let persisted;
+ const api=async(path,o)=>{calls.push({path,o});if(path==='/api/publish-drafts'){const id=o.body.get('id');if(!drafts.has(id))drafts.set(id,{id,expiresAt:new Date(Date.now()+86400000).toISOString(),cover:null,video:null});return {...drafts.get(id)};}const {id,kind}=o.body,result={id,kind,status:'ready',url:path.replace('/capture','/media/'+id)};drafts.get(path.split('/')[3])[kind]=result;return result;};
  const c=createPublishMediaController({api,debounceMs:0,onPersist:s=>persisted=s,...extra});return {c,calls,get saved(){return persisted;}};
 }
 test('same-name same-size replacement revokes prior media using actual bytes',async t=>{
@@ -29,4 +29,30 @@ test('late responses after changing source or cancelling cannot replace the new 
 test('lost create response retries same ID and explicit skips survive delayed captures',async t=>{
  let first=true,finish;const ids=[];const e=setup({api:async(path,o)=>{if(path==='/api/publish-drafts'){ids.push(o.body.get('id'));if(first){first=false;throw Error('response lost');}return {id:ids[0],expiresAt:new Date(Date.now()+86400000).toISOString()};}return new Promise(r=>finish=()=>r({...o.body,status:'ready',url:path.replace('/capture','/media/'+o.body.id)}));}});t.after(()=>e.c.dispose());
  e.c.sync({source:'url',url:'https://example.com'});await until(()=>finish);e.c.choose('cover','skip');e.c.choose('video','skip');finish();await flush();assert.equal(e.c.canPublish,true);assert.equal(e.c.state.coverChoice,'skip');assert.equal(ids.length,2);assert.equal(ids[0],ids[1]);
+});
+
+
+test('reselecting identical HTML keeps its draft, selected media and capture budget',async t=>{
+ const e=setup();t.after(()=>e.c.dispose());e.c.sync({source:'html',file:new File(['unchanged'],'first.html')});
+ await until(()=>e.c.state.video?.status==='ready');e.c.choose('cover','candidate');e.c.choose('video','candidate');
+ const saved=e.saved,original=e.c.state.id;
+ // A real file picker / IndexedDB read returns a new File object for the same bytes.
+ e.c.sync({source:'html',file:new File(['unchanged'],'renamed.html')});assert.equal(e.c.canPublish,false);
+ await until(()=>e.c.state.status==='ready');assert.equal(e.c.state.id,original);
+ assert.equal(e.c.state.coverChoice,'candidate');assert.equal(e.c.state.videoChoice,'candidate');
+ assert.equal(e.calls.filter(c=>c.path.endsWith('/capture')).length,2);
+ assert.equal(e.c.state.coverCaptureId,saved.coverCaptureId);
+});
+
+test('reselecting identical HTML while capturing resumes the same draft and attempt',async t=>{
+ const drafts=[],attempts=[];let pending,first=true;
+ const e=setup({api:async(path,o)=>{
+  if(path==='/api/publish-drafts'){drafts.push(o.body.get('id'));return {id:o.body.get('id'),expiresAt:new Date(Date.now()+86400000).toISOString()};}
+  attempts.push({path,id:o.body.id,kind:o.body.kind});
+  if(first){first=false;return new Promise((resolve,reject)=>{pending={resolve,signal:o.signal};o.signal.addEventListener('abort',()=>reject(Error('disconnected')),{once:true});});}
+  return {...o.body,status:'ready',url:path.replace('/capture','/media/'+o.body.id)};
+ }});t.after(()=>e.c.dispose());
+ e.c.sync({source:'html',file:new File(['same bytes'],'game.html')});await until(()=>pending);
+ e.c.sync({source:'html',file:new File(['same bytes'],'game.html')});await until(()=>e.c.state.video?.status==='ready');
+ assert.equal(new Set(drafts).size,1);assert.equal(attempts[0].id,attempts[1].id);assert.equal(attempts[0].path,attempts[1].path);
 });
