@@ -385,6 +385,9 @@ async function cancelGithubBuild(){
 }
 function renderPublish(number){
   const d=publishDraft;
+  // Old URL-only drafts stored generated covers as uploaded files. Reconfirm
+  // these through the private controller so a source switch cannot reuse them.
+  if(d.coverSourceURL){coverFile=null;delete d.coverSourceURL;refreshCoverPreview();void fileStore('delete','cover');savePublish();}
   if(!applyHTML(`<div class="page narrow"><a class="back" href="#/studio/works">${t("← 我的作品")}</a>${head(t("发布作品"))}
     <form id="publish-form" class="form">
       <div class="field"><label for="publish-name">${t("作品名称")}</label><input id="publish-name" name="name" value="${esc(d.name)}" maxlength="80" required></div>
