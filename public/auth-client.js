@@ -4,7 +4,9 @@ const DEFAULT_RETURN = '/site.html#/feed';
 const DEFAULT_CONFIG = Object.freeze({ provider: 'unknown', configured: false, environment: 'production' });
 const UNAVAILABLE = '登录暂不可用，请稍后再试。';
 const SESSION_CHANGED = '登录状态已变化，请重新登录后重试。';
+const ACCOUNT_CHANGED = '登录账号已变化，请刷新页面后重试。';
 registerMessages({
+  [ACCOUNT_CHANGED]: 'Your account has changed. Reload the page and retry.',
   [UNAVAILABLE]: 'Sign-in is temporarily unavailable. Please try again later.',
   [SESSION_CHANGED]: 'Your sign-in status has changed. Sign in again and retry.',
   '无法连接登录服务，请检查网络后重试。': 'Could not connect to sign-in. Check your connection and retry.',
@@ -133,8 +135,15 @@ export function createAuthClient({
     }
     return config;
   }
-  async function authHeaders() {
+  function assertAuthAccount(expectedUserId) {
+    if (expectedUserId && config.provider === 'clerk' &&
+        (!clerk?.session || !clerk.user?.id || `clerk:${clerk.user.id}` !== expectedUserId)) {
+      throw authError('AUTH_SESSION_CHANGED', ACCOUNT_CHANGED, 409);
+    }
+  }
+  async function authHeaders(expectedUserId) {
     await ensureAuth();
+    assertAuthAccount(expectedUserId);
     if (config.provider === 'sites' || !clerk.session) return {};
     const session = clerk.session;
     let token;
@@ -142,6 +151,7 @@ export function createAuthClient({
     catch { throw authError('AUTH_TOKEN_UNAVAILABLE', '无法连接登录服务，请检查网络后重试。'); }
     if (!clerk.session || (session.id ? clerk.session.id !== session.id : clerk.session !== session)) throw authError('AUTH_SESSION_CHANGED', SESSION_CHANGED, 401);
     if (typeof token !== 'string' || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token)) throw authError('AUTH_REQUIRED', SESSION_CHANGED, 401);
+    assertAuthAccount(expectedUserId);
     return { Authorization: `Bearer ${token}` };
   }
   function authURL(action, returnTo) {
@@ -158,8 +168,8 @@ export function createAuthClient({
     try { await clerk.signOut({ redirectUrl: target }); }
     catch { throw authError('AUTH_SIGN_OUT_FAILED', '无法连接登录服务，请检查网络后重试。'); }
   }
-  return { ensureAuth, getAuthConfig, getClerk, authHeaders, authURL, signOut };
+  return { ensureAuth, getAuthConfig, getClerk, authHeaders, assertAuthAccount, authURL, signOut };
 }
 
 const client = createAuthClient();
-export const { ensureAuth, getAuthConfig, getClerk, authHeaders, authURL, signOut } = client;
+export const { ensureAuth, getAuthConfig, getClerk, authHeaders, assertAuthAccount, authURL, signOut } = client;

@@ -3,6 +3,7 @@ import { AVATAR_PRESETS, avatarMarkup, safeAvatarURL } from './avatars.js';
 import { closeDialog } from './experience.js?v=20261117-creator-actions';
 
 registerMessages({
+  '登录账号已变化，请刷新页面后重试。':'Your account has changed. Reload the page and retry.',
   '编辑个人资料':'Edit profile', '头像':'Avatar', '上传图片':'Upload image', '移除头像':'Remove avatar',
   '默认插画':'Illustrations', 'PNG、JPG 或 WebP，最大 2 MiB。':'PNG, JPG or WebP, up to 2 MiB.',
   '名字':'Name', '简介':'Bio', '身份 / 角色':'Role', '个人网址':'Website',
@@ -73,7 +74,7 @@ export function profileChangeBody(fields, avatarChoice = { type:'keep' }) {
 
 export class ProfileSaveError extends Error {
   constructor(cause, stage, savedUser) {
-    super(t(savedUser && stage === 'avatar' ? '资料已保存，头像暂未保存。请重试。' : [400,413,415,422].includes(cause?.status) && cause.message ? cause.message : '暂时未能确认保存结果，请重试。'), { cause });
+    super(t(cause?.code === 'AUTH_SESSION_CHANGED' ? '登录账号已变化，请刷新页面后重试。' : savedUser && stage === 'avatar' ? '资料已保存，头像暂未保存。请重试。' : [400,413,415,422].includes(cause?.status) && cause.message ? cause.message : '暂时未能确认保存结果，请重试。'), { cause });
     this.stage = stage; this.savedUser = savedUser;
   }
 }

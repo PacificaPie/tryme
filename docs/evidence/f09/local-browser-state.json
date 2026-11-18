@@ -1,0 +1,67 @@
+{
+  "account": "publication-other",
+  "workId": "7041d408-bfb1-4590-9f17-2fba584cefd2",
+  "aborted": 2,
+  "held": 0,
+  "writes": [
+    {
+      "path": "/api/events",
+      "account": "publication-owner",
+      "expected": "publication-owner",
+      "status": 200
+    },
+    {
+      "path": "/api/events",
+      "account": "publication-owner",
+      "expected": "publication-owner",
+      "status": 200
+    },
+    {
+      "path": "/api/feed/impressions",
+      "account": "publication-owner",
+      "expected": "publication-owner",
+      "status": 200
+    },
+    {
+      "path": "/api/me/profile",
+      "account": "publication-other",
+      "expected": "publication-owner",
+      "status": 409
+    },
+    {
+      "path": "/api/feed/impressions",
+      "account": "publication-owner",
+      "expected": "publication-owner",
+      "status": 200
+    },
+    {
+      "path": "/api/me/profile",
+      "account": "publication-other",
+      "expected": "publication-owner",
+      "status": 409
+    },
+    {
+      "path": "/api/events",
+      "account": "publication-other",
+      "expected": "publication-other",
+      "status": 200
+    },
+    {
+      "path": "/api/works/7041d408-bfb1-4590-9f17-2fba584cefd2/comments",
+      "account": "publication-other",
+      "expected": "publication-other",
+      "status": 201
+    }
+  ],
+  "profiles": [],
+  "comments": [
+    {
+      "body": "Baseline comment",
+      "author_id": "publication-other"
+    },
+    {
+      "body": "Account B mobile comment",
+      "author_id": "publication-other"
+    }
+  ]
+}

@@ -25,7 +25,7 @@ import { safeAvatarURL } from './avatar-rules.mjs';
 import { cardIdentity,cardRowIdentities } from './card-identity.mjs';
 import { cardWorkRefs } from './version-rules.mjs';
 import { analyticsResponse } from './analytics';
-import { ApiError, fail, authenticate, verifyWrite, requiredText, eventId, safeURL, coverType, htmlSource, sessionEvents, GAME_CSP, gameDocument, likedState, cardDetails, cardTemplate, commentInput, validateCommentParent, commentPageLimit, encodeCommentCursor, decodeCommentCursor, discoverQuery, encodeDiscoverCursor, decodeDiscoverCursor, workCategory } from './rules.mjs';
+import { ApiError, fail, authenticate, verifyWrite, verifyExpectedUser, requiredText, eventId, safeURL, coverType, htmlSource, sessionEvents, GAME_CSP, gameDocument, likedState, cardDetails, cardTemplate, commentInput, validateCommentParent, commentPageLimit, encodeCommentCursor, decodeCommentCursor, discoverQuery, encodeDiscoverCursor, decodeDiscoverCursor, workCategory } from './rules.mjs';
 
 type Row = Record<string, any>;
 type User = { id: string; name: string; email: string };
@@ -372,14 +372,15 @@ async function addComment(request:Request,user:User,workId:string) {
   const prior=await first(COMMENT_QUERY+' WHERE c.author_id=? AND c.idempotency_key=?',user.id,user.id,key);if(prior)return response(prior,true);
   if(input.versionId!==null&&!await first('SELECT id FROM ft_work_versions WHERE id=? AND work_id=?',input.versionId,workId))throw new ApiError(422,'INVALID_COMMENT_VERSION','评论版本不属于当前作品，请刷新作品后重试');
   if(input.parentId){const parent=await first('SELECT id,work_id,parent_id FROM ft_comments WHERE id=?',input.parentId);validateCommentParent(parent,workId);}
-  await rateLimit(user,'ft_comments','created_at',30);
-  const id=uuid();
+  const id=uuid(),createdAt=iso(),recent=new Date(Date.parse(createdAt)-60000).toISOString();
   await db().batch([
     sql(`INSERT INTO ft_comments (id,work_id,version_id,author_id,author_name,body,parent_id,created_at,idempotency_key,request_hash)
-      VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(author_id,idempotency_key) DO NOTHING`,id,w.id,input.versionId,user.id,(await userProfile(user)).name,input.body,input.parentId,iso(),key,requestHash),
+      SELECT ?,?,?,?,?,?,?,?,?,?
+      WHERE (SELECT COUNT(*) FROM ft_comments WHERE author_id=? AND created_at>=?)<30
+      ON CONFLICT(author_id,idempotency_key) DO NOTHING`,id,w.id,input.versionId,user.id,(await userProfile(user)).name,input.body,input.parentId,createdAt,key,requestHash,user.id,recent),
     ...input.parentId?[]:[recommendations.creditStatement(user.id,w.id,'comment',id)],
   ]);
-  const comment=await first(COMMENT_QUERY+' WHERE c.author_id=? AND c.idempotency_key=?',user.id,user.id,key);if(!comment)throw new Error('Comment insertion failed');
+  const comment=await first(COMMENT_QUERY+' WHERE c.author_id=? AND c.idempotency_key=?',user.id,user.id,key);if(!comment)throw new ApiError(429,'RATE_LIMITED','提交太频繁，请稍后重试');
   return response(comment,comment.id!==id);
 }
 async function commentLike(request:Request,user:User,id:string) {
@@ -443,6 +444,7 @@ export async function handleAPI(request:Request) {
     const avatarResponse=await creators.publicAvatar(request);if(avatarResponse)return avatarResponse;
     const user=authenticate(request.headers),url=new URL(request.url),parts=url.pathname.replace(/^\/api\/?/,'').split('/').filter(Boolean);
     if(['POST','PATCH'].includes(request.method))verifyWrite(request);
+    verifyExpectedUser(request.headers,user);
     const creatorResponse=await creators.handle(request,user);if(creatorResponse)return creatorResponse;
     const publishDraftResponse=await publishDrafts.handle(request,user);if(publishDraftResponse)return publishDraftResponse;
     const draftCoverResponse=await coverDrafts.handle(request,user);if(draftCoverResponse)return draftCoverResponse;
