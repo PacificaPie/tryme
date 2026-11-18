@@ -11,7 +11,7 @@ const shareURL='https://funtrack.test/c/'+card.id;
 test('workspace displays only the current own card and exposes its view/share/remake/delete controls',()=>{
   const before=structuredClone(card),html=renderCardWorkspace({card,user,shareURL,shareText:'Take a look at my card!'});
   assert.match(html,/<h1>名片<\/h1>/);assert.match(html,/当前名片/);assert.match(html,/My saved card/);assert.match(html,/Small things I made/);
-  assert.match(html,new RegExp(`href="#/card/${card.id}"`));assert.match(html,/href="#\/cards\/me">重新制作<\/a>/);
+  assert.match(html,new RegExp(`href="#/card/${card.id}"`));assert(html.includes(`href="#/cards/me?editCard=${card.id}">更新名片</a>`));
   assert(html.includes(`data-share-url="${shareURL}"`));assert.match(html,/data-share-title="My saved card"/);assert.match(html,/data-share-text="Take a look at my card!"/);
   assert(html.includes(`data-delete-card="${card.id}"`));assert.match(html,/data-card-name="My saved card"/);
   assert.match(html,/src="\/media\/version-one"/);assert.match(html,/名片中有 1 件作品/);assert.deepEqual(card,before);

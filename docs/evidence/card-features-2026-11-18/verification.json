@@ -1,0 +1,49 @@
+{
+  "date": "2026-11-18 America/New_York",
+  "environment": "local synthetic identity, real client/router/SQL, in-memory D1/R2",
+  "baseline": "77be1fa3e1eff41220a428a51c2a3740c9b06ef3",
+  "check": "passed",
+  "tests": {
+    "passed": 603,
+    "failed": 0,
+    "skipped": 0,
+    "added": 23
+  },
+  "build_standalone": "passed; no deployment",
+  "diff_check": "passed",
+  "browser": {
+    "mobile_viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "share_dialog": {
+      "outer_width": 358,
+      "client_width": 341,
+      "scroll_width": 341
+    },
+    "saved_cards": 3,
+    "original_snapshot_unchanged": true,
+    "download": "browser download-link tool returned actual PNG; iframe download event unavailable",
+    "png": {
+      "width": 1200,
+      "height": 1440,
+      "decoded_qr": "http://127.0.0.1:8894/c/141d7d72-e4e4-45d3-8dfa-b56b4c934abc"
+    }
+  },
+  "not_verified": [
+    "real phone QR scan",
+    "Safari/WeChat image save",
+    "native file sharing",
+    "Blob full-image navigation blocked by browser security policy",
+    "real Clerk sign-in return",
+    "production deployment"
+  ],
+  "files_sha256": {
+    "desktop-share-dialog.png": "9db22c036c98edde34302c156b00ac9f2ae956ca8e08fd22bb1d5afeed88bf39",
+    "downloaded-share-poster.png": "4d146efd1f3fa15446e5052574931337ca78e5254c05b16be306b8569bedc7f4",
+    "mobile-city-preview.png": "1012524f0fdcb3209fe60557dc999a0ca93be58d5a5f90abcbf133a3ce2f4120",
+    "mobile-draft-choice.png": "5ca9617ad3db06c2fe0255024bb1a9a55a6ebaef1b81f7c7bd8673dd86302949",
+    "mobile-share-dialog.png": "dd987e0ea1cf6aa4fc6d7a2d45dc152ffb5401b9dbe57cc0c5a77cec36ffa172",
+    "mobile-update-dark.png": "a0bd4412cf9bc79f4fafade805b7ff798fe91e2d6cec07a5b8ccc189b31295ee"
+  }
+}
