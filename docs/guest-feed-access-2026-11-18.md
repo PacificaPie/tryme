@@ -41,6 +41,6 @@
 
 2026-11-18 用户完成 OAuth 凭据设置后，正式 Clerk Google 连接已显示 Enabled。浏览器实测：退出邮箱会话 → 公开 Feed 可浏览 → 创作中心要求登录 → Google 账号选择/基础资料授权 → 正确返回 `/site#/studio/works` 并显示已登录身份。未读取或记录 Client Secret；邮箱验证码继续保留。
 
-Google Cloud 项目 `tryme-card` 的受众仍为 External / Testing，发布按钮提示需要补全品牌配置。已保存正式站首页；隐私政策、服务条款尚未上线。基础 `openid/email/profile` 登录在 Testing 状态下属于 Google 的例外，不要求加入测试名单，但不能据一次成功登录把 Google 发布状态记为 In production。另一个新账号、跨浏览器与会话到期仍未验收。
+Google Cloud 项目 `tryme-card` 已切换为 External / In production。经用户批准，PR #7 的公开介绍、隐私政策及服务条款已发布，Google 与 Clerk 链接已配置。正式版复测退出→名片登录→Google→回到名片页通过；刷新保持身份，账号 ID 与此前邮箱登录一致。新账号、跨浏览器和会话到期验收仍保留。
 
-已准备公开介绍、隐私政策与服务条款页面及首页/登录页入口，等待项目负责人审核条款与发布。具体证据、文案依据与上线后步骤见 [Google 登录验收与公开信息](google-oauth-acceptance-2026-11-18.md)。
+当前主站版本已更新为 `cb160ac` / `28164db4-a65c-4f97-bc92-d59ce46c1796`；上面的 PR #5 记录保留其历史发布信息。具体版本、检查与边界见 [Google 登录验收与公开信息](google-oauth-acceptance-2026-11-18.md)。
