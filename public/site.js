@@ -9,6 +9,7 @@ import { emptyState, pageSkeleton, loadingMark } from './empty-state.js';
 import { beginRouteLoading, mountMenus } from './experience.js?v=20261117-creator-actions';
 import './experience.messages.js';
 import { cardShareText, openShareDialog } from './sharing.js';
+import { planCardAddition } from './card-addition.js';
 import { confirmCardDeletion, hasPendingCardDeletion } from './card-actions.js';
 import { avatarMarkup } from './avatars.js';
 import { openProfileEditor } from './profile-editor.js';
@@ -46,7 +47,7 @@ const read = (key, fallback) => { try { return JSON.parse(sessionStorage.getItem
 const write = (key,value) => { try { sessionStorage.setItem(key,JSON.stringify(value)); } catch {} };
 const storage = {publish:'funtrack.real.publish',card:'funtrack.real.card',preview:'funtrack.real.preview',feedback:'funtrack.real.feedback',views:'funtrack.real.gallery'};
 const storageBase={...storage};let draftOwner=null,fileScope='';
-let startPending=false, analyticsPanel=null, discoveryPanel=null, creatorPanel=null, visitRecorded=false, publishAvailability=null;
+let startPending=false, discussionPanel=null, analyticsPanel=null, discoveryPanel=null, creatorPanel=null, visitRecorded=false, publishAvailability=null;
 let publishFailure=null,publishRelatedWorks=[];
 let me=null, authChecked=false, routeNumber=0, currentRoute='', noticeTimer, currentGallery=null, activeSession=null;
 const scrolls=new Map();
@@ -148,7 +149,7 @@ async function renderRoute(options={}){
   const publicPath=(!authChecked||!me)&&legacyPublicCardPath(location.hash);
   if(publicPath){location.replace(publicPath);return;}
   if(!options.localeOnly)visitRecorded=false;
-  const r=route(),number=++routeNumber;publishedAutoCover?.dispose();publishedAutoCover=null;stopBuildPolling();publishAvailability?.dispose();publishAvailability=null;disposeVersioning();disposeWorkEdit();disposePublicationControls();analyticsPanel?.dispose();analyticsPanel=null;discoveryPanel?.dispose();discoveryPanel=null;creatorPanel?.dispose();creatorPanel=null;templateExperiencePanel?.dispose();templateExperiencePanel=null;
+  const r=route(),number=++routeNumber;publishedAutoCover?.dispose();publishedAutoCover=null;stopBuildPolling();publishAvailability?.dispose();publishAvailability=null;disposeVersioning();disposeWorkEdit();disposePublicationControls();analyticsPanel?.dispose();analyticsPanel=null;discussionPanel?.dispose();discussionPanel=null;discoveryPanel?.dispose();discoveryPanel=null;creatorPanel?.dispose();creatorPanel=null;templateExperiencePanel?.dispose();templateExperiencePanel=null;
   if(currentRoute&&currentRoute!==r.raw)scrolls.set(currentRoute,window.scrollY);
   endSession('exit');currentGallery?.dispose?.();currentGallery=null;currentRoute=r.raw;
   const activeNav=r.path.startsWith('/cards')||r.path.startsWith('/card/')?'cards':r.path.startsWith('/studio')||r.path==='/publish'?'studio':r.path.startsWith('/author/')||r.path==='/following'?null:'feed';
@@ -256,7 +257,7 @@ async function renderWork(r,number,countView=true,autoPlay=true){
   $$('[data-action="start-game"]').forEach(b=>b.addEventListener('click',()=>startGame(work)));
   $('[data-action="discussion"]').addEventListener('click',()=>{$('#discussion').scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});$('#comment-input')?.focus({preventScroll:true});});
   const discussionOwner=me.id;
-  mountDiscussion($('#discussion'),{work,user:me,api,esc,notify,beforeRootSubmit:async()=>{await waitForPendingPlayStart(sessionQueues,{workId:work.id,ownerId:discussionOwner,flush:flushSession});if(draftOwner!==discussionOwner)throw new ApiError(t('请重新登录后重试。'),401,'AUTH_SESSION_CHANGED');},focusId:r.params.get('comment')||'',onCount:count=>{updateDiscoveryWork(work.id,{commentsCount:count});const label=$('.discussion-jump span');if(label)label.textContent=count?t("讨论 ")+n(count):t("讨论");}});
+  discussionPanel=mountDiscussion($('#discussion'),{work,user:me,api,esc,notify,beforeRootSubmit:async()=>{await waitForPendingPlayStart(sessionQueues,{workId:work.id,ownerId:discussionOwner,flush:flushSession});if(draftOwner!==discussionOwner)throw new ApiError(t('请重新登录后重试。'),401,'AUTH_SESSION_CHANGED');},focusId:r.params.get('comment')||'',onCount:count=>{updateDiscoveryWork(work.id,{commentsCount:count});const label=$('.discussion-jump span');if(label)label.textContent=count?t("讨论 ")+n(count):t("讨论");}});
   api('/api/discover?author='+encodeURIComponent(work.authorId)+'&limit=4').then(({works})=>{if(number!==routeNumber)return;const others=works.filter(w=>w.authorId===work.authorId&&w.id!==id).slice(0,3);if(others.length)$('#related-works').innerHTML=`<h2>${t("作者的其他作品")}</h2>${others.map(w=>`<a class="related-work" href="${esc(workHref(w,from))}">${workImage(w)}<div><strong>${esc(w.name)}</strong><p>${esc(w.desc)}</p></div></a>`).join('')}`;}).catch(()=>{});
   if(autoPlay&&r.params.get('play')==='1'&&work.source==='html')startGame(work);
   if(r.params.get('discussion')==='1')requestAnimationFrame(()=>{if(number===routeNumber)$('#discussion')?.scrollIntoView({block:'start'});});
@@ -459,14 +460,31 @@ async function submitPublish(form){
 }
 async function renderPublished(r,number){
   const {work}=await api('/api/works/'+encodeURIComponent(r.path.split('/')[2]));
-  if(!applyHTML(`<div class="page narrow">${head(t("作品已发布"),work.name)}<div id="published-work-tile" class="work-grid" style="max-width:560px;grid-template-columns:1fr">${workTile(work)}</div><div id="published-auto-cover"></div><div class="form-footer"><a class="button primary" href="${esc(workHref(work,'/studio/works'))}">${t("试玩作品")}</a><details class="version-secondary"><summary>${t('更多')}</summary><a class="button quiet" href="#${discoveryPath(work.id)}">${t('展示设置')}</a><a class="button quiet" href="#/cards/me">${t("放进名片")}</a><a class="button quiet" href="#/studio/works">${t("我的作品")}</a></details></div></div>`,number))return;
+  if(!applyHTML(`<div class="page narrow">${head(t("作品已发布"),work.name)}<div id="published-work-tile" class="work-grid" style="max-width:560px;grid-template-columns:1fr">${workTile(work)}</div><div id="published-auto-cover"></div>${work.authorId===me.id?`<section class="post-publish-card"><div><h2>${t("把新作品放进名片")}</h2><p>${t("选择加入现有草稿，或在已保存名片的基础上重新制作。")}</p></div><a class="button primary" href="#/cards/me?addWork=${encodeURIComponent(work.id)}">${t("加入名片")}</a><a class="text-link" href="#/studio/works">${t("暂不加入")}</a></section>`:""}<div class="form-footer"><a class="button primary" href="${esc(workHref(work,'/studio/works'))}">${t("试玩作品")}</a><details class="version-secondary"><summary>${t('更多')}</summary><a class="button quiet" href="#${discoveryPath(work.id)}">${t('展示设置')}</a><a class="button quiet" href="#/cards/me">${t("放进名片")}</a><a class="button quiet" href="#/studio/works">${t("我的作品")}</a></details></div></div>`,number))return;
   publishedAutoCover=mountAutoCover($('#published-auto-cover'),{work,owner:me.id,api,onReady:async()=>{
     const {work:latest}=await api('/api/works/'+encodeURIComponent(work.id));
     if(number!==routeNumber)return;$('#published-work-tile').innerHTML=workTile(latest);clearDiscovery();
   }});
 }
+async function renderCardAddition(r,number){
+  const owner=draftOwner,current=()=>number===routeNumber&&draftOwner===owner&&me?.id===owner;
+  const workId=r.params.get('addWork');
+  const [works,result]=await Promise.all([readMine(),api('/api/cards/me').catch(error=>{if(error.status===404)return {card:null};throw error;})]);
+  if(!current())return;
+  const work=works.find(item=>item.id===workId&&item.authorId===owner),card=result.card?.authorId===owner?result.card:null;
+  if(!work)throw new ApiError(t('这件作品当前不可加入名片。'),404,'WORK_UNAVAILABLE');
+  const hasDraft=cardDraft.ids.length>0||Boolean(cardDraft.signature)||Boolean(preview);
+  if(!applyHTML(cardsPage(`${cardBuilderTop()}${head(t('加入名片'),work.name)}<section class="card-addition"><p>${t('选择从哪里继续。只有预览并保存后才会生成新名片，已有分享链接与作品版本保持不变。')}</p>${hasDraft?`<button class="button primary" type="button" data-add-source="draft">${t('加入现有草稿')}</button>`:''}${card?`<button class="button ${hasDraft?'quiet':'primary'}" type="button" data-add-source="card">${t('从已保存名片继续制作')}</button>`:''}<button class="button ${hasDraft||card?'quiet':'primary'}" type="button" data-add-source="new">${t('只用这件作品开始')}</button>${hasDraft?`<p class="tiny muted">${t('选择其他起点会替换当前未保存草稿。')}</p>`:''}<p class="tiny muted">${t('新名片将使用所选作品当前版本，你可以先调整作品和顺序。')}</p><p id="card-addition-error" class="error" role="alert"></p><a class="text-link" href="#/published/${encodeURIComponent(workId)}">${t('暂不加入')}</a></section>`,'mine'),number))return;
+  $$('[data-add-source]').forEach(button=>button.addEventListener('click',()=>{
+    if(!current())return;
+    const planned=planCardAddition({workId,works,ownerId:owner,draft:cardDraft,card,source:button.dataset.addSource});
+    if(planned.error){$('#card-addition-error').textContent=t(planned.error==='CARD_FULL'?'草稿已有 30 件作品，请先移除一件，再加入新作品。':'这件作品当前不可加入名片。');return;}
+    cardDraft=planned.draft;preview=null;cardError='';cardKey=uid();saveCardDraft();write(storage.preview,null);notify(t('已加入草稿，预览并保存后生效。'));go('/cards/me');
+  }));
+}
 const steps = current => `<nav class="steps" aria-label="${t("制作步骤")}">${[t("选作品"),t("选模板"),t("生成名片")].map((name,index)=>index<current?`<a href="${index===0?'#/cards/me':'#/cards/me/template'}"><b>${index+1}</b>${name}</a>`:`<span class="${index===current?'active':''}" ${index===current?'aria-current="step"':''}><b>${index+1}</b>${name}</span>`).join('')}</nav>`;
 async function renderBuilder(r,number){
+  if(r.params.has('addWork'))return renderCardAddition(r,number);
   if(r.params.has('templateFrom'))return renderCardRemix(r,number);
   const owner=draftOwner,current=()=>number===routeNumber&&draftOwner===owner&&me?.id===owner;
   const works=await readMine();if(!current())return;
