@@ -1,0 +1,32 @@
+/* Snapshot of public/theme.css semantic tokens, 2026-11-18. Prototype chrome must follow the main site. */
+/* Site chrome uses semantic colors. Uploaded artwork and game canvases retain
+   their authored palette; they are never inverted or recolored by filters. */
+:root {
+  --bg:#fcfcfd;--surface:#fff;--surface-raised:#fff;--surface-hover:#f1f3f5;
+  --text:#252c34;--text-secondary:#5c6672;--text-tertiary:#687582;
+  --border:#dfe4e8;--line:#e5e9ed;--soft:#f3f5f7;
+  --primary:#29333c;--on-primary:#fff;--primary-hover:#424e59;
+  --accent:#a75a45;--focus:#527b8c;
+  --success:#386b52;--success-bg:#edf5ef;--danger:#a54c40;--danger-bg:#fbefec;
+  --warning:#8a6634;--warning-bg:#faf3e7;
+  --muted:var(--text-secondary);--ink:var(--text);
+  --shadow-popover:0 4px 12px #18212b06,0 16px 48px #18212b12;
+  --header-bg:#fcfcfdec;--skeleton:#ecf0f3;--skeleton-sheen:#ffffffa8;
+  --focus-ring:#62899b20;--backdrop:#1119235c;
+  color:var(--text);background:var(--bg);color-scheme:light;
+}
+:root[data-theme="dark"] {
+  --bg:#15191e;--surface:#1c2229;--surface-raised:#232b34;--surface-hover:#2b3540;
+  --text:#ebeff3;--text-secondary:#b7c0cb;--text-tertiary:#94a0af;
+  --border:#394450;--line:#303a45;--soft:#232c36;
+  --primary:#e4ebf0;--on-primary:#1b242d;--primary-hover:#fff;
+  --accent:#e6a088;--focus:#9bbdce;
+  --success:#a2c9af;--success-bg:#22392c;--danger:#efac9e;--danger-bg:#3a2828;
+  --warning:#dcc292;--warning-bg:#382f24;
+  --shadow-popover:0 8px 20px #0004,0 20px 54px #0005;
+  --header-bg:#15191eeb;--skeleton:#28323d;--skeleton-sheen:#ffffff0a;
+  --focus-ring:#9bbdce25;--backdrop:#050a12b3;
+  color-scheme:dark;
+}
+
+:root{--paper:var(--surface);--round:14px;--card-bg:#252c34;--card-text:#ebeff3;}
