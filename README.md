@@ -2,6 +2,8 @@
 
 新合作者请先看 [协作开发交接](docs/collaboration-handoff.md)：包含环境安装、目录分工、分支/PR、迁移与名片快照契约，以及已完成和待验收的边界。当前独立站使用 Cloudflare Worker + D1 + R2 + Clerk；配置见 [独立部署](docs/independent-deployment.md)，本轮分享入口见 [公开名片方案](docs/public-card-sharing-plan.md)。
 
+正式域名 [trymecard.com](https://trymecard.com) 已于 2026-11-17 发布，首版使用邮箱验证码；旧 staging 账号和内容保留原站。版本、资源与实际验收范围见 [正式发布记录](docs/production-launch-2026-11-17.md)，真人登录、上传与分享验收结果单独记录。
+
 ```sh
 npm run install:ci
 npm run check
