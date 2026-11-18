@@ -1,0 +1,435 @@
+{
+  "observedAt": "2026-11-18T21:50:55.143Z",
+  "vantage": "execution host; geography and proxy route unverified",
+  "limitations": "No login, upload, email delivery, real QR or mainland-China reachability verified. Root responses do not validate provider APIs.",
+  "results": [
+    {
+      "url": "https://trymecard.com/site",
+      "dns": [
+        {
+          "address": "104.21.14.155",
+          "family": 4
+        },
+        {
+          "address": "172.67.203.204",
+          "family": 4
+        }
+      ],
+      "samples": [
+        {
+          "status": 200,
+          "dnsSeconds": 0.00934,
+          "connectSeconds": 0.01748,
+          "tlsSeconds": 0.035898,
+          "ttfbSeconds": 0.085012,
+          "totalSeconds": 0.085151,
+          "bytes": 2362,
+          "effectiveURL": "https://trymecard.com/site",
+          "redirects": 0
+        },
+        {
+          "status": 200,
+          "dnsSeconds": 0.004831,
+          "connectSeconds": 0.092929,
+          "tlsSeconds": 0.111702,
+          "ttfbSeconds": 0.146096,
+          "totalSeconds": 0.146177,
+          "bytes": 2362,
+          "effectiveURL": "https://trymecard.com/site",
+          "redirects": 0
+        },
+        {
+          "status": 200,
+          "dnsSeconds": 0.00215,
+          "connectSeconds": 0.094352,
+          "tlsSeconds": 0.263338,
+          "ttfbSeconds": 0.457383,
+          "totalSeconds": 0.457528,
+          "bytes": 2362,
+          "effectiveURL": "https://trymecard.com/site",
+          "redirects": 0
+        }
+      ]
+    },
+    {
+      "url": "https://trymecard.com/api/auth/config",
+      "dns": [
+        {
+          "address": "104.21.14.155",
+          "family": 4
+        },
+        {
+          "address": "172.67.203.204",
+          "family": 4
+        }
+      ],
+      "samples": [
+        {
+          "status": 200,
+          "dnsSeconds": 0.010463,
+          "connectSeconds": 0.019027,
+          "tlsSeconds": 0.037544,
+          "ttfbSeconds": 0.194508,
+          "totalSeconds": 0.194667,
+          "bytes": 190,
+          "effectiveURL": "https://trymecard.com/api/auth/config",
+          "redirects": 0
+        },
+        {
+          "status": 200,
+          "dnsSeconds": 0.002141,
+          "connectSeconds": 0.082438,
+          "tlsSeconds": 0.186719,
+          "ttfbSeconds": 0.370578,
+          "totalSeconds": 0.370663,
+          "bytes": 190,
+          "effectiveURL": "https://trymecard.com/api/auth/config",
+          "redirects": 0
+        },
+        {
+          "status": 200,
+          "dnsSeconds": 0.001755,
+          "connectSeconds": 0.136896,
+          "tlsSeconds": 0.222722,
+          "ttfbSeconds": 0.329355,
+          "totalSeconds": 0.329416,
+          "bytes": 190,
+          "effectiveURL": "https://trymecard.com/api/auth/config",
+          "redirects": 0
+        }
+      ]
+    },
+    {
+      "url": "https://trymecard.com/api/public/discover",
+      "dns": [
+        {
+          "address": "104.21.14.155",
+          "family": 4
+        },
+        {
+          "address": "172.67.203.204",
+          "family": 4
+        }
+      ],
+      "samples": [
+        {
+          "status": 200,
+          "dnsSeconds": 0.005257,
+          "connectSeconds": 0.012036,
+          "tlsSeconds": 0.030361,
+          "ttfbSeconds": 0.187479,
+          "totalSeconds": 0.187629,
+          "bytes": 1817,
+          "effectiveURL": "https://trymecard.com/api/public/discover",
+          "redirects": 0
+        },
+        {
+          "status": 200,
+          "dnsSeconds": 0.002122,
+          "connectSeconds": 0.017343,
+          "tlsSeconds": 0.034403,
+          "ttfbSeconds": 0.216146,
+          "totalSeconds": 0.216221,
+          "bytes": 1817,
+          "effectiveURL": "https://trymecard.com/api/public/discover",
+          "redirects": 0
+        },
+        {
+          "status": 200,
+          "dnsSeconds": 0.001966,
+          "connectSeconds": 0.097587,
+          "tlsSeconds": 0.113846,
+          "ttfbSeconds": 0.293545,
+          "totalSeconds": 0.293728,
+          "bytes": 1817,
+          "effectiveURL": "https://trymecard.com/api/public/discover",
+          "redirects": 0
+        }
+      ]
+    },
+    {
+      "url": "https://trymecard.com/api/me",
+      "dns": [
+        {
+          "address": "104.21.14.155",
+          "family": 4
+        },
+        {
+          "address": "172.67.203.204",
+          "family": 4
+        }
+      ],
+      "samples": [
+        {
+          "status": 401,
+          "dnsSeconds": 0.004456,
+          "connectSeconds": 0.011943,
+          "tlsSeconds": 0.026422,
+          "ttfbSeconds": 0.059256,
+          "totalSeconds": 0.059334,
+          "bytes": 71,
+          "effectiveURL": "https://trymecard.com/api/me",
+          "redirects": 0
+        },
+        {
+          "status": 401,
+          "dnsSeconds": 0.004563,
+          "connectSeconds": 0.013679,
+          "tlsSeconds": 0.113447,
+          "ttfbSeconds": 0.220231,
+          "totalSeconds": 0.220306,
+          "bytes": 71,
+          "effectiveURL": "https://trymecard.com/api/me",
+          "redirects": 0
+        },
+        {
+          "status": 401,
+          "dnsSeconds": 0.003639,
+          "connectSeconds": 0.027689,
+          "tlsSeconds": 0.064971,
+          "ttfbSeconds": 0.097289,
+          "totalSeconds": 0.097419,
+          "bytes": 71,
+          "effectiveURL": "https://trymecard.com/api/me",
+          "redirects": 0
+        }
+      ]
+    },
+    {
+      "url": "https://clerk.trymecard.com/npm/@clerk/clerk-js@6/dist/clerk.browser.js",
+      "dns": [
+        {
+          "address": "172.64.153.110",
+          "family": 4
+        },
+        {
+          "address": "104.18.34.146",
+          "family": 4
+        }
+      ],
+      "samples": [
+        {
+          "status": 200,
+          "dnsSeconds": 0.005062,
+          "connectSeconds": 0.011755,
+          "tlsSeconds": 0.030022,
+          "ttfbSeconds": 0.091944,
+          "totalSeconds": 0.218068,
+          "bytes": 328454,
+          "effectiveURL": "https://clerk.trymecard.com/npm/@clerk/clerk-js@6.45.0/dist/clerk.browser.js",
+          "redirects": 1
+        },
+        {
+          "status": 200,
+          "dnsSeconds": 0.003003,
+          "connectSeconds": 0.01151,
+          "tlsSeconds": 0.026748,
+          "ttfbSeconds": 0.080096,
+          "totalSeconds": 0.166979,
+          "bytes": 328454,
+          "effectiveURL": "https://clerk.trymecard.com/npm/@clerk/clerk-js@6.45.0/dist/clerk.browser.js",
+          "redirects": 1
+        },
+        {
+          "status": 200,
+          "dnsSeconds": 0.003646,
+          "connectSeconds": 0.011724,
+          "tlsSeconds": 0.11749,
+          "ttfbSeconds": 0.167112,
+          "totalSeconds": 0.301745,
+          "bytes": 328454,
+          "effectiveURL": "https://clerk.trymecard.com/npm/@clerk/clerk-js@6.45.0/dist/clerk.browser.js",
+          "redirects": 1
+        }
+      ]
+    },
+    {
+      "url": "https://clerk.trymecard.com/.well-known/jwks.json",
+      "dns": [
+        {
+          "address": "172.64.153.110",
+          "family": 4
+        },
+        {
+          "address": "104.18.34.146",
+          "family": 4
+        }
+      ],
+      "samples": [
+        {
+          "status": 200,
+          "dnsSeconds": 0.003332,
+          "connectSeconds": 0.011662,
+          "tlsSeconds": 0.032904,
+          "ttfbSeconds": 0.068144,
+          "totalSeconds": 0.06829,
+          "bytes": 450,
+          "effectiveURL": "https://clerk.trymecard.com/.well-known/jwks.json",
+          "redirects": 0
+        },
+        {
+          "status": 200,
+          "dnsSeconds": 0.006614,
+          "connectSeconds": 0.09646,
+          "tlsSeconds": 0.120975,
+          "ttfbSeconds": 0.143213,
+          "totalSeconds": 0.143315,
+          "bytes": 450,
+          "effectiveURL": "https://clerk.trymecard.com/.well-known/jwks.json",
+          "redirects": 0
+        },
+        {
+          "status": 200,
+          "dnsSeconds": 0.00297,
+          "connectSeconds": 0.010645,
+          "tlsSeconds": 0.028261,
+          "ttfbSeconds": 0.053613,
+          "totalSeconds": 0.053728,
+          "bytes": 450,
+          "effectiveURL": "https://clerk.trymecard.com/.well-known/jwks.json",
+          "redirects": 0
+        }
+      ]
+    },
+    {
+      "url": "https://accounts.google.com/",
+      "dns": [
+        {
+          "address": "172.253.115.84",
+          "family": 4
+        }
+      ],
+      "samples": [
+        {
+          "status": 200,
+          "dnsSeconds": 0.0014,
+          "connectSeconds": 0.014598,
+          "tlsSeconds": 0.03268,
+          "ttfbSeconds": 0.24211,
+          "totalSeconds": 0.389528,
+          "bytes": 918876,
+          "effectiveURL": "https://accounts.google.com/v3/signin/identifier",
+          "redirects": 2
+        },
+        {
+          "status": 200,
+          "dnsSeconds": 0.002768,
+          "connectSeconds": 0.110564,
+          "tlsSeconds": 0.12769,
+          "ttfbSeconds": 0.34776,
+          "totalSeconds": 0.511135,
+          "bytes": 919135,
+          "effectiveURL": "https://accounts.google.com/v3/signin/identifier",
+          "redirects": 2
+        },
+        {
+          "status": 200,
+          "dnsSeconds": 0.002462,
+          "connectSeconds": 0.015791,
+          "tlsSeconds": 0.112229,
+          "ttfbSeconds": 0.306724,
+          "totalSeconds": 0.441157,
+          "bytes": 918658,
+          "effectiveURL": "https://accounts.google.com/v3/signin/identifier",
+          "redirects": 2
+        }
+      ]
+    },
+    {
+      "url": "https://open.weixin.qq.com/",
+      "dns": [
+        {
+          "address": "203.205.232.110",
+          "family": 4
+        },
+        {
+          "address": "203.205.239.154",
+          "family": 4
+        }
+      ],
+      "samples": [
+        {
+          "status": 200,
+          "dnsSeconds": 0.007659,
+          "connectSeconds": 0.234049,
+          "tlsSeconds": 0.506059,
+          "ttfbSeconds": 0.888113,
+          "totalSeconds": 1.343083,
+          "bytes": 78547,
+          "effectiveURL": "https://open.weixin.qq.com/",
+          "redirects": 0
+        },
+        {
+          "status": 200,
+          "dnsSeconds": 0.002956,
+          "connectSeconds": 0.230204,
+          "tlsSeconds": 0.463668,
+          "ttfbSeconds": 0.927544,
+          "totalSeconds": 1.486675,
+          "bytes": 78547,
+          "effectiveURL": "https://open.weixin.qq.com/",
+          "redirects": 0
+        },
+        {
+          "status": 200,
+          "dnsSeconds": 0.005848,
+          "connectSeconds": 0.232395,
+          "tlsSeconds": 0.466921,
+          "ttfbSeconds": 1.071333,
+          "totalSeconds": 1.538522,
+          "bytes": 78547,
+          "effectiveURL": "https://open.weixin.qq.com/",
+          "redirects": 0
+        }
+      ]
+    },
+    {
+      "url": "https://api.weixin.qq.com/",
+      "dns": [
+        {
+          "address": "43.130.8.250",
+          "family": 4
+        },
+        {
+          "address": "43.130.8.50",
+          "family": 4
+        }
+      ],
+      "samples": [
+        {
+          "status": 404,
+          "dnsSeconds": 0.002077,
+          "connectSeconds": 0.165296,
+          "tlsSeconds": 0.500017,
+          "ttfbSeconds": 0.73825,
+          "totalSeconds": 0.738259,
+          "bytes": 0,
+          "effectiveURL": "https://api.weixin.qq.com/",
+          "redirects": 0
+        },
+        {
+          "status": 404,
+          "dnsSeconds": 0.003264,
+          "connectSeconds": 0.079794,
+          "tlsSeconds": 0.306428,
+          "ttfbSeconds": 0.526446,
+          "totalSeconds": 0.526456,
+          "bytes": 0,
+          "effectiveURL": "https://api.weixin.qq.com/",
+          "redirects": 0
+        },
+        {
+          "status": 404,
+          "dnsSeconds": 0.001671,
+          "connectSeconds": 0.078558,
+          "tlsSeconds": 0.307142,
+          "ttfbSeconds": 0.530867,
+          "totalSeconds": 0.530879,
+          "bytes": 0,
+          "effectiveURL": "https://api.weixin.qq.com/",
+          "redirects": 0
+        }
+      ]
+    }
+  ]
+}
