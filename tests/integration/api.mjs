@@ -43,7 +43,7 @@ await check('invalid upload fails without publishing a work',async()=>{
   const f=workForm('Bad cover upload');f.set('cover',new File(['not an image'],'bad.png',{type:'image/png'}));
   assert.equal((await request('/api/works',{method:'POST',form:f,headers:{'Idempotency-Key':`invalid-${run}`}})).status,415);
   assert.equal(ok(await request('/api/works?mine=1')).works.length,before);
-  const oversize=workForm('Oversize upload');oversize.set('file',new File(['<!doctype html>'+ 'x'.repeat(8*1024*1024+1-'<!doctype html>'.length)],'large.html',{type:'text/html'}));
+  const oversize=workForm('Oversize upload');oversize.set('file',new File(['<!doctype html>'+ 'x'.repeat(16*1024*1024+1-'<!doctype html>'.length)],'large.html',{type:'text/html'}));
   assert.equal((await request('/api/works',{method:'POST',form:oversize,headers:{'Idempotency-Key':`oversize-${run}`}})).status,413);
   assert.equal(ok(await request('/api/works?mine=1')).works.length,before);
 });

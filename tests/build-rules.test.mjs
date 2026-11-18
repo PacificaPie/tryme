@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { ApiError,htmlSource } from '../lib/funtrack/rules.mjs';
 import { builtHTML,buildProgress,buildLog,buildMetadata,verifyBuildWorker,BUILD_MAX_BYTES,BUILD_LOG_MAX_CHARS,buildCapabilities,buildFailureCode } from '../lib/funtrack/build-rules.mjs';
 const throws=(fn,code)=>assert.throws(fn,e=>e instanceof ApiError&&e.code===code);
-test('built artifacts and ordinary uploads share the 8 MiB limit',()=>{
+test('built artifacts and ordinary uploads share the 16 MiB limit',()=>{
   const bytes=new TextEncoder().encode('<!doctype html><html><body>'+'x'.repeat(1048576)+'</body></html>');
   assert(builtHTML(bytes,'text/html','index.html').startsWith('<!doctype'));
   assert(htmlSource(bytes,'text/html','index.html').startsWith('<!doctype'));
@@ -44,7 +44,7 @@ test('capabilities distinguish unconfigured, offline and fresh heartbeats withou
   const unconfigured=buildCapabilities({configured:false,lastHeartbeatAt:fresh,now});
   assert.equal(unconfigured.status,'unconfigured');assert.equal(unconfigured.online,false);assert.equal(unconfigured.lastHeartbeatAt,null);
   assert.deepEqual(unconfigured.imports,{html:true,repository:false});assert.equal(unconfigured.heartbeatTtlSeconds,90);
-  assert.deepEqual(unconfigured.limits,{htmlBytes:8388608,coverBytes:2097152,publicationBytes:10616832});
+  assert.deepEqual(unconfigured.limits,{htmlBytes:16777216,coverBytes:2097152,publicationBytes:19005440});
   assert.equal(buildCapabilities({configured:true,now}).status,'offline');
   assert.equal(buildCapabilities({configured:true,lastHeartbeatAt:'invalid',now}).online,false);
   assert.equal(buildCapabilities({configured:true,lastHeartbeatAt:'2026-11-16T15:00:01.000Z',now}).online,false);
@@ -54,6 +54,6 @@ test('capabilities distinguish unconfigured, offline and fresh heartbeats withou
   assert.equal(JSON.stringify(online).includes('secret'),false);assert.equal(JSON.stringify(online).includes('hidden'),false);
 });
 test('build failure codes retain supported actionable categories and bound unknown runner input',()=>{
-  for(const code of ['UNSUPPORTED_PROJECT','UNSUPPORTED_LOCKFILE','UNSUPPORTED_DEPENDENCY','LICENSE_REQUIRED','EXTERNAL_ASSET','OUTPUT_TOO_LARGE','ARCHIVE_TOO_LARGE','BUILD_TIMEOUT'])assert.equal(buildFailureCode(code),code);
+  for(const code of ['UNSUPPORTED_PROJECT','UNSUPPORTED_LOCKFILE','UNSUPPORTED_DEPENDENCY','LICENSE_REQUIRED','EXTERNAL_ASSET','OUTPUT_TOO_LARGE','ARCHIVE_TOO_LARGE','ARCHIVE_UNPACKED_TOO_LARGE','ARCHIVE_FILE_TOO_LARGE','ARCHIVE_TOO_MANY_FILES','BUILD_TIMEOUT'])assert.equal(buildFailureCode(code),code);
   for(const value of [undefined,null,'constructor','secret'.repeat(1000),{}])assert.equal(buildFailureCode(value),'BUILD_FAILED');
 });

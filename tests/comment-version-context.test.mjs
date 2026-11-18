@@ -8,6 +8,27 @@ const comments=(f,work,query='')=>f.api('/api/works/'+work.id+'/comments'+query)
 const context=(f,id)=>f.api('/api/comments/'+id+'/context');
 const versionContext=c=>({versionId:c.versionId,version:c.version});
 
+test('live author profiles coexist with immutable comment versions in lists, replies, inbox and context',async t=>{
+  const f=fixture(t),{work:v1}=await f.publish();
+  const profile=body=>f.api('/api/me/profile',{method:'POST',owner:OTHER,body});
+  assert.equal((await profile({name:'Before',avatarPreset:'moon'})).status,200);
+  const root=(await post(f,v1,{body:'Old version',versionId:v1.versionId,expectedAuthorId:OTHER})).comment;
+  assert.equal((await f.version(v1.id)).status,201);
+  const v2=(await f.get(v1.id)).work;
+  const reply=(await post(f,v2,{body:'Current version reply',parentId:root.id,versionId:v2.versionId,expectedAuthorId:OTHER})).comment;
+  const stored=f.database.prepare('SELECT * FROM ft_comments ORDER BY seq').all();
+  assert.equal((await profile({name:'After',avatarPreset:'sprout'})).status,200);
+  const list=await comments(f,v2),paged=await f.api('/api/comments/'+root.id+'/replies');
+  const inbox=await f.api('/api/comments?mine=1'),focused=await context(f,reply.id);
+  const visible=[list.comments[0],...list.comments[0].replies,...paged.replies,...inbox.comments,focused.thread,...focused.thread.replies];
+  assert.equal(visible.length,7);
+  for(const c of visible){
+    assert.equal(c.authorName,'After');assert.equal(c.authorAvatarUrl,'/avatars/sprout.svg');
+    assert.deepEqual(versionContext(c),versionContext(c.id===root.id?root:reply));
+  }
+  assert.deepEqual(f.database.prepare('SELECT * FROM ft_comments ORDER BY seq').all(),stored,'Reading current profiles must not rewrite comment history');
+});
+
 test('an account switch cannot publish another account draft or consume its key and contribution opportunity',async t=>{
   const f=fixture(t),{work}=await f.publish({owner:REVIEWER}),key=randomUUID();
   const session=await f.api('/api/sessions',{method:'POST',owner:OTHER,body:{workId:work.id,versionId:work.versionId}});assert.equal(session.status,201);

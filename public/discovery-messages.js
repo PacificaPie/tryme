@@ -1,6 +1,10 @@
 import { registerMessages } from './i18n.js';
 
 registerMessages({
+  '作品来源':'Work source','发现':'Discover','关注':'Following','全部作品':'All works',
+  '关注的人还没有公开作品':'No public works from followed creators yet',
+  '关注创作者后，可以在这里看到他们的作品。':'Follow creators to see their works here.',
+  '发现创作者':'Discover creators',
   '创作者': 'Creator', '← 名片': '← Creator cards', '查看名片': 'View card',
   '发现作品': 'Explore', '搜索作品或创作者': 'Search works or creators',
   '作品类型': 'Work type', '全部': 'All', '网页游戏': 'Web games', '外链作品': 'External',

@@ -1,4 +1,5 @@
 import { t, registerMessages } from './i18n.js';
+import {avatarMarkup} from './avatars.js';
 
 registerMessages({
   '创作者名片': 'Creator cards', '制作名片': 'Create a card', '我的已保存名片': 'My saved card',
@@ -29,7 +30,7 @@ export function renderPortfolioCard(card, { profile, safeCover, workHref, from, 
     const src=safeCover(work.coverUrl);
     return src ? `<img src="${escape(src)}" alt="${escape(work.name)}" loading="lazy">` : `<span class="portfolio-placeholder">${escape(work.name)}</span>`;
   };
-  const header = `<header class="portfolio-header"><div><h2>${escape(card.name)}</h2>${profile.headline?`<p class="portfolio-role">${escape(profile.headline)}</p>`:''}</div><div class="portfolio-intro">${card.bio?`<p>${escape(card.bio)}</p>`:''}${profile.website?`<a class="profile-website" href="${escape(profile.website)}" target="_blank" rel="noopener noreferrer">${escape(new URL(profile.website).hostname)} ↗</a>`:''}</div></header>`;
+  const header = `<header class="portfolio-header"><div>${card.avatarUrl?avatarMarkup(card,{className:'card-profile-avatar'}):''}<h2>${escape(card.name)}</h2>${profile.headline?`<p class="portfolio-role">${escape(profile.headline)}</p>`:''}</div><div class="portfolio-intro">${card.bio?`<p>${escape(card.bio)}</p>`:''}${profile.website?`<a class="profile-website" href="${escape(profile.website)}" target="_blank" rel="noopener noreferrer">${escape(new URL(profile.website).hostname)} ↗</a>`:''}</div></header>`;
   const footer = profile.signature?`<footer class="portfolio-signature">${escape(profile.signature)}</footer>`:'';
   const works=card.works || [];
   if (card.template==='editorial') {

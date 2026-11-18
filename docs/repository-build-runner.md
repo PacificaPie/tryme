@@ -6,10 +6,11 @@
 
 ## 当前范围
 
+- 已打包 HTML：非 Vite 仓库可直接使用 `dist/index.html`，没有时使用根 `index.html`；验证独立资源后导入，不执行项目代码。存在无效 dist 时不静默换根页面；原有 LICENSE 若存在则保留。
 - 根目录 npm 项目：Vite 5–7、package-lock.json v2/v3、build 脚本、LICENSE，默认输出 dist/index.html。
 - 依赖只接受锁定的 npm 官方 registry 包；不支持 workspace、私有仓库、后端/SSR、环境变量或运行时网络接口。
 - 源码可以是多文件。平台在真实构建后自动封装 HTML/JS/CSS/资源，适配现有 opaque-origin 游戏沙箱。静态资源校验不等于任意项目的运行兼容性保证，仍须预览。
-- 下载 16 MiB、解压 64 MiB、5,000 项；最终 HTML 上限 8 MiB。单任务最长 8 分钟。
+- 下载 64 MiB、解压 256 MiB、单文件 32 MiB、5,000 项；最终 HTML 上限 16 MiB，超过 8 MiB 提示加载可能较慢但不阻止发布。单任务最长 8 分钟。
 
 ## 本地模式构建器
 

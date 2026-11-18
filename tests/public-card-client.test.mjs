@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {publicCardPath,publicCardId,legacyPublicCardPath,snapshotPlayPath,publicPlaySignInPath,publicCardBackPath,publicCoverPath} from '../public/public-card-links.js';
+import {publicCardPath,publicCardId,legacyPublicCardPath,snapshotPlayPath,publicPlaySignInPath,publicCardRemixSignInPath,publicCardBackPath,publicCoverPath} from '../public/public-card-links.js';
 import {renderPublicCard,fetchPublicCard} from '../public/public-card.js';
 import {safeAuthReturnTo} from '../public/auth-client.js';
 
@@ -56,4 +56,16 @@ test('invalid IDs, missing cards, and malformed responses fail instead of exposi
   await assert.rejects(fetchPublicCard('bad',{fetchImpl:()=>assert.fail('Must not request an invalid ID')}),error=>error.status===404);
   await assert.rejects(fetchPublicCard(cardId,{fetchImpl:async()=>({ok:false,status:404})}),error=>error.status===404);
   await assert.rejects(fetchPublicCard(cardId,{fetchImpl:async()=>({ok:true,json:async()=>({card:{...card,works:[{id:'../../game'}]}})})}));
+});
+
+
+test('same-template public links preserve the template source through sign in without an external redirect',()=>{
+  const link=new URL(publicCardRemixSignInPath(cardId.toUpperCase()),origin);
+  const target='/site.html#/cards/me?templateFrom='+cardId;
+  assert.equal(link.pathname,'/auth/sign-in.html');
+  assert.equal(link.searchParams.get('return_to'),target);
+  assert.equal(safeAuthReturnTo(target,origin),target);
+  assert.equal(publicCardBackPath(target),'/c/'+cardId);
+  assert.equal(publicCardBackPath('https://evil.test'+target),null);
+  for(const value of ['../secret',cardId+'&redirect=https://evil.test','//evil.test',null])assert.equal(publicCardRemixSignInPath(value),null);
 });

@@ -1,0 +1,54 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "funtrack-builder-production",
+  "account_id": "26ecbb83a9773e88121606953aeca69f",
+  "main": "src/index.mjs",
+  "compatibility_date": "2026-11-16",
+  "workers_dev": false,
+  "preview_urls": false,
+  "vars": {
+    "FUNTRACK_SITE_ORIGIN": "https://trymecard.com"
+  },
+  "services": [
+    {
+      "binding": "FUNTRACK_SITE",
+      "service": "funtrack-production"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "JOBS",
+        "class_name": "BuildJob"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "BuildJob"
+      ]
+    }
+  ],
+  "containers": [
+    {
+      "class_name": "BuildJob",
+      "image": "./Dockerfile",
+      "image_build_context": "..",
+      "instance_type": "standard-1",
+      "max_instances": 2
+    }
+  ],
+  "triggers": {
+    "crons": [
+      "* * * * *"
+    ]
+  },
+  "observability": {
+    "enabled": true
+  },
+  "limits": {
+    "cpu_ms": 30000
+  }
+}

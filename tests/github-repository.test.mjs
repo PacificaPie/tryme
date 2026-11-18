@@ -96,3 +96,67 @@ test('REST rate limit falls back to public feed identity with the exact reposito
     await assert.rejects(resolveGithubRepository('https://github.com/example/game',{fetchImpl:async url=>url.startsWith('https://api.github.com/')?new Response('',{status:429}):new Response(body)}),errorCode('GITHUB_RESPONSE_INVALID'));
   }
 });
+
+const gitType='application/x-git-upload-pack-advertisement';
+const gitURL='https://github.com/example/game.git/info/refs?service=git-upload-pack';
+const packet=value=>Buffer.concat([Buffer.from((Buffer.byteLength(value)+4).toString(16).padStart(4,'0')),Buffer.from(value)]);
+const advertisement=(records,{service='# service=git-upload-pack\n',end=true}={})=>Buffer.concat([packet(service),Buffer.from('0000'),...records.map(packet),...(end?[Buffer.from('0000')]:[])]);
+const gitRefs=(branch='main')=>advertisement([`${sha} HEAD\0multi_ack symref=HEAD:refs/heads/${branch} object-format=sha1\n`,`${sha} refs/heads/${branch}\n`]);
+function gitFallback(response){
+  const calls=[];
+  return {calls,fetchImpl:async(url,options)=>{calls.push({url,options});if(url!==gitURL)return new Response('',{status:429});return typeof response==='function'?response(options):new Response(response,{headers:{'Content-Type':gitType}});}};
+}
+
+test('REST and Atom rate limits can resolve anonymous Git smart HTTP HEAD including Unicode refs',async()=>{
+  const fixture=gitFallback(gitRefs('release/中文'));
+  const result=await resolveGithubRepository('https://github.com/example/game.git',fixture);
+  assert.equal(result.commitSha,sha);assert.equal(result.defaultBranch,'release/中文');assert.equal(result.license,null);
+  assert.deepEqual(fixture.calls.map(call=>call.url),[root,'https://github.com/example/game/commits/HEAD.atom',gitURL]);
+  const options=fixture.calls[2].options;
+  assert.equal(options.credentials,'omit');assert.equal(options.redirect,'manual');assert.equal(options.referrerPolicy,'no-referrer');
+  assert.equal(options.headers.Accept,gitType);assert.equal(options.headers.Authorization,undefined);assert.equal(options.headers.Cookie,undefined);
+  assert.equal(options.headers['X-GitHub-Api-Version'],undefined);
+});
+
+test('Git ref fallback rejects malformed packets, duplicate HEAD and contradictory default refs',async()=>{
+  const head=`${sha} HEAD\0symref=HEAD:refs/heads/main object-format=sha1\n`,branch=`${sha} refs/heads/main\n`;
+  const invalid=[
+    advertisement([head,branch],{service:'# service=git-receive-pack\n'}),
+    gitRefs().subarray(0,-1),Buffer.from('zzzz'),advertisement([head,branch],{end:false}),
+    Buffer.concat([gitRefs(),packet(branch)]),advertisement([head,`${sha} HEAD\n`,branch]),
+    advertisement([head,`${'a'.repeat(40)} refs/heads/main\n`]),advertisement([head]),
+    advertisement([branch,head]),advertisement([`${sha} HEAD\0object-format=sha1\n`,branch]),
+    advertisement([head.replace('object-format=sha1','object-format=sha256'),branch]),
+    advertisement([head.replace('main object-format','main symref=HEAD:refs/heads/main object-format'),branch]),
+  ];
+  for(const value of invalid)await assert.rejects(resolveGithubRepository('https://github.com/example/game',gitFallback(value)),errorCode('GITHUB_RESPONSE_INVALID'));
+});
+
+test('Git reference advertisements without a usable HEAD report an empty repository',async()=>{
+  for(const value of [advertisement([]),advertisement([`${sha} refs/heads/other\n`]),advertisement([`${'0'.repeat(40)} capabilities^{}\0object-format=sha1\n`])]){
+    await assert.rejects(resolveGithubRepository('https://github.com/example/game',gitFallback(value)),errorCode('GITHUB_EMPTY_REPOSITORY'));
+  }
+});
+
+test('Git fallback preserves content-type, redirect, byte-limit and upstream error boundaries',async()=>{
+  const cases=[
+    [()=>new Response(gitRefs(),{headers:{'Content-Type':'text/html'}}),'GITHUB_RESPONSE_INVALID'],
+    [()=>new Response('',{status:302,headers:{Location:'https://evil.test/'}}),'GITHUB_REDIRECT'],
+    [()=>new Response('',{headers:{'Content-Type':gitType,'Content-Length':'1048577'}}),'GITHUB_RESPONSE_TOO_LARGE'],
+    [()=>new Response('',{status:429}),'GITHUB_RATE_LIMITED'],
+    [()=>new Response('',{status:404}),'GITHUB_NOT_FOUND'],
+  ];
+  for(const [response,code] of cases){const fixture=gitFallback(response);await assert.rejects(resolveGithubRepository('https://github.com/example/game',fixture),errorCode(code));assert.equal(fixture.calls.length,3);}
+  let cancelled=false;
+  const stream=gitFallback(()=>new Response(new ReadableStream({start(controller){controller.enqueue(new Uint8Array(700000));controller.enqueue(new Uint8Array(700000));},cancel(){cancelled=true;}}),{headers:{'Content-Type':gitType}}));
+  await assert.rejects(resolveGithubRepository('https://github.com/example/game',stream),errorCode('GITHUB_RESPONSE_TOO_LARGE'));assert.equal(cancelled,true);
+});
+
+test('Git fallback retains a ten-second abort and is never retried recursively',async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});let signal;
+  const fixture=gitFallback(options=>{signal=options.signal;return new Promise(()=>{});});
+  const pending=resolveGithubRepository('https://github.com/example/game',fixture);
+  const rejection=assert.rejects(pending,errorCode('GITHUB_TIMEOUT'));
+  while(!signal)await new Promise(resolve=>setImmediate(resolve));
+  t.mock.timers.tick(10001);await rejection;assert.equal(signal.aborted,true);assert.equal(fixture.calls.length,3);
+});

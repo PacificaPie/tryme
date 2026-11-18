@@ -33,6 +33,22 @@ const work=()=>({id:randomUUID(),versionId:'version-v1',version:'v1'});
 const comment=(w,u,extra={})=>({id:randomUUID(),workId:w.id,authorId:u.id,authorName:u.name,parentId:null,body:'A comment',versionId:w.versionId,version:w.version,createdAt:'2026-11-17T00:00:00.000Z',likesCount:0,likedByMe:false,...extra});
 const eventFor=(selector,data)=>({target:{closest:query=>query===selector?{dataset:data}:null}});
 
+test('versioned comments keep profile avatars in the composer, discussion and exact context',async t=>{
+  environment(t);const w=work(),u={...user(),avatarUrl:'/avatars/moon.svg'};
+  const root=comment(w,u,{authorName:'Current profile',authorAvatarUrl:'/avatars/sprout.svg'});
+  const api=async path=>path.endsWith('/context')
+    ?{workId:w.id,targetId:root.id,contextOnly:true,thread:{...root,replies:[],repliesNextCursor:null}}
+    :{comments:[{...root,replies:[],repliesNextCursor:null}],commentsCount:1,nextCursor:null};
+  const view=mounted({work:w,user:u,api,focusId:root.id});await tick();
+  assert.match(view.element.innerHTML,/src="\/avatars\/moon\.svg"/);
+  for(const markup of [view.list.innerHTML,view.context.innerHTML]){
+    assert.match(markup,/src="\/avatars\/sprout\.svg"/);
+    assert.match(markup,/class="comment-version"/);assert.match(markup,/>v1<\/span>/);
+    assert(markup.includes('#/author/'+u.id));
+  }
+  assert(view.context.querySelector(`[id="context-comment-${root.id}"]`).focused);
+});
+
 test('root comment captures the page version, and a lost response retries the same version/key',async t=>{
   environment(t);const w=work(),u=user(),posted=[];let release;const beforeRootSubmit=()=>new Promise(resolve=>{release=resolve;});
   const api=async(path,options)=>{
