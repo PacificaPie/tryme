@@ -548,8 +548,8 @@ function mountCard(card,key){
   const frame=$('#gallery-frame');if(!frame)return;
   const status=document.createElement('div');status.className='gallery-load-status';status.setAttribute('role','status');status.setAttribute('aria-live','polite');frame.before(status);
   const gallery={frame,card,key,restoreScroll:scrolls.get(key)||0,restoreTimer:null,view:normalizeGalleryView(card,galleryViews.get(key))};currentGallery=gallery;
-  const bridge=createGalleryBridge({frame,isCurrent:()=>gallery===currentGallery,payload:()=>initializeGallery(gallery),onStatus:state=>{
-    const busy=state==='loading';frame.setAttribute('aria-busy',String(busy));frame.style.visibility=busy||state==='timeout'?'hidden':'';
+  const bridge=createGalleryBridge({frame,...(card.template==='city'?{timeout:30000,recoveryDelay:10000}:{}),isCurrent:()=>gallery===currentGallery,payload:()=>initializeGallery(gallery),onStatus:state=>{
+    const busy=state==='loading';frame.setAttribute('aria-busy',String(busy));frame.style.visibility=(busy&&card.template!=='city')||state==='timeout'?'hidden':'';
     status.hidden=state==='rendered'||state==='empty';status.dataset.state=state;
     if(!status.hidden){status.innerHTML=busy?`${loadingMark()}<span>${t('正在加载 3D 名片…')}</span>`:`<span>${t(state==='fallback'?'当前浏览器暂未显示 3D，作品列表仍可查看。':'3D 名片加载超时，请重试。')}</span><button type="button" class="button small">${t('重新加载 3D')}</button>`;status.querySelector('button')?.addEventListener('click',()=>bridge.retry());}
   }});

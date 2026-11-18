@@ -100,9 +100,9 @@ export function mountTemplateExperience(root,{template,user,onUse=()=>{},onBack}
   if(frame){
     const status=root.querySelector('.gallery-load-status'),fallback=root.querySelector('.template-experience-fallback');
     window.addEventListener('message',received);
-    bridge=createGalleryBridge({frame,isCurrent:alive,payload:()=>({locale:getLocale(),author:{id:card.authorId,name:card.name,bio:card.bio,headline:card.headline,signature:'',website:'',backStyle:card.backStyle,avatarUrl:card.avatarUrl},works:card.works.map(work=>({id:work.id,name:work.name,desc:work.desc,cover:work.coverUrl,kind:t('示例作品'),version:''})),...view}),onStatus:state=>{
+    bridge=createGalleryBridge({frame,...(card.template==='city'?{timeout:30000,recoveryDelay:10000}:{}),isCurrent:alive,payload:()=>({locale:getLocale(),author:{id:card.authorId,name:card.name,bio:card.bio,headline:card.headline,signature:'',website:'',backStyle:card.backStyle,avatarUrl:card.avatarUrl},works:card.works.map(work=>({id:work.id,name:work.name,desc:work.desc,cover:work.coverUrl,kind:t('示例作品'),version:''})),...view}),onStatus:state=>{
       if(!alive())return;const loading=state==='loading',failed=state==='timeout'||state==='fallback';
-      frame.setAttribute('aria-busy',String(loading));frame.hidden=failed;frame.style.visibility=loading?'hidden':'';fallback.hidden=!failed;
+      frame.setAttribute('aria-busy',String(loading));frame.hidden=failed;frame.style.visibility=loading&&card.template!=='city'?'hidden':'';fallback.hidden=!failed;
       status.hidden=state==='rendered'||state==='empty';status.dataset.state=state;
       status.innerHTML=loading?`${loadingMark()}<span>${t('正在加载 3D 名片…')}</span>`:failed?`<span>${t(state==='fallback'?'当前浏览器暂未显示 3D，作品列表仍可查看。':'3D 名片加载超时，请重试。')}</span><button type="button" class="button small" data-template-retry>${t('重新加载 3D')}</button>`:'';
     }});
