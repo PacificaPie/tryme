@@ -56,11 +56,12 @@ export const workFingerprints = sqliteTable('ft_work_fingerprints', {
 // historical. Publication explicitly lists new work via the 0008 trigger.
 export const workDiscovery = sqliteTable('ft_work_discovery', {
   workId: text('work_id').primaryKey().references(()=>works.id), visibility: text('visibility').notNull().default('unlisted'),
+  category: text('category').notNull().default('other'),
   reviewStatus: text('review_status').notNull().default('unsubmitted'), kind: text('kind').notNull().default('unspecified'),
   playDescription: text('play_description').notNull().default(''), submittedVersionId: text('submitted_version_id').references(()=>versions.id),
   approvedVersionId: text('approved_version_id').references(()=>versions.id), reviewNote: text('review_note').notNull().default(''),
   reviewedBy: text('reviewed_by'), revision: integer('revision').notNull().default(1), updatedAt: text('updated_at').notNull(),
-}, t=>[index('ft_work_discovery_review').on(t.reviewStatus,t.updatedAt),index('ft_work_discovery_visibility').on(t.visibility,t.reviewStatus)]);
+}, t=>[index('ft_work_discovery_category').on(t.category,t.visibility),index('ft_work_discovery_review').on(t.reviewStatus,t.updatedAt),index('ft_work_discovery_visibility').on(t.visibility,t.reviewStatus)]);
 export const versionOperations = sqliteTable('ft_version_operations', {
   id: text('id').primaryKey(), ownerId: text('owner_id').notNull(), workId: text('work_id').notNull().references(()=>works.id),
   action: text('action').notNull(), idempotencyKey: text('idempotency_key').notNull(), requestHash: text('request_hash').notNull(),

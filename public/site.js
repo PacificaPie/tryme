@@ -1,3 +1,4 @@
+import {WORK_CATEGORIES,workCategoryLabel} from './work-categories.js';
 import { creationMenuMarkup } from './creation-menu.js';
 import { mountCoverReview } from './cover-review.js';
 import { previewMarkup, previewButton, mountVideoPreviews, mountAutoPreview } from './video-preview.js';
@@ -92,7 +93,7 @@ function safeExternal(value){try{const u=new URL(value);return ['http:','https:'
 function date(value){if(!value)return '';const d=new Date(typeof value==='number'&&value<1e12?value*1000:value);return Number.isNaN(d.valueOf())?'':d.toLocaleDateString(getLocale(),{month:'short',day:'numeric'});}
 function n(value){return typeof value==='number'&&Number.isFinite(value)?value.toLocaleString(getLocale()):'—';}
 function workHref(work, from=route().raw, cardId=''){return '#/work/'+encodeURIComponent(work.id)+'?from='+encodeURIComponent(from)+(cardId?'&card='+encodeURIComponent(cardId):'');}
-function cover(work, href, label=true){const src=safeCover(work.coverUrl);return `<a class="cover${src?'':' empty-cover'}" href="${esc(href)}" aria-label="${t("查看")} ${esc(work.name)}">${src?`<img src="${esc(src)}" alt="${esc(work.name)}" loading="lazy">`:`<span aria-hidden="true">${esc(work.name)}</span>`}${label?`<span class="tag">${work.source==='url'?t("外链作品"):t("网页游戏")}</span>`:''}</a>`;}
+function cover(work, href, label=true){const src=safeCover(work.coverUrl);return `<a class="cover${src?'':' empty-cover'}" href="${esc(href)}" aria-label="${t("查看")} ${esc(work.name)}">${src?`<img src="${esc(src)}" alt="${esc(work.name)}" loading="lazy">`:`<span aria-hidden="true">${esc(work.name)}</span>`}${label?`<span class="tag">${t(workCategoryLabel(work.category))}</span>`:''}</a>`;}
 function workTile(work,{from=route().raw,creator=true,cardId='',social=false}={}){
   const href=workHref(work,from,cardId),src=safeCover(work.coverUrl);
   const author=avatarMarkup({name:work.authorName,avatarUrl:work.authorAvatarUrl},{className:'feed-author-avatar'})+esc(work.authorName||t('创作者'));
@@ -183,9 +184,9 @@ async function renderRoute(options={}){
 async function renderDiscover(r,number){
   const authorId='',authorCard=null;
   if(!applyHTML('<div class="page discovery-page"></div>',number))return;
-  const panel=await mountDiscovery($('.discovery-page'),{api,esc,workTile,syncSocial,userId:me?.id||null,authorId,authorCard,onSignIn:()=>go('/following'),initial:{q:r.params.get('q'),source:r.params.get('source'),sort:r.params.get('sort'),following:r.params.get('following')},onQuery:query=>{
+  const panel=await mountDiscovery($('.discovery-page'),{api,esc,workTile,syncSocial,userId:me?.id||null,authorId,authorCard,onSignIn:()=>go('/following'),initial:{q:r.params.get('q'),category:r.params.get('category'),sort:r.params.get('sort'),following:r.params.get('following')},onQuery:query=>{
     if(number!==routeNumber)return;
-    const params=new URLSearchParams();if(query.q)params.set('q',query.q);if(query.source!=='all')params.set('source',query.source);if(query.sort!==(authorId?'newest':'recommended'))params.set('sort',query.sort);if(query.following==='1')params.set('following','1');
+    const params=new URLSearchParams();if(query.q)params.set('q',query.q);if(query.category!=='all')params.set('category',query.category);if(query.sort!==(authorId?'newest':'recommended'))params.set('sort',query.sort);if(query.following==='1')params.set('following','1');
     const next=r.path+(params.size?'?'+params:'');history.replaceState(null,'','#'+next);currentRoute=next;identity();
   },restoreScroll:()=>window.scrollTo(0,scrolls.get(route().raw)||0)});
   if(number===routeNumber)discoveryPanel=panel;else panel?.dispose();
@@ -245,7 +246,7 @@ async function renderWork(r,number,countView=true,autoPlay=true){
         ${work.desc?`<p class="work-description">${esc(work.desc)}</p>`:''}
         <div class="detail-social">${socialControls(work)}<button class="discussion-jump" data-action="discussion" aria-label="${t("查看讨论")}">${commentIcon()}<span>${t("讨论")}</span></button></div>
         <details class="work-metadata"><summary>${t('作品信息')}<span>${esc(work.version)}</span></summary>
-          <dl class="work-facts"><div><dt>${t("形式")}</dt><dd>${work.source==='url'?t("外部网站"):t("网页游戏")}</dd></div><div><dt>${t("版本")}</dt><dd>${esc(work.version)}</dd></div>${work.createdAt?`<div><dt>${t("发布日期")}</dt><dd>${date(work.createdAt)}</dd></div>`:''}</dl>
+          <dl class="work-facts"><div><dt>${t('作品类型')}</dt><dd>${t(workCategoryLabel(work.category))}</dd></div><div><dt>${t("版本")}</dt><dd>${esc(work.version)}</dd></div>${work.createdAt?`<div><dt>${t("发布日期")}</dt><dd>${date(work.createdAt)}</dd></div>`:''}</dl>
           ${work.build?`<p class="work-origin">${t("来源")} <a href="${esc(safeExternal(work.build.sourceUrl||'https://github.com/'+work.build.repository+'/tree/'+work.build.commitSha))}" target="_blank" rel="noopener noreferrer">${esc(work.build.repository)}</a><span>${esc((work.build.commitSha||'').slice(0,7))}</span></p>`:''}
           ${ownerActions}
         </details>
@@ -382,6 +383,7 @@ function renderPublish(number){
     <form id="publish-form" class="form">
       <div class="field"><label for="publish-name">${t("作品名称")}</label><input id="publish-name" name="name" value="${esc(d.name)}" maxlength="80" required></div>
       <div class="field"><label for="publish-desc">${t("一句介绍")}</label><textarea id="publish-desc" name="desc" maxlength="500" required>${esc(d.desc)}</textarea></div>
+      <div class="field"><label for="publish-category">${t('作品类型')}</label><select id="publish-category" name="category" required><option value="" disabled ${!d.category?'selected':''}>${t('选择作品类型')}</option>${WORK_CATEGORIES.map(({id,label})=>`<option value="${id}" ${d.category===id?'selected':''}>${t(label)}</option>`).join('')}</select><small>${t('按作品内容选择，与上传方式无关。之后可在展示设置中修改。')}</small></div>
       <fieldset class="field source-picker"><legend>${t("作品来源")}</legend><div class="segmented">${[['html',t("本地 HTML")],['github','GitHub'],['url',t("已有网站")]].map(([value,label])=>`<label><input type="radio" name="source" value="${value}" ${d.source===value?'checked':''}>${label}</label>`).join('')}</div></fieldset>
       <div id="publish-import-availability" class="import-availability" aria-live="polite"></div>
       <div class="field" id="html-field"><label for="game-file">${t("游戏文件")}</label><input id="game-file" type="file" accept=".html,.htm,text/html"><small>${t(HTML_UPLOAD_HINT)}</small><div class="publish-file-selection"><span id="game-file-name" class="file-selected"></span><button id="game-file-remove" type="button" class="button quiet small" aria-label="${t("移除游戏文件")}" hidden>${t("移除")}</button></div></div>
@@ -395,7 +397,7 @@ function renderPublish(number){
   publishRelatedWorks=[];readMine().then(works=>{if(number===routeNumber){publishRelatedWorks=works;refreshPublishState();}}).catch(()=>{});
   const form=$('#publish-form');publishAvailability=createBuildAvailability(api,refreshPublishState);refreshPublishState();publishAvailability.refresh();
   form.addEventListener('input',event=>{
-    if(!['name','desc','url','source','githubURL'].includes(event.target.name))return;
+    if(!['name','desc','url','source','githubURL','category'].includes(event.target.name))return;
     if(['source','githubURL'].includes(event.target.name)){githubJob++;githubPending=false;stopBuildPolling();buildPollError='';}
     publishDraft[event.target.name]=event.target.value;publishDraft.key=uid();publishError='';savePublish();refreshPublishState();if(event.target.name==='source'){pollGithubBuild();if(event.target.value==='github')publishAvailability?.refresh();}
   });
@@ -453,7 +455,7 @@ async function submitPublish(form){
   if(d.source==='github'&&!githubReady()){publishError="请先完成当前 GitHub 项目的导入。";refreshPublishState();return;}
   if(d.source==='url'&&!safeExternal(d.url)){publishError="请输入完整的 http:// 或 https:// 链接。";refreshPublishState();return;}
   if(d.source==='url'&&new URL(d.url).hostname==='github.com'){publishError="这是 GitHub 仓库页面，请选择 GitHub 导入，或填写部署后的 GitHub Pages 地址。";refreshPublishState();return;}
-  const body=new FormData();body.set('name',d.name.trim());body.set('desc',d.desc.trim());body.set('source',d.source==='github'?'html':d.source);
+  const body=new FormData();body.set('category',d.category);body.set('name',d.name.trim());body.set('desc',d.desc.trim());body.set('source',d.source==='github'?'html':d.source);
   if(d.source==='github'&&matchingBuild()?.status==='ready')body.set('buildId',matchingBuild().id);else if(d.source!=='url')body.set('file',publishFile.type==='text/html'?publishFile:new File([publishFile],publishFile.name,{type:'text/html'}));else body.set('url',d.url.trim());if(coverFile)body.set('cover',coverFile);
   publishPending=true;refreshPublishState();
   try{
@@ -714,7 +716,6 @@ function renderChrome(){
   document.documentElement.lang=getLocale();
   $('.skip').textContent=t('跳至内容');
   $('.brand').setAttribute('aria-label',t('TryMe 首页'));
-  $('.site-header nav').setAttribute('aria-label',t('主导航'));
   $('#creation-menu').innerHTML=creationMenuMarkup();
   const button=$('#locale-toggle');button.textContent=getLocale()==='en'?'中':'EN';
   button.setAttribute('aria-label',getLocale()==='en'?'切换为中文':'Switch to English');

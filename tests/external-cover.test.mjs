@@ -63,7 +63,7 @@ test('manual upload skips automatic enqueue; legacy external work can explicitly
  const legacy=f.seed({source:'url',url:'https://example.org'}),work=(await f.get(legacy.id)).work;
  assert.equal((await action(f,work,'generate')).status,'queued');
  const disabled=fixture(t),result=await publish(disabled);assert.equal(result.status,201);assert.equal(disabled.count('ft_cover_review_jobs'),0);
- const old=fixture(t,{externalCover:true,through:15});assert.equal((await publish(old)).status,201,'migration lag cannot break publication');
+ const old=fixture(t,{externalCover:true});old.database.exec('DROP TABLE ft_cover_review_attempts; DROP TABLE ft_cover_review_jobs;');assert.equal((await publish(old)).status,201,'migration lag cannot break publication');
 });
 
 test('bounded retries, budget reservation and concurrent leases prevent unbounded capture',async t=>{

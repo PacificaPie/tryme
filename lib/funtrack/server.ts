@@ -21,7 +21,7 @@ import { safeAvatarURL } from './avatar-rules.mjs';
 import { cardIdentity,cardRowIdentities } from './card-identity.mjs';
 import { cardWorkRefs } from './version-rules.mjs';
 import { analyticsResponse } from './analytics';
-import { ApiError, fail, authenticate, verifyWrite, requiredText, eventId, safeURL, coverType, htmlSource, sessionEvents, GAME_CSP, gameDocument, likedState, cardDetails, cardTemplate, commentInput, validateCommentParent, commentPageLimit, encodeCommentCursor, decodeCommentCursor, discoverQuery, encodeDiscoverCursor, decodeDiscoverCursor } from './rules.mjs';
+import { ApiError, fail, authenticate, verifyWrite, requiredText, eventId, safeURL, coverType, htmlSource, sessionEvents, GAME_CSP, gameDocument, likedState, cardDetails, cardTemplate, commentInput, validateCommentParent, commentPageLimit, encodeCommentCursor, decodeCommentCursor, discoverQuery, encodeDiscoverCursor, decodeDiscoverCursor, workCategory } from './rules.mjs';
 
 type Row = Record<string, any>;
 type User = { id: string; name: string; email: string };
@@ -51,7 +51,7 @@ async function bodyJSON(request:Request):Promise<Row> {
   try {const body=JSON.parse(new TextDecoder().decode(await limitedBody(request,65536)));if(!body||typeof body!=='object'||Array.isArray(body))throw new Error();return body;}catch(e){if(e instanceof ApiError)throw e;throw new ApiError(400,'INVALID_JSON','JSON 格式无效');}
 }
 const WORK_QUERY=`SELECT w.*,v.version,v.game_key,CASE WHEN m.id IS NOT NULL THEN m.cover_key ELSE v.cover_key END cover_key,CASE WHEN m.id IS NOT NULL THEN m.cover_mime ELSE v.cover_mime END cover_mime,v.provenance_json,${DISCOVERY_COLUMNS} FROM ft_works w JOIN ft_work_versions v ON v.id=w.current_version_id LEFT JOIN ft_work_metadata m ON m.id=w.current_metadata_id AND m.work_id=w.id${DISCOVERY_JOIN}`;
-function workJSON(w:Row) { return {id:w.id,authorId:w.author_id,authorName:w.author_name,authorAvatarUrl:w.author_avatar_url||'',name:w.name,desc:w.description,source:w.source,versionId:w.current_version_id,version:w.version,metadataId:w.current_metadata_id||null,coverUrl:w.cover_key?`/media/${w.current_metadata_id||w.current_version_id}`:'',...(w.url?{url:w.url}:{}),...(w.provenance_json?{build:JSON.parse(w.provenance_json)}:{}),createdAt:w.created_at,revision:w.revision,updatedAt:w.updated_at||w.created_at,archivedAt:w.archived_at||null,discovery:discoveryJSON(w)}; }
+function workJSON(w:Row) { return {id:w.id,authorId:w.author_id,authorName:w.author_name,authorAvatarUrl:w.author_avatar_url||'',name:w.name,desc:w.description,source:w.source,category:w.work_category||'other',versionId:w.current_version_id,version:w.version,metadataId:w.current_metadata_id||null,coverUrl:w.cover_key?`/media/${w.current_metadata_id||w.current_version_id}`:'',...(w.url?{url:w.url}:{}),...(w.provenance_json?{build:JSON.parse(w.provenance_json)}:{}),createdAt:w.created_at,revision:w.revision,updatedAt:w.updated_at||w.created_at,archivedAt:w.archived_at||null,discovery:discoveryJSON(w)}; }
 async function getWork(id:unknown):Promise<Row> { if(typeof id!=='string'||id.length>128)throw new ApiError(404,'WORK_NOT_FOUND','作品不存在');const w=await first(WORK_QUERY+' WHERE w.id=?',id);if(!w)throw new ApiError(404,'WORK_NOT_FOUND','作品不存在');const profile=await first('SELECT * FROM ft_profiles WHERE id=?',w.author_id);return {...w,author_name:profile?.name||w.author_name,author_avatar_url:profile?.avatar_url||''}; }
 async function ownWork(id:unknown,user:User) {const w=await getWork(id);if(w.author_id!==user.id)throw new ApiError(403,'NOT_OWNER','只能访问自己的作品数据');return w;}
 async function userProfile(user:User) {return creators.me(user);}
@@ -74,7 +74,7 @@ function likeJSON(workId:string,row:Row) {return {workId,liked:Boolean(row.liked
 async function discover(url:URL,user:User|null,mine=false) {
   if(mine&&!user)fail(401,'AUTH_REQUIRED','请先登录后继续。');
   const params=new URLSearchParams(url.searchParams);if(mine)params.set('author',user!.id);
-  if(!user)for(const key of params.keys())if(!['q','source','sort','limit','cursor'].includes(key))fail(422,'INVALID_QUERY','公开发现页不支持此筛选。');
+  if(!user)for(const key of params.keys())if(!['q','source','category','sort','limit','cursor'].includes(key))fail(422,'INVALID_QUERY','公开发现页不支持此筛选。');
   const state=mine?mineWorkState(params.get('state')):'active';
   const query=discoverQuery(params),cursor=decodeDiscoverCursor(params.get('cursor'),query),scope=!user?'public-feed':mine?'mine:'+user.id+':'+state:query.following?'following:'+user.id:'public',asOf=cursor?.asOf||iso();
   if(cursor&&(cursor.scope||'public')!==scope)fail(400,'INVALID_CURSOR','分页游标与当前列表不符，请重新加载');
@@ -88,6 +88,7 @@ async function discover(url:URL,user:User|null,mine=false) {
   const conditions=['w.created_at<=?',...mine?(state==='all'?[]:[state==='archived'?'w.archived_at IS NOT NULL':'w.archived_at IS NULL']):[DISCOVERY_ELIGIBLE]],values:any[]=[asOf];
   if(snapshot){conditions.push('w.rowid<=?');values.push(snapshot.works);}
   if(query.source!=='all'){conditions.push('w.source=?');values.push(query.source);}
+  if(query.category){conditions.push('d.category=?');values.push(query.category);}
   if(query.author){conditions.push('w.author_id=?');values.push(query.author);}
   if(query.following){conditions.push('EXISTS(SELECT 1 FROM ft_creator_follows f WHERE f.follower_id=? AND f.creator_id=w.author_id AND f.created_at<=?)');values.push(user!.id,asOf);}
   // instr treats '%' and '_' literally instead of expanding them as SQL LIKE wildcards.
@@ -104,7 +105,7 @@ async function discover(url:URL,user:User|null,mine=false) {
     sql('SELECT COUNT(*) n FROM ft_works w'+DISCOVERY_JOIN+' WHERE '+where,...values),
   ]);
   const page=results[0].results.slice(0,query.limit),last=page[page.length-1];
-  const nextCursor=results[0].results.length>query.limit?encodeDiscoverCursor({v:1,scope,filters:{q:query.q,source:query.source,sort:query.sort,author:query.author,...query.following?{following:true}:{}},asOf,...(snapshot?{snapshot}:{}),last:{rank:Number(last.feed_rank),createdAt:last.created_at,id:last.id}}):null;
+  const nextCursor=results[0].results.length>query.limit?encodeDiscoverCursor({v:1,scope,filters:{q:query.q,source:query.source,sort:query.sort,author:query.author,...query.category?{category:query.category}:{},...query.following?{following:true}:{}},asOf,...(snapshot?{snapshot}:{}),last:{rank:Number(last.feed_rank),createdAt:last.created_at,id:last.id}}):null;
   // Presentation counts and the viewer's liked state stay live. Ranking uses
   // asOf to prevent new works/comments/likes from changing this traversal.
   // Recommended reads append-only impressions, starts and credits below the
@@ -113,7 +114,7 @@ async function discover(url:URL,user:User|null,mine=false) {
   const works=await withWorkStats(page.map(workJSON),user);
   // Explicit DTO: no identity IDs, external play URLs, version/artifact paths,
   // provenance, moderation state or viewer-specific data cross this boundary.
-  const publicWorks=()=>works.map((w:Row)=>({id:w.id,name:w.name,desc:w.desc,source:w.source,authorName:w.authorName,authorAvatarUrl:safeAvatarURL(w.authorAvatarUrl),coverUrl:w.coverUrl?`/api/public/works/${encodeURIComponent(w.id)}/cover`:'',...(w.preview?{preview:w.preview}:{}),likesCount:w.likesCount,commentsCount:w.commentsCount}));
+  const publicWorks=()=>works.map((w:Row)=>({id:w.id,name:w.name,desc:w.desc,source:w.source,category:w.category,authorName:w.authorName,authorAvatarUrl:safeAvatarURL(w.authorAvatarUrl),coverUrl:w.coverUrl?`/api/public/works/${encodeURIComponent(w.id)}/cover`:'',...(w.preview?{preview:w.preview}:{}),likesCount:w.likesCount,commentsCount:w.commentsCount}));
   return json({works:user?works:publicWorks(),nextCursor,total:Number(results[1].results[0]?.n||0),sort:query.sort,asOf,...(recommended?{rankingVersion:RECOMMENDATION_VERSION}:{})});
 }
 async function publicFeedAPI(request:Request) {
@@ -163,10 +164,11 @@ async function publish(request:Request,user:User) {
   const form=await readPublicationForm(request);
   const name=requiredText(form.get('name'),'作品名',80),description=requiredText(form.get('desc'),'作品简介',500);
   const source=form.get('source');if(source!=='html'&&source!=='url')throw new ApiError(422,'INVALID_SOURCE','选择 HTML 上传或外部链接');
+  const category=form.has('category')?workCategory(form.get('category')):'other';
   const url=source==='url'?safeURL(form.get('url')):null;
   const {gameBytes,coverBytes,coverMime,provenanceJSON,buildId}=await readArtifact(form,source,user.id);
   const fingerprint=gameBytes?await hash(gameBytes):url!;
-  const requestHash=await hash(JSON.stringify({name,description,source,url,...(buildId?{buildId}:{}),game:gameBytes?fingerprint:null,cover:coverBytes?await hash(coverBytes):null,coverMime}));
+  const requestHash=await hash(JSON.stringify({name,description,source,url,...(form.has('category')?{category}:{}),...(buildId?{buildId}:{}),game:gameBytes?fingerprint:null,cover:coverBytes?await hash(coverBytes):null,coverMime}));
   const initialQuery=`SELECT w.*,v.id initial_version_id,v.version,v.game_key,v.cover_key,v.cover_mime,v.provenance_json,i.name initial_name,i.description initial_description,${DISCOVERY_COLUMNS} FROM ft_works w JOIN ft_work_versions v ON v.work_id=w.id AND v.ordinal=1 LEFT JOIN ft_work_metadata i ON i.id=w.initial_metadata_id AND i.work_id=w.id${DISCOVERY_JOIN}`;
   async function initialResponse(found:Row,status=200){if(found.request_hash!==requestHash)throw new ApiError(409,'IDEMPOTENCY_CONFLICT','同一次提交的内容已变化，请创建新的提交标识');await onPublished(found.id,found.initial_version_id,user.id);return json({work:workJSON({...found,name:found.initial_name??found.name,description:found.initial_description??found.description,current_metadata_id:found.initial_metadata_id,current_version_id:found.initial_version_id,revision:1,updated_at:found.created_at}),current:{versionId:found.current_version_id,revision:found.revision}},status);}
   async function replay(){const found=await first(initialQuery+' WHERE w.author_id=? AND w.idempotency_key=?',user.id,key);return found?initialResponse(found):null;}
@@ -181,7 +183,7 @@ async function publish(request:Request,user:User) {
       sql('INSERT INTO ft_work_versions (id,work_id,version,game_key,cover_key,cover_mime,created_at,provenance_json,ordinal,content_hash,created_by) VALUES (?,?,?,?,?,?,?,?,1,?,?)',versionId,id,'v1',gameKey,coverKey,coverMime,createdAt,provenanceJSON,gameBytes?fingerprint:null,user.id),
       sql('INSERT INTO ft_work_metadata(id,work_id,name,description,cover_key,cover_mime,created_at,created_by) VALUES(?,?,?,?,?,?,?,?)',initialMetadataId,id,name,description,coverKey,coverMime,createdAt,user.id),
       duplicates.claim(user.id,source,fingerprint,id,versionId,createdAt),
-      initialDiscovery(sql,id,createdAt),
+      initialDiscovery(sql,id,createdAt,category),
     ]);
   } catch(e) {
     // A database commit can succeed even if its response is lost. Confirm the

@@ -1,4 +1,6 @@
 import {t} from './i18n.js';
+import {WORK_CATEGORIES} from './work-categories.js';
+import './discovery-messages.js';
 import './publication.messages.js';
 import { isArchived, archivedWorkPath, hasPendingArchiveControl, disposeArchiveControls } from './archive-controls.js';
 
@@ -60,4 +62,17 @@ export async function renderDiscoverySettings(route,h){
   const e=h.esc;
   h.render(`<div class="page narrow discovery-settings"><a class="back" href="#/studio/works">${t('← 我的作品')}</a><div class="page-head"><div><h1>${e(work.name)}</h1>${statusText(work,e)}</div><a class="button quiet small" href="#/work/${encodeURIComponent(id)}?from=${encodeURIComponent(discoveryPath(id))}">${t('试玩作品')}</a></div><p class="discovery-scope">${t(isArchived(work)?'这件作品已归档，请先恢复再继续。':'隐藏仅影响 Feed、搜索和作者作品列表；原链接、名片与历史数据保留。')}</p><div class="form-footer">${controls(work)}</div></div>`);
   q('[data-visibility]')?.addEventListener('click',event=>changeVisibility(work,event.currentTarget.dataset.visibility,h));
+  if(!isArchived(work)){
+    q('.discovery-scope').insertAdjacentHTML('beforebegin',`<form id="work-category-form" class="form"><div class="field"><label for="work-category">${t('作品类型')}</label><select id="work-category">${WORK_CATEGORIES.map(({id:category,label})=>`<option value="${category}" ${(work.category||'other')===category?'selected':''}>${t(label)}</option>`).join('')}</select></div><button class="button" type="submit">${t('保存类型')}</button><p class="error" role="alert"></p></form>`);
+    const form=q('#work-category-form'),select=q('#work-category',form),button=q('button',form);
+    form.addEventListener('submit',async event=>{
+      event.preventDefault();if(button.disabled)return;
+      button.disabled=true;select.disabled=true;pending++;
+      try{
+        const result=await h.api('/api/works/'+encodeURIComponent(id)+'/discovery',{method:'PATCH',body:{action:'categorize',category:select.value,expectedRevision:work.discovery.revision}});
+        Object.assign(work,result.work);h.onChanged();h.notify(t('作品类型已保存'));if(h.isCurrent())h.reload();
+      }catch(error){if(h.isCurrent()){q('.error',form).textContent=t(error.message);if(error.code==='DISCOVERY_CONFLICT'){button.textContent=t('刷新状态');button.type='button';button.onclick=()=>h.reload();}}}
+      finally{pending--;if(form.isConnected){button.disabled=false;select.disabled=false;}}
+    });
+  }
 }

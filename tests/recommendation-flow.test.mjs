@@ -25,11 +25,12 @@ async function topScore(f,owner=OWNER){const result=await feed(f,'&author='+enco
 
 test('recommendation migration is additive and does not change works, versions, cards, events or visibility',async t=>{
   const f=setup(t,{through:8}),[a]=rankingPair(f),other=f.seed({owner:OTHER,at:at(START-DAY)});
-  const c=await f.api('/api/cards',{method:'POST',body:{name:'Creator',bio:'Games',template:'fold',workIds:[a.id],workRefs:[{workId:a.id,versionId:a.versionId}]}});assert.equal(c.status,201,JSON.stringify(c));
-  assert.equal((await f.api('/api/events',{method:'POST',owner:OTHER,body:{eventId:randomUUID(),type:'work_view',workId:a.id}})).status,200);
+  const cardId=randomUUID();
+  f.database.prepare('INSERT INTO ft_cards(id,author_id,snapshot_json,created_at) VALUES(?,?,?,?)').run(cardId,OWNER,JSON.stringify({id:cardId,name:'Creator',template:'fold',works:[a]}),at(START));
+  f.database.prepare('INSERT INTO ft_events(id,client_event_id,actor_id,work_id,version_id,event_type,received_at) VALUES(?,?,?,?,?,?,?)').run(randomUUID(),randomUUID(),OTHER,a.id,a.versionId,'work_view',at(START));
   const tables=['ft_works','ft_work_versions','ft_work_discovery','ft_cards','ft_events'];
   const before=tables.map(table=>f.database.prepare('SELECT * FROM '+table+' ORDER BY rowid').all());f.migrate();
-  tables.forEach((table,i)=>{const after=f.database.prepare('SELECT * FROM '+table+' ORDER BY rowid').all();if(table==='ft_works')for(const row of after){assert.equal(row.archived_at,null);delete row.archived_at;}if(table==='ft_cards')for(const row of after){assert.equal(row.deleted_at,null);delete row.deleted_at;}assert.deepEqual(after,before[i]);});
+  tables.forEach((table,i)=>{const after=f.database.prepare('SELECT * FROM '+table+' ORDER BY rowid').all();if(table==='ft_works')for(const row of after){assert.equal(row.archived_at,null);delete row.archived_at;}if(table==='ft_work_discovery')for(const row of after){assert.equal(row.category,'other');delete row.category;}if(table==='ft_cards')for(const row of after){assert.equal(row.deleted_at,null);delete row.deleted_at;}assert.deepEqual(after,before[i]);});
   assert.equal(credits(f).length,0);assert.equal(impressions(f).length,0);assert.equal((await feed(f)).total,3);
 });
 

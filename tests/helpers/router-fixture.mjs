@@ -53,8 +53,8 @@ export function fixture(t,{legacy=false,through=legacy?6:Infinity,autoCover=fals
     return new Request('https://site.test'+path,{method,headers,...(method==='GET'?{}:{body:body instanceof FormData?body:JSON.stringify(body||{})})});
   }
   const api=async(path,options)=>{const response=await handleAPI(request(path,options));return {status:response.status,...await response.json()};};
-  const publish=({bytes=html('v1'),owner=OWNER,key=randomUUID(),name='A game',source='html',url,cover=false,buildId,extra={}}={})=>{
-    const form=new FormData();form.set('name',name);form.set('desc','Click to explore the game');form.set('source',source);
+  const publish=({bytes=html('v1'),owner=OWNER,key=randomUUID(),name='A game',source='html',url,cover=false,buildId,extra={},category}={})=>{
+    const form=new FormData();form.set('name',name);form.set('desc','Click to explore the game');form.set('source',source);if(category!==undefined)form.set('category',category);
     if(source==='url')form.set('url',url);else if(buildId)form.set('buildId',buildId);else form.set('file',new File([bytes],'game.html',{type:'text/html'}));
     if(cover)form.set('cover',new File([png],'cover.png',{type:'image/png'}));for(const [name,value] of Object.entries(extra))form.set(name,value);
     return api('/api/works',{method:'POST',body:form,owner,key});

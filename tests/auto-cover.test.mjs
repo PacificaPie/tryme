@@ -46,7 +46,7 @@ test('existing hosted works can generate explicitly; ownership and current versi
 
 test('an absent binding and a missing jobs table cannot block publication or version updates', async t => {
   const f = fixture(t), first = await f.publish(); assert.equal(first.status, 201); assert.equal((await currentStatus(f, first.work)).status, 'unavailable'); assert.equal(f.count('ft_auto_cover_jobs'), 0); assert.equal((await f.version(first.work.id)).status, 201);
-  const old = fixture(t, { autoCover: true, through: 10 }), published = await old.publish(); assert.equal(published.status, 201); assert.equal((await currentStatus(old, published.work)).reason, 'ENQUEUE_UNAVAILABLE'); assert.equal((await old.version(published.work.id)).status, 201);
+  const old = fixture(t, { autoCover: true });old.database.exec('DROP TABLE ft_auto_cover_attempts; DROP TABLE ft_auto_cover_jobs;');const published = await old.publish(); assert.equal(published.status, 201); assert.equal((await currentStatus(old, published.work)).reason, 'ENQUEUE_UNAVAILABLE'); assert.equal((await old.version(published.work.id)).status, 201);
 });
 
 test('automatic-cover requests enforce a byte limit while streaming even without Content-Length', async t => {

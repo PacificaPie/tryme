@@ -30,7 +30,7 @@ test('anonymous discovery uses real visibility, sorting/search/pagination and a 
   }
   const page=await g.read('/api/public/discover?q=rain&source=html');
   assert.deepEqual(page.works.map(w=>w.id),[a.id]);
-  assert.deepEqual(Object.keys(page.works[0]).sort(),['id','name','desc','source','authorName','authorAvatarUrl','coverUrl','likesCount','commentsCount'].sort());
+  assert.deepEqual(Object.keys(page.works[0]).sort(),['id','name','desc','source','category','authorName','authorAvatarUrl','coverUrl','likesCount','commentsCount'].sort());
   assert.equal(page.works[0].coverUrl,`/api/public/works/${a.id}/cover`);
   assert(!JSON.stringify(await g.read('/api/public/discover')).includes('private-launch-url'));
   assert.deepEqual(tables.map(name=>f.count(name)),before);assert.equal(g.checks,0);
