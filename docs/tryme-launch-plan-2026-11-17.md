@@ -8,7 +8,7 @@
 | --- | --- | --- | --- |
 | P01 | 确定并取得域名 | 具体域名、注册商、费用和管理账号明确 | 已完成：用户购买 `trymecard.com`，Cloudflare 状态 Active；到期日 2027-11-17，自动续费开启，当前续费价 $11.17/年 |
 | P02 | 整合发布基线 | 保留作者主页/导入增强和 main 评论修复，检查、测试、构建通过 | 本分支已整合，见下方验证；待 PR 审阅与合并 |
-| P03 | 配置域名与登录 | HTTPS、站点 origin、Clerk 生产实例、回调与资源绑定一致 | 进行中：正式 Clerk、DNS、D1/R2 和生产配置已准备；主站/构建器 dry-run 通过，待证书与实际发布 |
+| P03 | 配置域名与登录 | HTTPS、站点 origin、Clerk 生产实例、回调与资源绑定一致 | 进行中：正式 Clerk、DNS/证书、D1/R2 和生产配置已准备；主站/构建器 dry-run 通过，待实际发布 |
 | P04 | 验收正式域名 | 新旧账号方案、上传、作品、版本、名片分享、登录回跳通过 | 待 P03；本地验收不替代正式域名验收 |
 
 ### P02 的变更范围
@@ -59,7 +59,7 @@
 
 - 正式 origin：`https://trymecard.com`。主站配置为 `wrangler.standalone.production.jsonc`；私有构建器配置为 `cloud-builder/wrangler.production.jsonc`。生产 Worker 与构建器分别为 `funtrack-production` 和 `funtrack-builder-production`，不使用 staging 绑定。
 - Clerk production 实例：`ins_3MGNuVSO1Wsq2JmBzyUnucNUTcD`。用户确认首版仅用邮箱验证码，Google 登录后补；生产实例实际查询确认 Google `enabled:false`，邮箱注册和登录均使用 `email_code`，注册必须验证邮箱。
-- Clerk 的 Frontend API、Account Portal、邮件 3 条记录均已在 Cloudflare 以 DNS only CNAME 配置，控制台显示全部 Verified。SSL 证书仍在签发，未把 DNS 验证当作证书完成。
+- Clerk 的 Frontend API、Account Portal、邮件 3 条记录均已在 Cloudflare 以 DNS only CNAME 配置，控制台显示全部 Verified。Clerk 状态已确认 DNS、SSL、mail 均 complete，两个认证域名的 TLS 校验通过；这不替代真实邮箱注册/登录验收。
 - 登录/注册路径为 `/auth/sign-in.html`，首页及退出后路径为 `/site`。生产 secret 仅存于 Git 忽略、权限 0600 的 `.env.clerk-production.local`；真实 Clerk Backend API 已接受该密钥，生产用户计数为 0。未将服务端密钥写入源码或 PR。
 - 独立 D1 `funtrack-production`（`106c5ea7-2c17-44ea-93f5-5383168365c0`）原有 `0000`–`0006`。先导出到忽略目录 `.preview/production-launch/before-launch.sql`，核对 SQL 后应用 `0007`–`0014`；复查无待应用迁移。迁移前作品、作品版本、名片、资料、评论、事件六张表均为 0 条。
 - 独立 R2 `funtrack-production` 已创建。旧 staging D1/R2、用户与内容仍按原环境保留；实际复制前需明确范围、身份映射与校验方式。生产新身份不会自动拥有测试站旧作品。
