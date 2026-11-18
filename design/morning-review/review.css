@@ -52,3 +52,11 @@ input[type=checkbox]{accent-color:var(--primary)}
 
 /* The review toolbar is a fixed dark surface in both appearance modes. */
 #review-bar a.active{color:#fff}
+
+.logo-baseline{display:flex;align-items:center;gap:16px;padding:14px 18px;border:1px solid var(--line);border-radius:12px;margin:20px 0 24px;background:var(--surface)}
+.logo-baseline>img{width:40px;height:40px}.logo-baseline>div{flex:1;display:grid;gap:3px;font-size:12px}.logo-baseline span{color:var(--muted);font-size:11px}
+:root[data-theme=dark] .logo-baseline>img{filter:brightness(0) invert(1)}
+:root[data-theme=dark] .logo-sizes img.favicon-proof{filter:none}
+@media(max-width:800px){.logo-baseline{flex-wrap:wrap}.logo-baseline>a{margin-left:56px}}
+
+.signin-options{display:grid;gap:10px;margin:20px 0}.signin-options .button{min-height:42px}

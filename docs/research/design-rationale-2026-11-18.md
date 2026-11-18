@@ -72,3 +72,22 @@ Pacifica 指出原型的绿色与主站不一致，并否定第二轮 Logo，要
 检查：两个脚本语法和 `git diff --check` 通过；浏览器检查桌面浅/深色的作品列表、编辑器、数据页和 Logo；390px 手机作品列表及编辑器的 clientWidth 与 scrollWidth 均为390。浏览器工具会给被控标签页覆盖标记，因此原生标签栏的最终视觉仍以用户解除控制后的试用为准；页面内真实尺寸 favicon 对照已检查。本次只改本地原型与说明，不改产品业务代码，不将旧提交531项测试结果冒充本次新检查。
 
 当前截图：`r3-space.png` / `r3-space-dark.png`、`card-editor.png` / `card-editor-dark.png`、`website-data.png`、`mobile-space.png` / `mobile-editor.png` / `mobile-editor-dark.png`、`logo-round3.png`。`r1-space.png`、`r2-space.png` 和 `logo-round2.png` 是历史方案截图。
+
+
+## 第四轮：用户选择叠卡 T 方向后的细化
+
+用户认为第三轮 A 更接近期望，要求 T 与卡片结合更自然，并查看主站导航 / favicon 效果。本轮收敛到 A，不再继续推荐第三轮 B。
+
+- A1 共边叠卡：T 横画与前卡上沿共用，竖画接入卡沿。最接近 A，优先建议。
+- A2 卡缝成 T：通过卡片之间的留白和向内开口读出 T，减少“卡上贴字”的感觉。
+- A3 轻递一张：较轻卡框共用上沿，后卡轻微倾斜，保留叠放并增加递卡的方向感。
+
+`brand-round4/` 保存原生 SVG 与独立 favicon；favicon 描边从4.5增至5.5坐标单位，并扩大有效图形，避免简单缩放后变糊。原 A0 原样保留。并非完成商标检索或真实用户偏好实验。
+
+实际导航预览使用同一仓库的 `public/site.html`、原有 CSS 与应用脚本，由本地 fixture server 在显式 `?logo=` 参数下插入候选标志、对照工具条和 favicon；`public/` 的生产页面和图标均未修改。端口8882、假身份、本地数据库，不读取生产用户数据。
+
+启动：`TRYME_REVIEW_PORT=8882 node tests/fixtures/morning-review-server.mjs`。原8881功能验收服务保留独立，8882 fixture记录写到 `.preview/review/fixture-8882.json`。示例地址：`http://127.0.0.1:8882/site?logo=stack-edge#/feed`；页面内可切A0/A1/A2/A3，并沿用主站外观菜单。
+
+走查：三版在真实主站本地页面的浅/深色导航分别留图；手机390px宽度无横向溢出。Logo 页提供16/24/32px实际尺寸的 favicon、浅深色标签效果及本地试用。被浏览器工具控制的标签页可能显示工具自己的图标标记，原生标签栏以用户打开预览后的显示为准。
+
+同次反馈还把微信原型改为“邮箱 / 微信 / Google 并列，新微信用户不必先填邮箱”。这只是交互与方案修订，正式认证实现尚待独立开发实例验证和跨层调整。

@@ -1,0 +1,10 @@
+/* This toolbar is a local review aid. The header's original layout/CSS is retained. */
+.brand-review-toolbar{min-height:42px;display:flex;justify-content:space-between;align-items:center;gap:16px;padding:7px 5vw;background:var(--soft);border-bottom:1px solid var(--border);font-size:11px;color:var(--text-secondary)}
+.brand-review-toolbar>div{display:flex;gap:6px;flex-wrap:wrap}
+.brand-review-toolbar button{padding:6px 10px;font-size:11px}
+.brand-review-toolbar button[aria-pressed="true"]{background:var(--primary);color:var(--on-primary);border-color:var(--primary)}
+.brand-review-toolbar a{text-decoration:underline;text-underline-offset:3px}
+body[data-logo-review] .site-header .brand{display:inline-flex;align-items:center;gap:9px}
+.brand-review-symbol{width:29px;height:29px;flex:none}
+:root[data-theme=dark] .brand-review-symbol{filter:brightness(0) invert(1)}
+@media(max-width:700px){.brand-review-toolbar{flex-wrap:wrap;padding:8px 18px;gap:8px}.brand-review-toolbar>span{width:100%}.brand-review-toolbar>a{font-size:10px}.brand-review-symbol{width:25px;height:25px}body[data-logo-review] .site-header .brand{gap:6px}}
