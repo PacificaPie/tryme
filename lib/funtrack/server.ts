@@ -23,6 +23,7 @@ import { publicFeedReadRoute } from './public-feed-routes.mjs';
 import { createCreatorService } from './creator-service.mjs';
 import { safeAvatarURL } from './avatar-rules.mjs';
 import { cardIdentity,cardRowIdentities } from './card-identity.mjs';
+import { createCardCoverService } from './card-cover-service.mjs';
 import { cardWorkRefs } from './version-rules.mjs';
 import { analyticsResponse } from './analytics';
 import { ApiError, fail, authenticate, verifyWrite, requiredText, eventId, safeURL, coverType, htmlSource, sessionEvents, GAME_CSP, gameDocument, likedState, cardDetails, cardTemplate, commentInput, validateCommentParent, commentPageLimit, encodeCommentCursor, decodeCommentCursor, discoverQuery, encodeDiscoverCursor, decodeDiscoverCursor, workCategory } from './rules.mjs';
@@ -35,6 +36,7 @@ const bindings = () => env as unknown as { DB?: D1Database; BUCKET?: R2Bucket; B
 function db(): D1Database { const d=bindings().DB; if(!d)throw new ApiError(503,'STORAGE_UNAVAILABLE','数据库暂不可用'); return d; }
 function bucket(): R2Bucket { const b=bindings().BUCKET; if(!b)throw new ApiError(503,'STORAGE_UNAVAILABLE','文件存储暂不可用'); return b; }
 const sql=(query:string,...values:any[])=>db().prepare(query).bind(...values);
+const cardCovers=createCardCoverService({db,bodyJSON,json,hash});
 const autoCovers=createAutoCoverService({db,bucket,configured:()=>bindings().FUNTRACK_COVER_REVIEW_ENABLED!=='1'&&bindings().FUNTRACK_AUTO_COVER_ENABLED==='1'&&typeof bindings().BROWSER?.fetch==='function',capture:(html:string)=>captureHostedHTML(bindings().BROWSER,html)});
 const autoPreviews=createVideoPreviewService({db,bucket,configured:()=>bindings().FUNTRACK_VIDEO_PREVIEW_ENABLED==='1'&&typeof bindings().BROWSER?.fetch==='function',capture:async()=>{throw new Error('Video capture runs only in the scheduled worker');}});
 const coverReviews=createCoverReviewService({db,bucket,configured:()=>bindings().FUNTRACK_COVER_REVIEW_ENABLED==='1'&&typeof bindings().BROWSER?.fetch==='function',capture:async()=>{throw new Error('External capture runs only in the scheduled worker');}});
@@ -443,6 +445,7 @@ export async function handleAPI(request:Request) {
     const avatarResponse=await creators.publicAvatar(request);if(avatarResponse)return avatarResponse;
     const user=authenticate(request.headers),url=new URL(request.url),parts=url.pathname.replace(/^\/api\/?/,'').split('/').filter(Boolean);
     if(['POST','PATCH'].includes(request.method))verifyWrite(request);
+    const cardCoverResponse=await cardCovers.handle(request,user);if(cardCoverResponse)return cardCoverResponse;
     const creatorResponse=await creators.handle(request,user);if(creatorResponse)return creatorResponse;
     const publishDraftResponse=await publishDrafts.handle(request,user);if(publishDraftResponse)return publishDraftResponse;
     const draftCoverResponse=await coverDrafts.handle(request,user);if(draftCoverResponse)return draftCoverResponse;
