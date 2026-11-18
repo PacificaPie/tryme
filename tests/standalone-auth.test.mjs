@@ -111,6 +111,17 @@ test('public card allowlist bypasses Clerk only for scoped read routes and still
   for(const method of ['POST','PATCH','DELETE'])await errorCode(await handler(request('/api/public/cards/'+id,{method}),env),401,'AUTH_REQUIRED');
 });
 
+test('public avatar allowlist exposes only immutable image GET/HEAD and strips identity headers',async()=>{
+  const {handler,calls}=fixture({state:signedOut()}),path='/api/public/avatars/00000000-0000-4000-8000-000000000001';
+  for(const method of ['GET','HEAD']){
+    assert.equal((await handler(request(path,{method,headers:{'oai-authenticated-user-id':'forged-owner'}}),{})).status,200);
+    assert.equal(calls.app.at(-1).request.headers.get('oai-authenticated-user-id'),null);
+  }
+  assert.equal(calls.client.length,0);
+  for(const path of ['/api/public/avatars','/api/public/avatars/me','/api/public/avatars/00000000-0000-4000-8000-000000000001/extra'])await errorCode(await handler(request(path),env),401,'AUTH_REQUIRED');
+  for(const method of ['POST','PATCH','DELETE'])await errorCode(await handler(request(path,{method}),env),401,'AUTH_REQUIRED');
+});
+
 test('verified cookie or Bearer identities are subject-prefixed, request-scoped, and preserve upload bodies', async () => {
   for (const headers of [{ Authorization: 'Bearer session-fixture' }, { Cookie: '__session=session-fixture; __client_uat=1' }]) {
     const { handler, calls } = fixture();

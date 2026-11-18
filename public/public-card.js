@@ -1,7 +1,7 @@
 import {t,getLocale,setLocale,registerMessages} from './i18n.js';
-import {renderPortfolioCard,mountPortfolioCard} from './card-templates.js';
+import {CARD_TEMPLATES,renderPortfolioCard,mountPortfolioCard} from './card-templates.js';
 import {createGalleryBridge} from './gallery/embed.js';
-import {publicCardId,publicCoverPath,publicPlaySignInPath,isCardId,isPublicWorkId} from './public-card-links.js';
+import {publicCardId,publicCoverPath,publicPlaySignInPath,publicCardRemixSignInPath,isCardId,isPublicWorkId} from './public-card-links.js';
 
 registerMessages({
   '正在加载名片…':'Loading card…', '名片暂时无法打开':'This card is unavailable',
@@ -14,6 +14,9 @@ registerMessages({
   '当前浏览器暂未显示 3D，作品列表仍可查看。':'3D is unavailable in this browser. Your works are still available below.',
   '网页游戏':'Browser game','外链作品':'External work','卡中展厅':'Fold-out gallery','点亮收藏':'Collection desk',
 });
+
+import {avatarMarkup} from './avatars.js';
+import './creator-social.messages.js';
 
 const escape=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const website=value=>{try{const url=new URL(value);return ['https:','http:'].includes(url.protocol)&&!url.username&&!url.password?url.href:'';}catch{return '';}};
@@ -28,7 +31,7 @@ export function renderPublicCard(card, origin = globalThis.location?.origin) {
     return `<section class="card-preview public-gallery"><div class="gallery-load-status" role="status" aria-live="polite">${spinner()}<span>${t('正在加载 3D 名片…')}</span></div><iframe id="public-gallery-frame" class="gallery-frame" src="/${card.template==='collection'?'collection':'gallery'}/?lang=${getLocale()}" title="${t(card.template==='collection'?'点亮收藏':'卡中展厅')}" loading="eager" aria-busy="true"></iframe></section>`;
   }
   if (['editorial','filmstrip'].includes(card.template)) return renderPortfolioCard(card,{profile,safeCover,workHref,from:'/card/'+card.id,cardId:card.id});
-  return `<div class="card-preview"><article class="white-card"><header><h2>${escape(card.name)}</h2>${profile.headline?`<p class="card-headline">${escape(profile.headline)}</p>`:''}${card.bio?`<p class="bio">${escape(card.bio)}</p>`:''}${profile.website?`<a class="profile-website" href="${escape(profile.website)}" target="_blank" rel="noopener noreferrer">${escape(new URL(profile.website).hostname)} ↗</a>`:''}</header><div class="work-grid">${card.works.map(work=>{
+  return `<div class="card-preview"><article class="white-card"><header>${card.avatarUrl?avatarMarkup(card,{className:'card-profile-avatar'}):''}<h2>${escape(card.name)}</h2>${profile.headline?`<p class="card-headline">${escape(profile.headline)}</p>`:''}${card.bio?`<p class="bio">${escape(card.bio)}</p>`:''}${profile.website?`<a class="profile-website" href="${escape(profile.website)}" target="_blank" rel="noopener noreferrer">${escape(new URL(profile.website).hostname)} ↗</a>`:''}</header><div class="work-grid">${card.works.map(work=>{
     const cover=publicCoverPath(work.coverUrl,card.id,work.id,origin);
     return `<article class="work-tile"><a class="work-entry" href="${escape(workHref(work))}" data-card-work="${escape(work.id)}"><div class="cover${cover?'':' empty-cover'}">${cover?`<img src="${escape(cover)}" alt="${escape(work.name)}" loading="lazy">`:`<span>${escape(work.name)}</span>`}<span class="cover-action" aria-hidden="true">${t('查看作品')} ↗</span></div><div class="tile-info"><h3 class="tile-title">${escape(work.name)}</h3>${work.desc?`<p class="tile-desc">${escape(work.desc)}</p>`:''}</div></a></article>`;
   }).join('')}</div>${profile.signature?`<footer class="card-signature">${escape(profile.signature)}</footer>`:''}</article></div>`;
@@ -60,10 +63,11 @@ function mountPublicPage(root) {
     modal.querySelector('button').addEventListener('click',closeWork);
     if(!modal.open)modal.showModal();
   }
-  const payload=()=>({locale:getLocale(),author:{id:'public-card:'+card.id,name:card.name,bio:card.bio,headline:card.headline,signature:card.signature,website:website(card.website),backStyle:card.backStyle},works:card.works.map(work=>({id:work.id,name:work.name,desc:work.desc,cover:publicCoverPath(work.coverUrl,card.id,work.id),kind:work.source==='url'?'外链作品':'网页游戏',version:work.version})),...view});
+  const payload=()=>({locale:getLocale(),author:{id:'public-card:'+card.id,name:card.name,bio:card.bio,avatarUrl:card.avatarUrl||'',headline:card.headline,signature:card.signature,website:website(card.website),backStyle:card.backStyle},works:card.works.map(work=>({id:work.id,name:work.name,desc:work.desc,cover:publicCoverPath(work.coverUrl,card.id,work.id),kind:work.source==='url'?'外链作品':'网页游戏',version:work.version})),...view});
   function render() {
     bridge?.dispose();bridge=null;syncLocale();document.title=card.name+' · Funtrack';
-    root.innerHTML=`<h1 class="public-card-title">${escape(card.name)}</h1>${renderPublicCard(card)}<footer class="public-card-footer"><a href="${joinPath}">${t('加入 Funtrack')} <span aria-hidden="true">↗</span></a></footer><dialog class="public-work-dialog" aria-labelledby="public-work-title"></dialog>`;
+    const template=CARD_TEMPLATES.find(item=>item.id===card.template)||CARD_TEMPLATES[0];
+    root.innerHTML=`<h1 class="public-card-title">${escape(card.name)}</h1>${renderPublicCard(card)}<section class="public-card-remix"><div><h2>${escape(t(template.name))}</h2><p>${escape(t(template.description))}</p></div><a class="button" href="${escape(publicCardRemixSignInPath(card.id))}">${t('用同款制作')} ↗</a></section><footer class="public-card-footer"><a href="${joinPath}">${t('加入 Funtrack')} <span aria-hidden="true">↗</span></a></footer><dialog class="public-work-dialog" aria-labelledby="public-work-title"></dialog>`;
     const modal=dialog();modal.addEventListener('cancel',event=>{event.preventDefault();closeWork();});modal.addEventListener('click',event=>{if(event.target!==modal)return;const rect=modal.getBoundingClientRect();if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)closeWork();});
     const frame=root.querySelector('#public-gallery-frame');
     if(frame){
@@ -77,9 +81,10 @@ function mountPublicPage(root) {
   }
   async function load() {
     fetchController?.abort();fetchController=new AbortController();const controller=fetchController;
+    bridge?.dispose();bridge=null;card=null;
     root.innerHTML=`<div class="public-card-loading" role="status">${spinner()}<span>${t('正在加载名片…')}</span></div>`;
     const timeout=setTimeout(()=>controller.abort(),15000);
-    try{card=await fetchPublicCard(id,{signal:controller.signal});if(controller===fetchController)render();}
+    try{const loaded=await fetchPublicCard(id,{signal:controller.signal});if(controller!==fetchController||controller.signal.aborted)return;card=loaded;render();}
     catch(error){if(controller!==fetchController)return;root.innerHTML=`<section class="public-card-error"><h1>${t('名片暂时无法打开')}</h1><p>${t(error.status===404?'这张名片不存在或已不可访问。':'连接暂时中断，请重试。')}</p>${error.status===404?'':`<button type="button" class="button" data-public-retry>${t('重试')}</button>`}</section>`;root.querySelector('[data-public-retry]')?.addEventListener('click',load);}
     finally{clearTimeout(timeout);}
   }
@@ -92,7 +97,7 @@ function mountPublicPage(root) {
   });
   localeButton?.addEventListener('click',()=>{setLocale(getLocale()==='en'?'zh-CN':'en');syncLocale();if(card)render();});
   window.addEventListener('pagehide',()=>{bridge?.dispose();fetchController?.abort();});
-  window.addEventListener('pageshow',event=>{if(event.persisted){if(card)render();else load();}});
+  window.addEventListener('pageshow',event=>{if(event.persisted)load();});
   syncLocale();load();
 }
 

@@ -1,10 +1,12 @@
 export const validId=value=>typeof value==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(value);
 export const json=(value,status=200)=>Response.json(value,{status,headers:{'Cache-Control':'no-store'}});
-export async function readLimited(message,max,binary=false){
-  if(Number(message.headers.get('content-length')||0)>max)throw Error('Response exceeds limit');
+export async function readLimited(message,max,binary=false,limitError=null){
+  const tooLarge=size=>Object.assign(Error(limitError?`${limitError.label} 大小至少为 ${Math.ceil(size/1048576*100)/100} MiB，超过 ${max/1048576} MiB 上限。`:'Response exceeds limit'),{code:limitError?.code||'BUILD_FAILED'});
+  const declared=Number(message.headers.get('content-length')||0);
+  if(declared>max){await message.body?.cancel();throw tooLarge(declared);}
   if(!message.body)return binary?new Uint8Array():'';
   const reader=message.body.getReader(),chunks=[];let size=0;
-  try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>max){await reader.cancel();throw Error('Response exceeds limit');}chunks.push(value);}}finally{reader.releaseLock();}
+  try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>max){await reader.cancel();throw tooLarge(size);}chunks.push(value);}}finally{reader.releaseLock();}
   const result=new Uint8Array(size);let at=0;for(const chunk of chunks){result.set(chunk,at);at+=chunk.length;}
   return binary?result:new TextDecoder('utf-8',{fatal:true}).decode(result);
 }

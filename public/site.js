@@ -10,6 +10,15 @@ import { beginRouteLoading, mountMenus } from './experience.js?v=20261117-creato
 import './experience.messages.js';
 import { cardShareText, openShareDialog } from './sharing.js';
 import { confirmCardDeletion, hasPendingCardDeletion } from './card-actions.js';
+import { avatarMarkup } from './avatars.js';
+import { openProfileEditor } from './profile-editor.js';
+import { mountCreatorHome } from './creator-home.js';
+import { mountCreatorDirectory } from './creator-directory.js';
+import { renderCardWorkspace } from './card-workspace.js';
+import { mountTemplateExperience } from './card-template-experience.js';
+import { createRemixDraft, remixStyle } from './card-remix.js';
+import { withCardIdentity, cardPreviewFingerprint } from './card-identity.js';
+import './creator-social.messages.js';
 import { signInState } from './sign-in-state.js';
 import { CARD_TEMPLATES, renderPortfolioCard, mountPortfolioCard } from './card-templates.js';
 import { syncNavigation } from './navigation.js';
@@ -23,7 +32,9 @@ import { renderVersioning, disposeVersioning, hasPendingVersionMutation } from '
 import { renderWorkEdit, disposeWorkEdit, hasPendingWorkEdit } from './work-edit.js';
 import { previewReferences, isPinnedPreview, prepareCardPreview, frozenAction } from './versioning-state.js';
 import { mountDiscovery, clearDiscovery, updateDiscoveryWork } from './discovery.js';
-import { HTML_UPLOAD_HINT, htmlFileError, isGithubHTMLURL, importErrorText, repositoryImportBlocked, buildAvailabilityMarkup, createBuildAvailability } from './import-status.js';
+import { HTML_UPLOAD_HINT, htmlFileError, htmlImportSizeNotice, isGithubHTMLURL, importErrorText, repositoryImportBlocked, buildAvailabilityMarkup, createBuildAvailability } from './import-status.js';
+let templateExperiencePanel=null;
+registerMessages({'名片会自动使用你的最新个人资料。':'Your card automatically uses your latest profile.','模板已选好，继续制作你的名片。':'The template is selected. Continue making your card.','这个名片模板不存在。':'This card template does not exist.'});
 const $ = (s, root=document) => root.querySelector(s);
 const $$ = (s, root=document) => [...root.querySelectorAll(s)];
 const main = $('#main');
@@ -35,14 +46,14 @@ const read = (key, fallback) => { try { return JSON.parse(sessionStorage.getItem
 const write = (key,value) => { try { sessionStorage.setItem(key,JSON.stringify(value)); } catch {} };
 const storage = {publish:'funtrack.real.publish',card:'funtrack.real.card',preview:'funtrack.real.preview',feedback:'funtrack.real.feedback',views:'funtrack.real.gallery'};
 const storageBase={...storage};let draftOwner=null,fileScope='';
-let startPending=false, analyticsPanel=null, discoveryPanel=null, visitRecorded=false, publishAvailability=null;
+let startPending=false, analyticsPanel=null, discoveryPanel=null, creatorPanel=null, visitRecorded=false, publishAvailability=null;
 let publishFailure=null,publishRelatedWorks=[];
 let me=null, authChecked=false, routeNumber=0, currentRoute='', noticeTimer, currentGallery=null, activeSession=null;
 const scrolls=new Map();
 const galleryViews=new Map(Object.entries(read(storage.views,{})));
 const feedbackDrafts=read(storage.feedback,{});
 let publishDraft={name:'',desc:'',source:'html',url:'',key:uid(),...read(storage.publish,{})},publishFile=null,coverFile=null,coverPreview='',publishPending=false,publishError='',githubPending=false,githubJob=0,buildPollTimer,buildPollRevision=0,buildCancelPending=false,buildPollError='';
-let cardDraft={ids:[],template:'wall',name:'',bio:'',signature:'',headline:'',website:'',backStyle:'ink',...read(storage.card,{})},preview=read(storage.preview,null),cardPending=false,cardError='',cardKey=uid();
+let cardDraft={ids:[],template:'wall',signature:'',backStyle:'ink',...read(storage.card,{})},preview=read(storage.preview,null),cardPending=false,cardError='',cardKey=uid();
 let sessionQueues=new Set(),actionQueue=new Map();
 const socialState=new Map(),likePending=new Set(),likeRetry=new Map();
 class ApiError extends Error { constructor(message,status,code){super(message);this.status=status;this.code=code;} }
@@ -58,7 +69,16 @@ async function api(path, options={}) {
 }
 function signinURL(){return authURL('sign-in','/site.html'+(location.hash||'#/'));}
 function signinLink(label=t("登录")){return `<a class="button primary" href="${esc(signinURL())}" target="_top">${esc(label)}</a>`;}
-function identity(){ $('#identity').innerHTML=me?`<details class="account-menu"><summary class="avatar" aria-label="${t("账号菜单")}">${esc([...me.name][0]||t("我"))}</summary><div class="account-options"><span>${esc(me.name)}</span><a href="#/studio/works">${t("打开创作中心")}</a><a href="${esc(authURL('sign-out','/site.html#/feed'))}" target="_top">${t("退出登录")}</a></div></details><span class="identity-name">${esc(me.name)}</span>`:getAuthConfig().provider==='unknown'?'':`<a class="button quiet" href="${esc(signinURL())}" target="_top">${t("登录")}</a>`; }
+function identity(){ $('#identity').innerHTML=me?`<details class="account-menu"><summary class="avatar" aria-label="${t("账号菜单")}">${avatarMarkup(me,{className:'account-avatar'})}</summary><div class="account-options"><span>${esc(me.name)}</span><a href="#/author/${encodeURIComponent(me.id)}">${t('个人主页')}</a><a href="#/following">${t('关注列表')}</a><button type="button" data-edit-profile>${t('编辑个人资料')}</button><a href="#/studio/works">${t("打开创作中心")}</a><a href="${esc(authURL('sign-out','/site.html#/feed'))}" target="_top">${t("退出登录")}</a></div></details><span class="identity-name">${esc(me.name)}</span>`:getAuthConfig().provider==='unknown'?'':`<a class="button quiet" href="${esc(signinURL())}" target="_top">${t("登录")}</a>`; }
+function editProfile(){
+  if(!me)return;const owner=me.id;
+  const profileAPI=(path,options)=>{if(me?.id!==owner||draftOwner!==owner)throw new ApiError(t('请重新登录后重试。'),401,'AUTH_SESSION_CHANGED');return api(path,options);};
+  openProfileEditor({user:me,api:profileAPI,notify,onSaved:user=>{
+    if(me?.id!==owner||user?.id!==owner)return;
+    me={...me,...user};identity();clearDiscovery();syncCardPreview(me);
+    const r=route();if(r.path==='/feed'||r.path==='/cards'||r.path==='/following'||r.path.startsWith('/card/')||r.path.startsWith('/cards/')||r.path==='/author/'+encodeURIComponent(me.id)||r.path==='/author/'+me.id)renderRoute();
+  }});
+}
 function notify(message){message=t(message);clearTimeout(noticeTimer);$('#notice').textContent=message;$('#notice').hidden=false;noticeTimer=setTimeout(()=>$('#notice').hidden=true,3500);}
 function urlFor(path){return '#'+path;}
 function go(path){if(location.hash==='#'+path)renderRoute();else location.hash=path;}
@@ -72,7 +92,7 @@ function workHref(work, from=route().raw, cardId=''){return '#/work/'+encodeURIC
 function cover(work, href, label=true){const src=safeCover(work.coverUrl);return `<a class="cover${src?'':' empty-cover'}" href="${esc(href)}" aria-label="${t("查看")} ${esc(work.name)}">${src?`<img src="${esc(src)}" alt="${esc(work.name)}" loading="lazy">`:`<span aria-hidden="true">${esc(work.name)}</span>`}${label?`<span class="tag">${work.source==='url'?t("外链作品"):t("网页游戏")}</span>`:''}</a>`;}
 function workTile(work,{from=route().raw,creator=true,cardId='',social=false}={}){
   const href=workHref(work,from,cardId),src=safeCover(work.coverUrl);
-  return `<article class="work-tile"><a class="work-entry" href="${esc(href)}" aria-label="${t("查看")} ${esc(work.name)}"><div class="cover${src?'':' empty-cover'}">${src?`<img src="${esc(src)}" alt="" loading="lazy">`:`<span>${esc(work.name)}</span>`}<span class="cover-action" aria-hidden="true">${t("查看作品")} ↗</span></div><div class="tile-info"><div class="tile-copy"><h3 class="tile-title">${esc(work.name)}</h3><p class="tile-desc">${esc(work.desc)}</p></div></div></a><div class="tile-bottom">${creator?`<a class="creator-link" href="#/author/${encodeURIComponent(work.authorId)}">${esc(work.authorName||t("创作者"))}</a>`:''}${social?socialControls(work,{share:false,comments:true}):''}</div></article>`;
+  return `<article class="work-tile"><a class="work-entry" href="${esc(href)}" aria-label="${t("查看")} ${esc(work.name)}"><div class="cover${src?'':' empty-cover'}">${src?`<img src="${esc(src)}" alt="" loading="lazy">`:`<span>${esc(work.name)}</span>`}<span class="cover-action" aria-hidden="true">${t("查看作品")} ↗</span></div><div class="tile-info"><div class="tile-copy"><h3 class="tile-title">${esc(work.name)}</h3><p class="tile-desc">${esc(work.desc)}</p></div></div></a><div class="tile-bottom">${creator?`<a class="creator-link" href="#/author/${encodeURIComponent(work.authorId)}">${avatarMarkup({name:work.authorName,avatarUrl:work.authorAvatarUrl},{className:"feed-author-avatar"})}${esc(work.authorName||t("创作者"))}</a>`:''}${social?socialControls(work,{share:false,comments:true}):''}</div></article>`;
 }
 function workImage(work,className=''){const src=safeCover(work.coverUrl);return src?`<img class="${className}" src="${esc(src)}" alt="${esc(work.name)}">`:`<div class="image-placeholder ${className}">${esc(work.name)}</div>`;}
 function playIcon(){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7Z"/></svg>';}
@@ -86,10 +106,16 @@ function cardBuilderTop(saved=null){return `<div class="card-builder-top"><a cla
 function cardProfile(card){return {signature:typeof card.signature==='string'?card.signature:'',headline:typeof card.headline==='string'?card.headline:'',website:safeExternal(card.website),backStyle:['ink','ivory','cobalt'].includes(card.backStyle)?card.backStyle:'ink'};}
 function pageError(error){if(error.status===401){me=null;identity();const standalone=getAuthConfig().provider==='clerk';return signInState(signinLink(t(standalone?"登录 / 注册":"使用 ChatGPT 登录")));}return `<div class="page narrow"><section class="error-state"><h2>${t("暂时没能加载")}</h2><p>${esc(t(error.message))}</p><button class="button" data-action="reload">${t("重试")}</button></section></div>`;}
 function head(title,subtitle='',action=''){return `<div class="page-head"><div><h1>${esc(title)}</h1>${subtitle?`<p>${esc(subtitle)}</p>`:''}</div>${action}</div>`;}
-function saveCardDraft(){write(storage.card,cardDraft);}
+function saveCardDraft(){for(const key of ['name','bio','headline','website','avatarUrl'])delete cardDraft[key];write(storage.card,cardDraft);}
+function syncCardPreview(user){
+  if(!preview||preview.authorId!==user?.id)return;
+  const updated=withCardIdentity(preview,user),fingerprint=cardPreviewFingerprint(updated);
+  if(cardPreviewFingerprint(preview)===fingerprint)return;
+  preview={...updated,fingerprint,saveKey:uid()};write(storage.preview,preview);
+}
 function savePublish(){write(storage.publish,publishDraft);}
 function saveFeedback(){write(storage.feedback,feedbackDrafts);}
-function contentKey(){return JSON.stringify({ids:cardDraft.ids,template:cardDraft.template,name:cardDraft.name,bio:cardDraft.bio});}
+function contentKey(){return JSON.stringify({ids:cardDraft.ids,template:cardDraft.template,signature:cardDraft.signature,backStyle:cardDraft.backStyle});}
 function invalidatePreview(){cardError='';cardKey=uid();saveCardDraft();}
 async function readMine(state='active'){
   const works=[];let cursor=null;
@@ -98,14 +124,14 @@ async function readMine(state='active'){
 }
 
 async function activateDrafts(user){
-  if(draftOwner===user.id)return;
+  if(draftOwner===user.id){syncCardPreview(user);return;}
   const legacyOwner=read('funtrack.real.owner',null),canMigrate=(!legacyOwner||legacyOwner===user.id)&&!read('funtrack.real.migrated:'+user.id,false);
-  draftOwner=user.id;stopBuildPolling();githubJob++;githubPending=false;clearDiscovery();socialState.clear();likePending.clear();likeRetry.clear();fileScope=user.id+':';Object.keys(storage).forEach(key=>storage[key]=storageBase[key]+':'+user.id);
+  draftOwner=user.id;cardPending=false;cardError='';stopBuildPolling();githubJob++;githubPending=false;clearDiscovery();socialState.clear();likePending.clear();likeRetry.clear();fileScope=user.id+':';Object.keys(storage).forEach(key=>storage[key]=storageBase[key]+':'+user.id);
   const stored=(key,fallback)=>read(storage[key],canMigrate?read(storageBase[key],fallback):fallback);
   publishDraft={name:'',desc:'',source:'html',url:'',key:uid(),...stored('publish',{})};
-  cardDraft={ids:[],template:'wall',name:user.name,bio:user.bio||'',signature:user.signature||'',headline:user.headline||'',website:user.website||'',backStyle:user.backStyle||'ink',...stored('card',{})};
+  cardDraft={ids:[],template:'wall',signature:'',backStyle:'ink',...stored('card',{})};
   preview=stored('preview',null);if(preview&&!preview.fingerprint&&typeof preview.signature==='string'){preview.fingerprint=preview.signature;preview.signature='';}Object.keys(feedbackDrafts).forEach(key=>delete feedbackDrafts[key]);Object.assign(feedbackDrafts,stored('feedback',{}));Object.values(feedbackDrafts).forEach(d=>d.pending=false);
-  galleryViews.clear();Object.entries(stored('views',{})).forEach(([key,value])=>galleryViews.set(key,value));
+  syncCardPreview(user);galleryViews.clear();Object.entries(stored('views',{})).forEach(([key,value])=>galleryViews.set(key,value));
   [publishFile,coverFile]=await Promise.all([fileStore('get','game'),fileStore('get','cover')]);
   if(canMigrate){if(!publishFile){publishFile=await fileStore('get','game',null,true);if(publishFile)await fileStore('put','game',publishFile);}if(!coverFile){coverFile=await fileStore('get','cover',null,true);if(coverFile)await fileStore('put','cover',coverFile);}}
   refreshCoverPreview();savePublish();saveCardDraft();saveFeedback();write(storage.preview,preview);write(storage.views,Object.fromEntries(galleryViews));if(!legacyOwner)write('funtrack.real.owner',user.id);write('funtrack.real.migrated:'+user.id,true);
@@ -119,16 +145,19 @@ async function renderRoute(options={}){
   const publicPath=(!authChecked||!me)&&legacyPublicCardPath(location.hash);
   if(publicPath){location.replace(publicPath);return;}
   if(!options.localeOnly)visitRecorded=false;
-  const r=route(),number=++routeNumber;publishedAutoCover?.dispose();publishedAutoCover=null;stopBuildPolling();publishAvailability?.dispose();publishAvailability=null;disposeVersioning();disposeWorkEdit();disposePublicationControls();analyticsPanel?.dispose();analyticsPanel=null;discoveryPanel?.dispose();discoveryPanel=null;
+  const r=route(),number=++routeNumber;publishedAutoCover?.dispose();publishedAutoCover=null;stopBuildPolling();publishAvailability?.dispose();publishAvailability=null;disposeVersioning();disposeWorkEdit();disposePublicationControls();analyticsPanel?.dispose();analyticsPanel=null;discoveryPanel?.dispose();discoveryPanel=null;creatorPanel?.dispose();creatorPanel=null;templateExperiencePanel?.dispose();templateExperiencePanel=null;
   if(currentRoute&&currentRoute!==r.raw)scrolls.set(currentRoute,window.scrollY);
   endSession('exit');currentGallery?.dispose?.();currentGallery=null;currentRoute=r.raw;
-  $$('.site-header nav a').forEach(a=>a.classList.toggle('active',a.dataset.nav===(r.path.startsWith('/cards')||r.path.startsWith('/card/')||r.path.startsWith('/author')?'cards':r.path.startsWith('/studio')||r.path==='/publish'?'studio':'feed')));
+  const activeNav=r.path.startsWith('/cards')||r.path.startsWith('/card/')?'cards':r.path.startsWith('/studio')||r.path==='/publish'?'studio':r.path.startsWith('/author/')||r.path==='/following'?null:'feed';
+  $$('.site-header nav a').forEach(a=>a.classList.toggle('active',a.dataset.nav===activeNav));
   syncNavigation();finishRouteLoading?.();finishRouteLoading=beginRouteLoading(main,{html:pageSkeleton(t("正在加载…"),r.path),slowText:t('还在加载，请稍候或重试。'),retryText:t('重试')});
   try{
     if(!authChecked)await loadMe();
     if(!me){applyHTML(pageError(new ApiError('',401)),number);return;}
-    if(r.path==='/feed'||r.path.startsWith('/author/'))await renderDiscover(r,number);
-    else if(r.path==='/cards')await renderCreators(number);
+    if(r.path==='/feed')await renderDiscover(r,number);
+    else if(r.path.startsWith('/author/'))await renderCreator(r,number);
+    else if(r.path==='/following'||(r.path==='/cards'&&r.params.get('following')==='1'))await renderFollowing(r,number);
+    else if(r.path==='/cards')await renderCards(number);
     else if(r.path.startsWith('/work/'))await renderWork(r,number,!visitRecorded,options.localeOnly!==true);
     else if(r.path==='/publish')renderPublish(number);
     else if(r.path.startsWith('/published/'))await renderPublished(r,number);
@@ -138,30 +167,53 @@ async function renderRoute(options={}){
     else if(r.path==='/studio'||r.path==='/studio/works')await renderMyWorks(r,number);
     else if(r.path==='/studio/data')await renderData(r,number);
     else if(r.path==='/studio/feedback')await renderFeedback(r,number);
+    else if(r.path.startsWith('/cards/templates/'))renderTemplateExperience(r,number);
     else if(r.path.startsWith('/cards/me'))await renderBuilder(r,number);
     else if(r.path.startsWith('/card/'))await renderCard(r,number,!visitRecorded);
     else applyHTML(`<div class="page narrow">${empty(t("页面不存在"),t("可以回到发现页继续看看。"),`<a class="button" href="#/">${t("发现作品")}</a>`)}</div>`,number);
   }catch(error){if(number===routeNumber)applyHTML(pageError(error),number);}
 }
 async function renderDiscover(r,number){
-  const authorId=r.path.startsWith('/author/')?decodeURIComponent(r.path.split('/')[2]):'';
-  let authorCard=null;if(authorId){try{authorCard=(await api('/api/cards')).cards.find(c=>c.authorId===authorId)||null;}catch{}}
+  const authorId='',authorCard=null;
   if(!applyHTML('<div class="page discovery-page"></div>',number))return;
-  const panel=await mountDiscovery($('.discovery-page'),{api,esc,workTile,syncSocial,userId:me.id,authorId,authorCard,initial:{q:r.params.get('q'),source:r.params.get('source'),sort:r.params.get('sort')},onQuery:query=>{
+  const panel=await mountDiscovery($('.discovery-page'),{api,esc,workTile,syncSocial,userId:me.id,authorId,authorCard,initial:{q:r.params.get('q'),source:r.params.get('source'),sort:r.params.get('sort'),following:r.params.get('following')},onQuery:query=>{
     if(number!==routeNumber)return;
-    const params=new URLSearchParams();if(query.q)params.set('q',query.q);if(query.source!=='all')params.set('source',query.source);if(query.sort!==(authorId?'newest':'recommended'))params.set('sort',query.sort);
+    const params=new URLSearchParams();if(query.q)params.set('q',query.q);if(query.source!=='all')params.set('source',query.source);if(query.sort!==(authorId?'newest':'recommended'))params.set('sort',query.sort);if(query.following==='1')params.set('following','1');
     const next=r.path+(params.size?'?'+params:'');history.replaceState(null,'','#'+next);currentRoute=next;
   },restoreScroll:()=>window.scrollTo(0,scrolls.get(route().raw)||0)});
   if(number===routeNumber)discoveryPanel=panel;else panel?.dispose();
 }
 
-async function renderCreators(number){
-  const {cards}=await api('/api/cards');
-  const tiles=cards.map(c=>{
-    const shared=location.origin+publicCardPath(c.id),own=c.authorId===me.id;
-    return `<article class="creator-card"><a class="creator-card-link" href="#/card/${encodeURIComponent(c.id)}"><div class="creator-covers">${c.works.slice(0,3).map(w=>safeCover(w.coverUrl)?`<img src="${esc(safeCover(w.coverUrl))}" alt="" loading="lazy">`:'<span></span>').join('')}</div><footer><div><h2>${esc(c.name)}</h2>${c.headline||c.bio?`<p>${esc(c.headline||c.bio)}</p>`:''}</div><span aria-hidden="true">↗</span></footer></a><div class="creator-card-actions" aria-label="${esc(t('名片操作'))}"><button type="button" data-share-url="${esc(shared)}" data-share-title="${esc(c.name)}" data-share-text="${esc(cardShareText(c,own))}">${t('分享名片')}</button>${own?`<a href="#/cards/me">${t('重新制作')}</a><button type="button" class="danger-text" data-delete-card="${esc(c.id)}" data-card-name="${esc(c.name)}">${t('删除名片')}</button>`:''}</div></article>`;
-  }).join('');
-  applyHTML(cardsPage(`${head(t("创作者名片"),'',cards.length?`<a class="button primary" href="#/cards/me">${t("制作名片")}</a>`:'')}${cards.length?`<div class="creator-grid">${tiles}</div>`:empty(t("还没有名片"),t("选几件自己的作品，制作第一张名片。"),`<a class="button primary" href="#/cards/me">${t("制作名片")}</a>`)}`,'browse'),number);
+async function renderCards(number){
+  const owner=me.id;let card=null;
+  try{card=(await api('/api/cards/me')).card;}catch(error){if(error.status!==404)throw error;}
+  if(number!==routeNumber||me?.id!==owner)return;
+  applyHTML(`<div class="page card-workspace-page">${renderCardWorkspace({card,user:me,esc,safeCover,shareURL:card?location.origin+publicCardPath(card.id):'',shareText:card?cardShareText(card,true):''})}</div>`,number);
+}
+function renderTemplateExperience(r,number){
+  const id=r.path.split('/')[3],template=CARD_TEMPLATES.find(item=>item.id===id);
+  if(!template||r.path!=='/cards/templates/'+id)throw new ApiError(t('这个名片模板不存在。'),404,'TEMPLATE_NOT_FOUND');
+  const owner=me.id,current=()=>number===routeNumber&&me?.id===owner&&draftOwner===owner;
+  if(!current()||!applyHTML('<div class="page card-template-experience-page"></div>',number))return;
+  templateExperiencePanel=mountTemplateExperience($('.card-template-experience-page'),{template,user:me,onUse:()=>{
+    if(!current())return;
+    cardDraft={...cardDraft,template:template.id};preview=null;write(storage.preview,null);cardError='';cardKey=uid();saveCardDraft();
+    notify(t('模板已选好，继续制作你的名片。'));go(cardDraft.ids.length?'/cards/me/template':'/cards/me');
+  }});
+}
+
+async function renderFollowing(r,number){
+  if(!applyHTML('<div class="page creator-directory-page"></div>',number))return;
+  creatorPanel=mountCreatorDirectory($('.creator-directory-page'),{api,esc,me});
+}
+async function renderCreator(r,number){
+  const id=decodeURIComponent(r.path.split('/')[2]);
+  const {creator,card}=await api('/api/creators/'+encodeURIComponent(id));
+  if(!applyHTML('<div class="page creator-home-page"></div>',number))return;
+  const home=mountCreatorHome($('.creator-home-page'),{creator,card,me,api,esc,notify,backHref:r.params.get('from')==='/following'?'#/following':'#/feed',onEditProfile:editProfile,onFollowChange:()=>clearDiscovery()});
+  creatorPanel=home;
+  const panel=await mountDiscovery(home.worksRoot,{api,esc,workTile:(work,options)=>workTile(work,{...options,creator:false,from:r.raw}),syncSocial,userId:me.id,authorId:id,authorCard:card,worksOnly:true,initial:{sort:'newest'},onQuery(){},restoreScroll:()=>window.scrollTo(0,scrolls.get(r.raw)||0)});
+  if(number===routeNumber)discoveryPanel=panel;else {panel.dispose();home.dispose();}
 }
 
 async function renderWork(r,number,countView=true,autoPlay=true){
@@ -181,7 +233,7 @@ async function renderWork(r,number,countView=true,autoPlay=true){
       <aside class="work-summary">
         ${pinned?`<p class="work-pinned">${esc(pinned)} · ${esc(work.version)}</p>`:''}
         <h1>${esc(work.name)}</h1>
-        <a class="detail-author" href="#/author/${encodeURIComponent(work.authorId)}"><span class="avatar">${esc([...(work.authorName||t("创作者"))][0])}</span>${esc(work.authorName||t('创作者'))}</a>
+        <a class="detail-author" href="#/author/${encodeURIComponent(work.authorId)}">${avatarMarkup({name:work.authorName,avatarUrl:work.authorAvatarUrl})}${esc(work.authorName||t('创作者'))}</a>
         <div class="work-launch">${action}</div>
         ${work.desc?`<p class="work-description">${esc(work.desc)}</p>`:''}
         <div class="detail-social">${socialControls(work)}<button class="discussion-jump" data-action="discussion" aria-label="${t("查看讨论")}">${commentIcon()}<span>${t("讨论")}</span></button></div>
@@ -248,7 +300,7 @@ async function renderFeedback(r,number){
   let comments=data.comments,nextCursor=data.nextCursor,pending=false;
   const draw=()=>{
     if(number!==routeNumber)return;
-    $('#inbox-records').innerHTML=comments.length?comments.map(c=>`<article class="inbox-comment"><span class="comment-avatar" aria-hidden="true">${esc([...(c.authorName||t("创作者"))][0])}</span><div class="inbox-main"><header><span>${esc(c.authorName)}</span>${c.isCreator?`<span class="author-badge">${t("作者")}</span>`:''}<span>${c.parentId?t("回复"):t("评论")}</span><span class="comment-version" aria-label="${esc(t('评论版本：{version}',{version:commentVersionLabel(c)}))}">${esc(commentVersionLabel(c))}</span><time>${date(c.createdAt)}</time></header><p>${esc(c.body)}</p><a class="inbox-work" href="${esc(commentHref(c,r.raw))}">${esc(c.workName)} ${t("· 查看讨论")}</a>${archivedBadge(c.workId)}</div></article>`).join(''):empty(t("还没有评论"),'');
+    $('#inbox-records').innerHTML=comments.length?comments.map(c=>`<article class="inbox-comment">${c.authorId?`<a href="#/author/${encodeURIComponent(c.authorId)}" aria-label="${esc(c.authorName)}">${avatarMarkup({name:c.authorName,avatarUrl:c.authorAvatarUrl},{className:"comment-avatar"})}</a>`:avatarMarkup({name:c.authorName,avatarUrl:c.authorAvatarUrl},{className:"comment-avatar"})}<div class="inbox-main"><header>${c.authorId?`<a href="#/author/${encodeURIComponent(c.authorId)}">${esc(c.authorName)}</a>`:`<span>${esc(c.authorName)}</span>`}${c.isCreator?`<span class="author-badge">${t("作者")}</span>`:''}<span>${c.parentId?t("回复"):t("评论")}</span><span class="comment-version" aria-label="${esc(t('评论版本：{version}',{version:commentVersionLabel(c)}))}">${esc(commentVersionLabel(c))}</span><time>${date(c.createdAt)}</time></header><p>${esc(c.body)}</p><a class="inbox-work" href="${esc(commentHref(c,r.raw))}">${esc(c.workName)} ${t("· 查看讨论")}</a>${archivedBadge(c.workId)}</div></article>`).join(''):empty(t("还没有评论"),'');
     $('#inbox-more').hidden=!nextCursor;
   };draw();
   $('#inbox-more').addEventListener('click',async()=>{
@@ -290,6 +342,7 @@ function refreshPublishState(){
     $('#build-poll-error').textContent=t(buildPollError);
   }
   $('#game-file-name').textContent=publishFile?.name||'';
+  const sizeNotice=$('#publish-size-notice');sizeNotice.textContent=htmlImportSizeNotice({source:d.source,file:publishFile,build,ready,pending:githubPending});sizeNotice.hidden=!sizeNotice.textContent;
   $('#game-file-remove').hidden=!publishFile;$('#game-file-remove').disabled=publishPending||githubPending;
   $('#cover-file-remove').hidden=!coverFile;$('#cover-file-remove').disabled=publishPending;
   $('#cover-upload-hint').textContent=t(d.source==='url'?'PNG、JPG 或 WebP，最大 2 MiB。':'封面可不上传，发布后自动截取游戏开屏。PNG、JPG 或 WebP，最大 2 MiB。');
@@ -326,6 +379,7 @@ function renderPublish(number){
       <div class="field" id="html-field"><label for="game-file">${t("游戏文件")}</label><input id="game-file" type="file" accept=".html,.htm,text/html"><small>${t(HTML_UPLOAD_HINT)}</small><div class="publish-file-selection"><span id="game-file-name" class="file-selected"></span><button id="game-file-remove" type="button" class="button quiet small" aria-label="${t("移除游戏文件")}" hidden>${t("移除")}</button></div></div>
       <div class="field" id="github-field"><label for="github-url">${t("GitHub 链接")}</label><div class="github-input"><input id="github-url" name="githubURL" type="url" placeholder="${t("https://github.com/作者/仓库")}" value="${esc(d.githubURL||'')}"><button id="github-read" class="button" type="button">${t("导入并构建")}</button></div><p id="github-status" class="file-selected" role="status"></p><section id="github-build-panel" class="build-panel" hidden><progress id="build-progress" max="5" aria-label="${t("构建进度")}"></progress><div class="build-actions"><a id="build-preview" class="button small" target="_blank" rel="noopener">${t("预览试玩 ↗")}</a><button id="build-cancel" class="button quiet small" type="button">${t("取消构建")}</button></div><details class="build-details"><summary>${t("构建记录")}</summary><p id="build-source"></p><pre id="build-logs"></pre></details><p id="build-poll-error" class="error" role="status"></p></section></div>
       <div class="field" id="url-field"><label for="publish-url">${t("作品链接")}</label><input id="publish-url" name="url" type="url" placeholder="https://" value="${esc(d.url)}"><small>${t("已部署的网站（含 GitHub Pages），将在新窗口打开。")}</small></div>
+      <p id="publish-size-notice" class="tiny muted" role="status" hidden></p>
       <div class="field"><label for="cover-file">${t("封面")}</label><div class="cover-picker">${coverPreview?`<img id="cover-preview" src="${esc(coverPreview)}" alt="${t("所选封面")}">`:`<img id="cover-preview" alt="${t("所选封面")}" hidden>`}<input id="cover-file" type="file" accept="image/png,image/jpeg,image/webp"><button id="cover-file-remove" type="button" class="button quiet small" aria-label="${t("移除封面")}" hidden>${t("移除")}</button></div><small id="cover-upload-hint">${t("PNG、JPG 或 WebP，最大 2 MiB。")}</small></div>
       <p id="publish-error" class="error" role="alert"></p><div id="publish-recovery" class="publication-recovery" hidden></div><details id="publish-related" class="sample-links" hidden></details><div class="form-footer"><button class="button primary" type="submit">${t("发布作品")}</button><a class="button quiet" href="#/studio/works">${t("保存草稿并返回")}</a></div>
       <details class="sample-links"><summary>${t("示例文件")}</summary><div><a class="text-link" href="/examples/more.html" target="_blank" rel="noopener">${t("浏览 9 个可玩示例 ↗")}</a></div></details>
@@ -408,17 +462,23 @@ async function renderPublished(r,number){
 }
 const steps = current => `<nav class="steps" aria-label="${t("制作步骤")}">${[t("选作品"),t("选模板"),t("生成名片")].map((name,index)=>index<current?`<a href="${index===0?'#/cards/me':'#/cards/me/template'}"><b>${index+1}</b>${name}</a>`:`<span class="${index===current?'active':''}" ${index===current?'aria-current="step"':''}><b>${index+1}</b>${name}</span>`).join('')}</nav>`;
 async function renderBuilder(r,number){
-  const works=await readMine();const ids=new Set(works.map(w=>w.id));cardDraft.ids=[...new Set(cardDraft.ids)].filter(id=>ids.has(id)).slice(0,30);if(!CARD_TEMPLATES.some(item=>item.id===cardDraft.template))cardDraft.template='wall';saveCardDraft();
+  if(r.params.has('templateFrom'))return renderCardRemix(r,number);
+  const owner=draftOwner,current=()=>number===routeNumber&&draftOwner===owner&&me?.id===owner;
+  const works=await readMine();if(!current())return;
+  const ids=new Set(works.map(w=>w.id));cardDraft.ids=[...new Set(cardDraft.ids)].filter(id=>ids.has(id)).slice(0,30);if(!CARD_TEMPLATES.some(item=>item.id===cardDraft.template))cardDraft.template='wall';saveCardDraft();
   const step=r.path.endsWith('/preview')?2:r.path.endsWith('/template')?1:0;
   let published=null;if(step===0||!works.length){try{published=(await api('/api/cards/me')).card;}catch(e){if(e.status!==404)throw e;}}
+  if(!current())return;
   if(!works.length){
     const archived=(await api('/api/works?mine=1&state=archived&limit=1')).total>0;
+    if(!current())return;
     const primary=published?`<a class="button primary" href="#/card/${encodeURIComponent(published.id)}">${t('我的已保存名片')}</a>`:archived?`<a class="button primary" href="#${archivedWorksPath}">${t('前往归档恢复')}</a>`:`<a class="button primary" href="#/publish">${t('发布作品')}</a>`;
     const more=published||archived?`<details class="version-secondary"><summary>${t('更多')}</summary>${published&&archived?`<a class="text-link" href="#${archivedWorksPath}">${t('前往归档恢复')}</a>`:''}<a class="text-link" href="#/publish">${t('发布作品')}</a></details>`:'';
     applyHTML(cardsPage(`${cardBuilderTop()}${head(t('你的名片'))}${empty(t(published||archived?'没有可选作品':'先放进一件作品'),t(published?'已保存的名片仍可访问。':'名片会复用作品已有的封面和介绍。'),primary+more)}`,'mine'),number);return;
   }
   if(step>0&&!cardDraft.ids.length){go('/cards/me');return;}
   if(step===2&&!preview){go('/cards/me/template');return;}
+  if(step===2)syncCardPreview(me);
   if(step===0){
     if(!applyHTML(cardsPage(`${cardBuilderTop(published)}${steps(0)}${head(t("选作品"))}<div class="select-grid">${works.map(w=>`<label class="select-work ${cardDraft.ids.includes(w.id)?'selected':''}"><input type="checkbox" value="${esc(w.id)}" ${cardDraft.ids.includes(w.id)?'checked':''}><div class="cover ${safeCover(w.coverUrl)?'':'empty-cover'}">${safeCover(w.coverUrl)?`<img src="${esc(safeCover(w.coverUrl))}" alt="" loading="lazy">`:`<span>${esc(w.name)}</span>`}</div><div class="select-copy">${esc(w.name)}<small>${esc(w.version)}</small></div></label>`).join('')}</div><div id="selection-order" class="selection-order"></div><div class="card-builder-footer"><span id="selection-count" class="selection-count" role="status"></span><button class="button primary" id="to-template" ${cardDraft.ids.length?'':'disabled'}>${t("选择模板 →")}</button></div>`,'mine'),number))return;
     const refresh=()=>{const selected=cardDraft.ids.map(id=>works.find(w=>w.id===id)),order=$('#selection-order'),wasOpen=Boolean(order.querySelector('details')?.open);$('#selection-count').textContent=t("已选 {count} 件",{count:selected.length})+' / 30';$('#to-template').disabled=!selected.length;order.innerHTML=selected.length>1?`<details ${wasOpen?'open':''}><summary>${t("调整作品顺序")}</summary><div class="order-chips">${selected.map((w,i)=>`<span class="order-chip">${i+1}. ${esc(w.name)}<button data-reorder="${esc(w.id)}" data-direction="-1" ${i===0?'disabled':''} aria-label="${t("前移")} ${esc(w.name)}">←</button><button data-reorder="${esc(w.id)}" data-direction="1" ${i===selected.length-1?'disabled':''} aria-label="${t("后移")} ${esc(w.name)}">→</button></span>`).join('')}</div></details>`:'';$$('.select-work input').forEach(input=>{input.disabled=!input.checked&&selected.length>=30;input.closest('label').classList.toggle('selected',input.checked);});};refresh();
@@ -426,28 +486,36 @@ async function renderBuilder(r,number){
     $('#selection-order').addEventListener('click',event=>{const button=event.target.closest('[data-reorder]');if(!button)return;const from=cardDraft.ids.indexOf(button.dataset.reorder),to=from+Number(button.dataset.direction);if(to<0||to>=cardDraft.ids.length)return;[cardDraft.ids[from],cardDraft.ids[to]]=[cardDraft.ids[to],cardDraft.ids[from]];invalidatePreview();refresh();});$('#to-template').addEventListener('click',()=>go('/cards/me/template'));return;
   }
   if(step===1){
-    if(!applyHTML(cardsPage(`${cardBuilderTop()}${steps(1)}${head(t("选模板"))}<div class="template-grid">${CARD_TEMPLATES.map(({id,name,description})=>`<button class="template ${cardDraft.template===id?'selected':''}" data-template="${id}" aria-pressed="${cardDraft.template===id}"><span class="template-art has-covers ${id==='wall'?'white':id}">${cardDraft.ids.slice(0,3).map(workId=>{const w=works.find(w=>w.id===workId),src=safeCover(w.coverUrl);return src?`<img src="${esc(src)}" alt="">`:`<span class="template-cover-title">${esc(w.name)}</span>`;}).join('')}</span><span class="template-copy"><strong>${t(name)}</strong><p>${t(description)}</p></span></button>`).join('')}</div><form id="card-profile"><div class="profile-fields"><div class="field"><label for="card-name">${t("你的名字")}</label><input id="card-name" name="name" maxlength="80" required value="${esc(cardDraft.name||me.name)}"></div><div class="field"><label for="card-bio">${t("简介")}</label><input id="card-bio" name="bio" maxlength="500" value="${esc(cardDraft.bio)}" placeholder="${t("简单介绍你自己")}"></div></div><details class="personalization"><summary>${t("个性设置")}</summary><div class="personalization-fields"><div class="field"><label for="card-headline">${t("身份 / 角色")}</label><input id="card-headline" name="headline" maxlength="120" value="${esc(cardDraft.headline||'')}" placeholder="${t("你想如何介绍自己")}"></div><div class="field"><label for="card-signature">${t("签名")}</label><input id="card-signature" name="signature" maxlength="80" value="${esc(cardDraft.signature||'')}" placeholder="${t("留下一句话")}"></div><div class="field"><label for="card-website">${t("个人网址")}</label><input id="card-website" name="website" type="url" maxlength="2000" value="${esc(cardDraft.website||'')}" placeholder="https://"></div><fieldset class="field back-styles" data-fold-options ${cardDraft.template==='fold'?'':'hidden'}><legend>${t("卡背样式")}</legend><div class="theme-options">${[['ink',t("墨黑")],['ivory',t("象牙白")],['cobalt',t("钴蓝")]].map(([value,label])=>`<label class="theme-option"><input type="radio" name="backStyle" value="${value}" ${cardDraft.backStyle===value?'checked':''}><span class="theme-swatch ${value}" aria-hidden="true"></span>${label}</label>`).join('')}</div></fieldset></div></details><div class="card-builder-footer"><a class="button quiet" href="#/cards/me">${t("← 返回选作品")}</a><button class="button primary" type="submit">${t("生成预览 →")}</button></div></form>`,'mine'),number))return;
+    if(!applyHTML(cardsPage(`${cardBuilderTop()}${steps(1)}${head(t("选模板"))}<div class="template-grid">${CARD_TEMPLATES.map(({id,name,description})=>`<button class="template ${cardDraft.template===id?'selected':''}" data-template="${id}" aria-pressed="${cardDraft.template===id}"><span class="template-art has-covers ${id==='wall'?'white':id}">${cardDraft.ids.slice(0,3).map(workId=>{const w=works.find(w=>w.id===workId),src=safeCover(w.coverUrl);return src?`<img src="${esc(src)}" alt="">`:`<span class="template-cover-title">${esc(w.name)}</span>`;}).join('')}</span><span class="template-copy"><strong>${t(name)}</strong><p>${t(description)}</p></span></button>`).join('')}</div><form id="card-profile"><section class="card-profile-source"><div class="card-profile-person">${avatarMarkup(me,{className:'card-profile-avatar'})}<div><strong>${esc(me.name)}</strong>${me.headline?`<p>${esc(me.headline)}</p>`:''}${me.bio?`<p>${esc(me.bio)}</p>`:''}<small>${t('名片会自动使用你的最新个人资料。')}</small></div></div><button class="button small quiet" type="button" data-edit-profile>${t('编辑个人资料')}</button></section><details class="personalization"><summary>${t("个性设置")}</summary><div class="personalization-fields"><div class="field"><label for="card-signature">${t("签名")}</label><input id="card-signature" name="signature" maxlength="80" value="${esc(cardDraft.signature||'')}" placeholder="${t("留下一句话")}"></div><fieldset class="field back-styles" data-fold-options ${cardDraft.template==='fold'?'':'hidden'}><legend>${t("卡背样式")}</legend><div class="theme-options">${[['ink',t("墨黑")],['ivory',t("象牙白")],['cobalt',t("钴蓝")]].map(([value,label])=>`<label class="theme-option"><input type="radio" name="backStyle" value="${value}" ${cardDraft.backStyle===value?'checked':''}><span class="theme-swatch ${value}" aria-hidden="true"></span>${label}</label>`).join('')}</div></fieldset></div></details><div class="card-builder-footer"><a class="button quiet" href="#/cards/me">${t("← 返回选作品")}</a><button class="button primary" type="submit">${t("生成预览 →")}</button></div></form>`,'mine'),number))return;
     $$('[data-template]').forEach(b=>b.addEventListener('click',()=>{cardDraft.template=b.dataset.template;invalidatePreview();$$('[data-template]').forEach(x=>{x.classList.toggle('selected',x===b);x.setAttribute('aria-pressed',String(x===b));});$('[data-fold-options]').hidden=cardDraft.template!=='fold';}));
     const form=$('#card-profile');
-    const captureProfile=()=>{for(const key of ['name','bio','headline','signature','website','backStyle'])cardDraft[key]=form.elements[key].value;invalidatePreview();};
-    form.addEventListener('input',()=>{form.elements.name.setCustomValidity('');form.elements.website.setCustomValidity('');captureProfile();});
+    const captureProfile=()=>{for(const key of ['signature','backStyle'])cardDraft[key]=form.elements[key].value;invalidatePreview();};
+    form.addEventListener('input',captureProfile);
     form.addEventListener('submit',event=>{
-      event.preventDefault();captureProfile();
-      if(!cardDraft.name.trim()){form.elements.name.setCustomValidity(t("请输入你的名字。"));form.elements.name.reportValidity();return;}
-      if(cardDraft.website.trim()&&!safeExternal(cardDraft.website.trim())){form.elements.website.setCustomValidity(t("请填写不含账号密码的 http:// 或 https:// 网址。"));form.elements.website.reportValidity();return;}
-      for(const key of ['name','bio','headline','signature','website'])cardDraft[key]=cardDraft[key].trim();saveCardDraft();
-      const selected=cardDraft.ids.map(id=>works.find(w=>w.id===id)),key=JSON.stringify({name:cardDraft.name,bio:cardDraft.bio,...cardProfile(cardDraft),template:cardDraft.template,works:selected});
-      preview=prepareCardPreview(preview,{id:'preview',authorId:me.id,name:cardDraft.name,bio:cardDraft.bio,...cardProfile(cardDraft),template:cardDraft.template,workIds:[...cardDraft.ids],works:structuredClone(selected),fingerprint:key},uid());write(storage.preview,preview);go('/cards/me/preview');
+      event.preventDefault();captureProfile();cardDraft.signature=cardDraft.signature.trim();saveCardDraft();
+      const selected=cardDraft.ids.map(id=>works.find(w=>w.id===id));
+      const next=withCardIdentity({id:'preview',authorId:me.id,signature:cardDraft.signature,backStyle:cardDraft.backStyle,template:cardDraft.template,workIds:[...cardDraft.ids],works:structuredClone(selected)},me);
+      preview=prepareCardPreview(preview,{...next,fingerprint:cardPreviewFingerprint(next)},uid());write(storage.preview,preview);go('/cards/me/preview');
     });return;
   }
   if(!applyHTML(cardsPage(`${cardBuilderTop()}${steps(2)}<h1 class="card-preview-title">${t("名片预览")}</h1><div class="card-actions"><a class="button quiet" href="#/cards/me/template">${t("← 返回选模板")}</a><button class="button primary" id="save-card" ${cardPending?'disabled':''}>${cardPending?t("正在保存…"):!isPinnedPreview(preview)?t("重新生成预览"):cardError?t("重试保存"):t("保存名片")}</button></div><p id="card-error" class="error" role="alert">${esc(t(cardError)||(!isPinnedPreview(preview)?t("这份预览来自旧版，请重新生成后保存。"):''))}</p>${cardMarkup(preview,'/cards/me/preview')}`,'mine'),number))return;
   mountCard(preview,'/cards/me/preview');$('#save-card').addEventListener('click',saveCard);
 }
+async function renderCardRemix(r,number){
+  const owner=draftOwner,current=()=>number===routeNumber&&draftOwner===owner&&me?.id===owner;
+  const id=r.params.get('templateFrom');
+  if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id||''))throw new ApiError(t('这张名片暂时无法用于同款制作。'),404,'CARD_NOT_FOUND');
+  const {card}=await api('/api/cards/'+encodeURIComponent(id)),style=remixStyle(card),template=CARD_TEMPLATES.find(item=>item.id===style.template);
+  if(!current())return;
+  const hasDraft=cardDraft.ids.length>0||Boolean(preview)||Boolean(cardDraft.signature);
+  if(!applyHTML(`<div class="page narrow"><a class="back" href="#/card/${encodeURIComponent(id)}">← ${t('返回名片')}</a>${head(t('用同款制作'))}<section class="remix-confirmation"><h2>${esc(t(template.name))}</h2><p>${esc(t(template.description))}${style.template==='fold'?' · '+esc(t({ink:'墨黑',ivory:'象牙白',cobalt:'钴蓝'}[style.backStyle])):''}</p><p>${t('沿用名片的模板和卡背样式，选择你自己的作品。')}</p>${hasDraft?`<p class="remix-draft-notice">${t('你有一份未完成的名片草稿。使用同款后会开始新的草稿，已保存的名片不受影响。')}</p>`:''}<div class="form-footer">${hasDraft?`<a class="button quiet" href="#/cards/me">${t('继续原草稿')}</a>`:''}<button type="button" class="button primary" id="apply-card-remix">${t('使用这个模板')}</button></div></section></div>`,number))return;
+  $('#apply-card-remix').addEventListener('click',()=>{if(!current())return;cardDraft=createRemixDraft(card,me);preview=null;cardError='';saveCardDraft();write(storage.preview,null);notify(t('同款模板已选好，先选择自己的作品。'));go('/cards/me');});
+}
 function cardMarkup(card,from,cardId=''){
   if(['fold','collection'].includes(card.template))return `<div class="card-preview"><iframe id="gallery-frame" class="gallery-frame" src="/${card.template==='collection'?'collection':'gallery'}/?lang=${getLocale()}" title="${card.template==='collection'?t("点亮收藏"):t("卡中展厅")}" loading="eager"></iframe></div>`;
   const profile=cardProfile(card);
   if(['editorial','filmstrip'].includes(card.template))return renderPortfolioCard(card,{profile,safeCover,workHref,from,cardId});
-  return `<div class="card-preview"><article class="white-card"><header><h2>${esc(card.name)}</h2>${profile.headline?`<p class="card-headline">${esc(profile.headline)}</p>`:''}${card.bio?`<p class="bio">${esc(card.bio)}</p>`:''}${profile.website?`<a class="profile-website" href="${esc(profile.website)}" target="_blank" rel="noopener noreferrer">${esc(new URL(profile.website).hostname)} ↗</a>`:''}</header><div class="work-grid">${card.works.map(w=>workTile(w,{from,creator:false,cardId})).join('')}</div>${profile.signature?`<footer class="card-signature">${esc(profile.signature)}</footer>`:''}</article></div>`;
+  return `<div class="card-preview"><article class="white-card"><header>${card.avatarUrl?avatarMarkup(card,{className:"card-profile-avatar"}):""}<h2>${esc(card.name)}</h2>${profile.headline?`<p class="card-headline">${esc(profile.headline)}</p>`:''}${card.bio?`<p class="bio">${esc(card.bio)}</p>`:''}${profile.website?`<a class="profile-website" href="${esc(profile.website)}" target="_blank" rel="noopener noreferrer">${esc(new URL(profile.website).hostname)} ↗</a>`:''}</header><div class="work-grid">${card.works.map(w=>workTile(w,{from,creator:false,cardId})).join('')}</div>${profile.signature?`<footer class="card-signature">${esc(profile.signature)}</footer>`:''}</article></div>`;
 }
 
 function normalizeGalleryView(card,view={}){
@@ -481,16 +549,32 @@ function mountCard(card,key){
 }
 function initializeGallery(gallery){
   gallery.view=normalizeGalleryView(gallery.card,gallery.view);
-  return {locale:getLocale(),author:{id:gallery.card.authorId,name:gallery.card.name,bio:gallery.card.bio,...cardProfile(gallery.card)},works:gallery.card.works.map(w=>({id:w.id,name:w.name,desc:w.desc,cover:safeCover(w.coverUrl),kind:w.source==='url'?"外链作品":"网页游戏",version:w.version})),...gallery.view};
+  return {locale:getLocale(),author:{id:gallery.card.authorId,name:gallery.card.name,bio:gallery.card.bio,avatarUrl:gallery.card.avatarUrl||"",...cardProfile(gallery.card)},works:gallery.card.works.map(w=>({id:w.id,name:w.name,desc:w.desc,cover:safeCover(w.coverUrl),kind:w.source==='url'?"外链作品":"网页游戏",version:w.version})),...gallery.view};
 }
 async function saveCard(){
-  if(cardPending||!preview)return;if(!isPinnedPreview(preview)){go('/cards/me/template');return;}cardPending=true;cardError='';const button=$('#save-card');button.disabled=true;button.textContent=t("正在保存…");const saving=preview;
-  try{const {card}=await api('/api/cards',{method:'POST',headers:{'Idempotency-Key':saving.saveKey},body:{workIds:saving.workIds,workRefs:previewReferences(saving),template:saving.template,name:saving.name,bio:saving.bio,...cardProfile(saving)}});cardPending=false;me={...me,name:card.name,bio:card.bio,...cardProfile(card)};identity();if(route().path==='/cards/me/preview')go('/card/'+encodeURIComponent(card.id)+'?saved=1');else notify(t("名片已保存。"));}
-  catch(error){cardPending=false;if(error.code==='CARD_DELETED'){preview=null;write(storage.preview,null);cardError='';notify(error.message);if(route().path==='/cards/me/preview')go('/cards/me/template');return;}cardError=error.message;if($('#save-card')){$('#save-card').disabled=false;$('#save-card').textContent=t("重试保存");$('#card-error').textContent=t(error.message);}}
+  if(cardPending||!preview)return;syncCardPreview(me);if(!isPinnedPreview(preview)){go('/cards/me/template');return;}
+  const saving=preview,owner=draftOwner,saveKey=saving.saveKey,operation={owner,saveKey};
+  const current=()=>draftOwner===owner&&me?.id===owner&&preview===saving&&preview.saveKey===saveKey;
+  cardPending=operation;cardError='';const button=$('#save-card');button.disabled=true;button.textContent=t("正在保存…");
+  try{
+    const {card}=await api('/api/cards',{method:'POST',headers:{'Idempotency-Key':saveKey},body:{workIds:saving.workIds,workRefs:previewReferences(saving),template:saving.template,name:saving.name,bio:saving.bio,...cardProfile(saving),avatarUrl:saving.avatarUrl||''}});
+    if(!current())return;
+    if(route().path==='/cards/me/preview')go('/card/'+encodeURIComponent(card.id)+'?saved=1');else notify(t("名片已保存。"));
+  }catch(error){
+    if(!current())return;
+    if(error.code==='CARD_DELETED'){preview=null;write(storage.preview,null);cardError='';notify(error.message);if(route().path==='/cards/me/preview')go('/cards/me/template');return;}
+    cardError=error.message;if($('#save-card')){$('#save-card').disabled=false;$('#save-card').textContent=t("重试保存");$('#card-error').textContent=t(error.message);}
+  }finally{
+    if(cardPending===operation){
+      cardPending=false;
+      // A newer preview may have been opened while this save was in flight.
+      const activeButton=$('#save-card');if(activeButton){activeButton.disabled=false;activeButton.textContent=t(!isPinnedPreview(preview)?'重新生成预览':cardError?'重试保存':'保存名片');}
+    }
+  }
 }
 async function renderCard(r,number,countView=true){
-  const {card}=await api('/api/cards/'+encodeURIComponent(decodeURIComponent(r.path.split('/')[2]))),own=card.authorId===me.id,shared=location.origin+publicCardPath(card.id);
-  if(!applyHTML(`<div class="page card-view"><div class="card-view-top"><a class="back" href="#/cards">← ${t("名片")}</a>${r.params.has('saved')?`<span class="saved-label" role="status">${t("已保存")}</span>`:''}<button class="button small" data-share-url="${esc(shared)}" data-share-title="${esc(card.name)}" data-share-text="${esc(cardShareText(card,own))}">${t("分享名片")}</button></div>${cardMarkup(card,r.raw,card.id)}<div class="card-management">${own?`<a class="text-link" href="#/cards/me">${t("重新制作")}</a>`:''}<button class="button quiet small" data-copy-url="${esc(shared)}">${t("复制名片链接")}</button>${own?`<button type="button" class="button quiet small danger-text" data-delete-card="${esc(card.id)}" data-card-name="${esc(card.name)}">${t('删除名片')}</button>`:''}<p class="tiny muted">${t("朋友无需登录即可查看名片，试玩时再登录。")}</p></div></div>`,number))return;
+  const {card}=await api('/api/cards/'+encodeURIComponent(decodeURIComponent(r.path.split('/')[2]))),own=card.authorId===me.id,shared=location.origin+publicCardPath(card.id),template=CARD_TEMPLATES.find(item=>item.id===card.template)||CARD_TEMPLATES[0];
+  if(!applyHTML(`<div class="page card-view"><div class="card-view-top"><a class="back" href="#/cards">← ${t("名片")}</a>${r.params.has('saved')?`<span class="saved-label" role="status">${t("已保存")}</span>`:''}<button class="button small" data-share-url="${esc(shared)}" data-share-title="${esc(card.name)}" data-share-text="${esc(cardShareText(card,own))}">${t("分享名片")}</button></div>${cardMarkup(card,r.raw,card.id)}<section class="card-template-reuse"><div><h2>${esc(t(template.name))}</h2><p>${esc(t(template.description))}</p></div><a class="button" href="#/cards/me?templateFrom=${encodeURIComponent(card.id)}">${t('用同款制作')} ↗</a></section><div class="card-management"><a class="text-link" href="#/author/${encodeURIComponent(card.authorId)}">${t('查看作者主页')}</a>${own?`<a class="text-link" href="#/cards/me">${t("重新制作")}</a>`:''}<button class="button quiet small" data-copy-url="${esc(shared)}">${t("复制名片链接")}</button>${own?`<button type="button" class="button quiet small danger-text" data-delete-card="${esc(card.id)}" data-card-name="${esc(card.name)}">${t('删除名片')}</button>`:''}<p class="tiny muted">${t("朋友无需登录即可查看名片，试玩时再登录。")}</p></div></div>`,number))return;
   mountCard(card,r.raw);if(countView){postAction('card_view',{cardId:card.id});visitRecorded=true;}
 }
 
@@ -608,12 +692,13 @@ for(const type of ['wheel','touchstart'])window.addEventListener(type,()=>{if(cu
 window.addEventListener('online',()=>{actionQueue.forEach((_,id)=>flushAction(id));sessionQueues.forEach(flushSession);});
 window.addEventListener('pagehide',()=>{endSession('exit');actionQueue.forEach((_,id)=>flushAction(id));sessionQueues.forEach(queue=>{if(queue.pending.length)api('/api/sessions/'+encodeURIComponent(queue.id)+'/events',{method:'POST',body:{token:queue.token,events:queue.pending.slice(0,20)},keepalive:true}).catch(()=>{});});});
 document.addEventListener('click',async event=>{
-  const account=$('.account-menu');if(account&&(!account.contains(event.target)||event.target.closest('a')))account.open=false;
+  const account=$('.account-menu');if(account&&(!account.contains(event.target)||event.target.closest('a,button')))account.open=false;
+  const edit=event.target.closest('[data-edit-profile]');if(edit&&!edit.closest('.creator-home-page'))editProfile();
   const outbound=event.target.closest('[data-outbound]');if(outbound)postAction('outbound_click',{workId:outbound.dataset.outbound,versionId:outbound.dataset.version});
   const button=event.target.closest('[data-action="reload"]');if(button){authChecked=false;clearDiscovery();renderRoute();}
   const like=event.target.closest('[data-like]');if(like)toggleLike(like.dataset.like);
   const share=event.target.closest('[data-share-url]');if(share)shareLink(share.dataset.shareTitle,share.dataset.shareUrl,share.dataset.shareText);
-  const remove=event.target.closest('[data-delete-card]');if(remove){const originRoute=routeNumber;confirmCardDeletion({id:remove.dataset.deleteCard,name:remove.dataset.cardName},{api,notify,onDeleted:()=>{if(preview){preview={...preview,saveKey:uid()};write(storage.preview,preview);}cardError='';if(originRoute===routeNumber)go('/cards');}});}
+  const remove=event.target.closest('[data-delete-card]');if(remove){const originRoute=routeNumber;confirmCardDeletion({id:remove.dataset.deleteCard,name:remove.dataset.cardName},{api,notify,onDeleted:()=>{if(preview){preview={...preview,saveKey:uid()};write(storage.preview,preview);}cardError='';if(originRoute===routeNumber){if(route().path.startsWith('/author/'))renderRoute();else go('/cards');}}});}
   const copy=event.target.closest('[data-copy-url]');if(copy)copyLink(copy.dataset.copyUrl);
 });
 function renderChrome(){

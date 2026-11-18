@@ -1,14 +1,47 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {HTML_MAX_BYTES,htmlFileError,repositoryImportBlocked,buildAvailabilityMarkup,importErrorText,createBuildAvailability} from '../public/import-status.js';
+import {HTML_MAX_BYTES,HTML_RECOMMENDED_BYTES,htmlFileError,htmlImportSizeNotice,repositoryImportBlocked,buildAvailabilityMarkup,importErrorText,createBuildAvailability} from '../public/import-status.js';
 import {t,setLocale,getLocale} from '../public/i18n.js';
 
-test('local HTML accepts exactly 8 MiB and rejects one byte more without confusing the file type',()=>{
-  assert.equal(HTML_MAX_BYTES,8388608);
+test('local HTML accepts exactly 16 MiB and rejects one byte more without confusing the file type',()=>{
+  assert.equal(HTML_MAX_BYTES,16777216);
   assert.equal(htmlFileError({name:'rain.html',size:HTML_MAX_BYTES}),'');
-  assert.match(htmlFileError({name:'rain.html',size:HTML_MAX_BYTES+1}),/8 MiB/);
+  assert.match(htmlFileError({name:'rain.html',size:HTML_MAX_BYTES+1}),/16 MiB/);
   assert.match(htmlFileError({name:'rain.zip',size:100}),/请选择 HTML/);
   assert.match(htmlFileError({name:'rain.htm',size:0}),/为空/);
+});
+test('large-file guidance is nonblocking and follows only the selected ready import',()=>{
+  const file={name:'rain.html',size:HTML_RECOMMENDED_BYTES+1};
+  assert.equal(HTML_RECOMMENDED_BYTES,8388608);assert.equal(htmlFileError(file),'');
+  assert.match(htmlImportSizeNotice({source:'html',file}),/仍可发布/);
+  assert.equal(htmlImportSizeNotice({source:'html',file:{...file,size:HTML_RECOMMENDED_BYTES}}),'');
+  assert.equal(htmlImportSizeNotice({source:'html',file:{...file,size:HTML_MAX_BYTES+1}}),'');
+  assert.match(htmlImportSizeNotice({source:'github',file,ready:true}),/仍可发布/);
+  assert.match(htmlImportSizeNotice({source:'github',file:{size:100},build:{status:'ready',artifactBytes:12*1048576},ready:true}),/12 MiB/);
+  for(const args of [{source:'url',file},{source:'github',file,ready:false},{source:'github',file,ready:true,pending:true}])assert.equal(htmlImportSizeNotice(args),'');
+});
+test('repository size failures retain safe actual sizes and paths with bilingual layer-specific text',()=>{
+  const previous=getLocale();
+  const examples=[
+    ['ARCHIVE_TOO_LARGE','仓库压缩包大小为 65 MiB，超过 64 MiB 上限。',/repository archive is 65 MiB/],
+    ['ARCHIVE_TOO_LARGE','仓库压缩包大小至少为 64.01 MiB，超过 64 MiB 上限。',/at least 64.01 MiB/],
+    ['ARCHIVE_UNPACKED_TOO_LARGE','仓库解压后大小超过 256 MiB 上限（已停止解压）。',/extracted repository exceeds the 256 MiB/],
+    ['ARCHIVE_FILE_TOO_LARGE','仓库文件「assets/font.ttf」大小为 33.2 MiB，超过 32 MiB 上限。',/assets\/font.ttf.*33.2 MiB.*32 MiB/],
+    ['ARCHIVE_TOO_MANY_FILES','仓库文件数量至少为 5001 项，超过 5000 项上限。',/5001 entries.*5000/],
+    ['OUTPUT_TOO_LARGE','最终 HTML 大小为 16.01 MiB，超过 16 MiB 上限。',/final HTML is 16.01 MiB/],
+    ['OUTPUT_TOO_LARGE','最终 HTML 大小至少为 16.01 MiB，超过 16 MiB 上限。',/final HTML is at least 16.01 MiB/],
+  ];
+  try{
+    setLocale('zh-CN');for(const [code,message]of examples)assert.equal(importErrorText({code,message}),message);
+    setLocale('en');for(const [errorCode,error,pattern]of examples){const text=t(importErrorText({errorCode,error}));assert.match(text,pattern);assert(!/[\u3400-\u9fff]/.test(text));}
+    for(const code of ['ARCHIVE_TOO_LARGE','ARCHIVE_UNPACKED_TOO_LARGE','ARCHIVE_FILE_TOO_LARGE','ARCHIVE_TOO_MANY_FILES','INVALID_ARCHIVE','OUTPUT_TOO_LARGE']){
+      const detail='Error: secret traceback\n at /root/credentials';const text=importErrorText({code,message:detail});assert(!text.includes('secret'));assert(!/[\u3400-\u9fff]/.test(t(text)));
+    }
+    const stored=importErrorText({code:examples[3][0],message:examples[3][1]});setLocale('zh-CN');assert.equal(t(stored),examples[3][1]);setLocale('en');assert.match(t(stored),examples[3][2]);
+    const invalidPath='仓库文件「bad\npath」大小为 33 MiB，超过 32 MiB 上限。';assert(!importErrorText({code:'ARCHIVE_FILE_TOO_LARGE',message:invalidPath}).includes('bad'));
+    const supported=buildAvailabilityMarkup({status:'online'},{selected:true});assert(supported.includes('dist/index.html'));assert(supported.includes('LICENSE'));
+    assert(!/[\u3400-\u9fff]/.test(htmlImportSizeNotice({source:'html',file:{size:10*1048576}})));
+  }finally{setLocale(previous);}
 });
 test('builder availability gates repositories but never standalone GitHub HTML',()=>{
   const repo='https://github.com/owner/game';

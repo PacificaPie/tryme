@@ -1,3 +1,4 @@
+import { HTML_MAX_BYTES } from '../../lib/funtrack/limits.mjs';
 import { DurableObject, WorkerEntrypoint } from 'cloudflare:workers';
 import { validId, readLimited, json, api, enqueue, safeError, allowOutbound } from './protocol.mjs';
 
@@ -102,19 +103,20 @@ export class BuildJob extends DurableObject {
         this.ctx.container.start({enableInternet:false,env:{FUNTRACK_CONTAINER_CONTROL_TOKEN:controlToken,NODE_EXTRA_CA_CERTS:'/etc/cloudflare/certs/cloudflare-containers-ca.crt'}});
         await this.ctx.container.setInactivityTimeout(DEADLINE_MS+30000);
         await this.ready();
-        await this.progress(task,'installing','Cloudflare 云端隔离环境：正在读取固定提交并安装锁定依赖。');
-        await this.containerJSON('/prepare',{repository:job.repository,commitSha:job.commitSha},controlToken);
+        await this.progress(task,'installing','正在读取固定提交：检查已打包 HTML，或准备 Vite 项目的锁定依赖。');
+        const prepared=await this.containerJSON('/prepare',{repository:job.repository,commitSha:job.commitSha},controlToken);
+        const prebuilt=prepared.metadata?.framework==='prebuilt-html';
         // Replace the exact rules (including existing connections) before any
         // repository build/configuration code is allowed to execute.
         await this.network(this.ctx.exports.DenyBuildNetwork);
-        await this.progress(task,'building','Cloudflare 云端隔离环境：出网已关闭，正在构建。');
+        await this.progress(task,'building',prebuilt?'正在导入仓库中的已打包 HTML；未运行项目脚本。':'Cloudflare 云端隔离环境：出网已关闭，正在构建。');
         const result=await this.containerJSON('/build',{},controlToken);
         await this.progress(task,'packaging','正在校验云端产物并保存至 R2。');
         const response=await this.containerFetch('/artifact',null,controlToken);
-        const bytes=await readLimited(response,8*1024*1024,true);
+        const bytes=await readLimited(response,HTML_MAX_BYTES,true,{code:'OUTPUT_TOO_LARGE',label:'最终 HTML'});
         await this.destroy();
         const form=new FormData();form.set('leaseId',task.leaseId);form.set('file',new File([bytes],'index.html',{type:'text/html'}));
-        form.set('metadata',JSON.stringify({...result.metadata,execution:{...result.metadata?.execution,provider:'cloudflare-containers',worker:'funtrack-builder-staging',buildId:task.buildId,network:'install allowlist; build denied',schedulingPolicy:'default'}}));
+        form.set('metadata',JSON.stringify({...result.metadata,execution:{...result.metadata?.execution,provider:'cloudflare-containers',worker:'funtrack-builder-staging',buildId:task.buildId,network:prebuilt?'repository download allowlist; no project code executed':'install allowlist; build denied',schedulingPolicy:'default'}}));
         await api(this.env,`${task.buildId}/complete`,form,{attempts:3});
         await this.finish(task,'ready');
       }catch(error){

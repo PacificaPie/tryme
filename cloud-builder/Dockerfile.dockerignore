@@ -12,3 +12,6 @@
 !scripts/build-toolkit/bundle.mjs
 !scripts/build-toolkit/inspect.mjs
 !scripts/build-toolkit/export.mjs
+
+!scripts/build-toolkit/limits.mjs
+!scripts/build-toolkit/self-contained.mjs

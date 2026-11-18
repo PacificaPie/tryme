@@ -3,7 +3,7 @@ import { readFile, writeFile, mkdir, readdir, lstat, chown, chmod, open, realpat
 import { constants } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
-import { BuildError, BUILD_IMAGE, LIMITS, validateJob, unpackTar, validateNpmProject, validatePackedHTML } from '../../scripts/repo-builder.mjs';
+import { BuildError, BUILD_IMAGE, LIMITS, validateJob, unpackTar, validatePackedHTML, archiveSizeMessage, htmlSizeMessage, prepareRepository, prebuiltMetadata } from '../../scripts/repo-builder.mjs';
 
 const WORK = '/work';
 const TOOLKIT = '/toolkit';
@@ -108,10 +108,10 @@ async function fetchArchive(job, signal) {
   const url = `https://codeload.github.com/${job.repository}/tar.gz/${job.commitSha}`;
   const response = await fetch(url, { redirect: 'manual', signal: AbortSignal.any([signal, AbortSignal.timeout(45000)]), headers: { 'User-Agent': 'Funtrack-Cloud-Builder' } });
   if (!response.ok || response.url !== url) fail(`GitHub 仓库下载失败（${response.status}）。`, 'FETCH_FAILED');
-  if (Number(response.headers.get('content-length')) > LIMITS.archive) fail('仓库压缩包超过 16 MiB。', 'ARCHIVE_TOO_LARGE');
+  if (Number(response.headers.get('content-length')) > LIMITS.archive) fail(archiveSizeMessage(Number(response.headers.get('content-length'))), 'ARCHIVE_TOO_LARGE');
   const chunks = []; let size = 0;
   for await (const chunk of response.body) {
-    size += chunk.length; if (size > LIMITS.archive) fail('仓库压缩包超过 16 MiB。', 'ARCHIVE_TOO_LARGE'); chunks.push(chunk);
+    size += chunk.length; if (size > LIMITS.archive) fail(archiveSizeMessage(size, true), 'ARCHIVE_TOO_LARGE'); chunks.push(chunk);
   }
   return Buffer.concat(chunks);
 }
@@ -143,8 +143,9 @@ async function readPackedHTML() {
   const file = await open(filename, constants.O_RDONLY | constants.O_NOFOLLOW);
   try {
     const info = await file.stat();
-    if (!info.isFile() || info.size > LIMITS.html) fail('产物超过 8 MiB。', 'OUTPUT_TOO_LARGE');
-    const bytes = await file.readFile(); if (bytes.length > LIMITS.html) fail('产物超过 8 MiB。', 'OUTPUT_TOO_LARGE');
+    if (!info.isFile()) fail('构建产物不是常规 HTML 文件。', 'UNSAFE_OUTPUT');
+    if (info.size > LIMITS.html) fail(htmlSizeMessage(info.size), 'OUTPUT_TOO_LARGE');
+    const bytes = await file.readFile(); if (bytes.length > LIMITS.html) fail(htmlSizeMessage(bytes.length), 'OUTPUT_TOO_LARGE');
     return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
   } finally { await file.close(); }
 }
@@ -169,7 +170,13 @@ export class BuildEngine {
     this.deadline = setTimeout(() => { this.controller.abort(); this.phase = 'failed'; this.failure = { code: 'BUILD_TIMEOUT', message: '构建超过 8 分钟。' }; void killBuildProcesses().catch(() => {}); }, TOTAL_MS);
     try {
       const archive = await this.stage('fetching', () => fetchArchive(this.job, this.controller.signal));
-      const files = unpackTar(archive); this.project = validateNpmProject(files);
+      const files = unpackTar(archive), prepared = prepareRepository(files,this.job);
+      this.source = { sourceFiles: files.length, archiveBytes: archive.length };
+      if(prepared.kind==='prebuilt'){
+        this.prebuilt=prepared;this.phase='prepared';
+        return {prepared:true,metadata:prebuiltMetadata(prepared,this.job,this.source)};
+      }
+      this.project = prepared.project;
       if ((await readdir(WORK)).length) fail('任务工作区必须为空。', 'ISOLATION_FAILED');
       for (const entry of files) {
         const filename = path.join(WORK, entry.path); await mkdir(path.dirname(filename), { recursive: true }); await writeFile(filename, entry.bytes, { mode: 0o644 });
@@ -187,6 +194,12 @@ export class BuildEngine {
     if (this.phase !== 'prepared') fail('请先完成准备阶段。', 'BUILD_STATE_CHANGED');
     this.phase = 'building';
     try {
+      if(this.prebuilt){
+        if(this.controller.signal.aborted)fail('构建已取消或超过总时限。','BUILD_TIMEOUT');
+        this.artifact=Buffer.from(this.prebuilt.html);
+        this.metadata=prebuiltMetadata(this.prebuilt,this.job,{...this.source,timingsMs:{...this.timings,total:Date.now()-this.started}});
+        clearTimeout(this.deadline);this.phase='ready';return {metadata:this.metadata};
+      }
       // The trusted Durable Object must replace BOTH registry/codeload HTTP and
       // HTTPS intercepts with deny handlers before calling this endpoint.
       const networkChecks = await verifyBuildNetwork(this.job, { signal: this.controller.signal });

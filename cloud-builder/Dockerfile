@@ -5,8 +5,9 @@ FROM node:22-bookworm-slim@sha256:e9f565d32859f0cbfb52125eafe8be39390f24dac302dc
 WORKDIR /toolkit
 COPY scripts/build-toolkit/package.json scripts/build-toolkit/package-lock.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund --registry=https://registry.npmjs.org --userconfig=/dev/null --globalconfig=/tmp/build-global-npmrc && npm cache clean --force
-COPY scripts/build-toolkit/bundle.mjs scripts/build-toolkit/inspect.mjs scripts/build-toolkit/export.mjs ./
+COPY scripts/build-toolkit/bundle.mjs scripts/build-toolkit/inspect.mjs scripts/build-toolkit/export.mjs scripts/build-toolkit/limits.mjs ./
 COPY scripts/repo-builder.mjs /app/scripts/repo-builder.mjs
+COPY scripts/build-toolkit/limits.mjs scripts/build-toolkit/self-contained.mjs /app/scripts/build-toolkit/
 COPY cloud-builder/runner/ /app/cloud-builder/runner/
 RUN mkdir -p /work && chown 1000:1000 /work && chmod 0700 /work && \
     chmod -R a-w /app /toolkit && chmod 0555 /app/cloud-builder/runner/start.sh && \

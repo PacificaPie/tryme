@@ -1,4 +1,5 @@
 import {t,getLocale,applyGalleryLocale} from './i18n.js';
+import {safeAvatarURL} from '../avatars.js';
 applyGalleryLocale('gallery',new URLSearchParams(location.search).get('lang'),{first:true});
 /* Host-driven adapter for the supplied 卡中展厅 Three.js paper model.
    No autoplay, fake metrics, external dependencies, or embedded game execution. */
@@ -24,7 +25,7 @@ function text(value,fallback,max){return typeof value==='string'?value.trim().sl
 function cleanPayload(payload){
   if(!payload||!payload.author||!Array.isArray(payload.works))return null;
   var a=payload.author,website='';try{var u=new URL(a.website);if(/^https?:$/.test(u.protocol)&&!u.username&&!u.password)website=u.href;}catch(e){}
-  var author={id:text(a.id,'creator',128)||'creator',name:text(a.name,t('创作者'),140)||t('创作者'),bio:text(a.bio,'',600),signature:text(a.signature,'',80),headline:text(a.headline,'',120),website:website,backStyle:['ink','ivory','cobalt'].includes(a.backStyle)?a.backStyle:'ink'};
+  var author={id:text(a.id,'creator',128)||'creator',name:text(a.name,t('创作者'),140)||t('创作者'),bio:text(a.bio,'',600),signature:text(a.signature,'',80),headline:text(a.headline,'',120),website:website,avatarUrl:safeAvatarURL(a.avatarUrl),backStyle:['ink','ivory','cobalt'].includes(a.backStyle)?a.backStyle:'ink'};
   var seen=new Set(),works=[];
   payload.works.forEach(function(w){
     if(!w||typeof w.id!=='string'||!w.id||seen.has(w.id))return;

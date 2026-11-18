@@ -1,3 +1,4 @@
+import {REPOSITORY_LIMITS as LIMITS} from './limits.mjs';
 // Trusted adapter, executed only in the offline build container.
 import {readFile,writeFile,readdir,lstat} from 'node:fs/promises';
 import path from 'node:path';
@@ -11,9 +12,9 @@ if(major<5||major>7)throw Error('当前构建适配器支持 Vite 5–7 静态�
 const {build}=await import(pathToFileURL(root+'/node_modules/vite/dist/node/index.js'));
 await build({root,base:'./',plugins:[viteSingleFile({removeViteModuleLoader:true})],build:{outDir:output,emptyOutDir:true,assetsInlineLimit:()=>true,cssCodeSplit:false,sourcemap:false,rollupOptions:{output:{inlineDynamicImports:true}}}});
 const types={'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp','.svg':'image/svg+xml','.ico':'image/x-icon','.avif':'image/avif','.woff':'font/woff','.woff2':'font/woff2','.ttf':'font/ttf','.otf':'font/otf','.mp3':'audio/mpeg','.ogg':'audio/ogg','.wav':'audio/wav','.mp4':'video/mp4','.webm':'video/webm'};
-const files=new Map();
+const files=new Map();let totalBytes=0;
 async function walk(dir,prefix=''){
-  for(const name of await readdir(dir)){const absolute=path.join(dir,name),relative=prefix+name,stat=await lstat(absolute);if(stat.isSymbolicLink())throw Error('构建产物不能包含符号链接。');if(stat.isDirectory())await walk(absolute,relative+'/');else if(stat.isFile()){if(stat.size>8*1024*1024)throw Error('构建产物文件过大。');files.set(relative,await readFile(absolute));}else throw Error('构建产物类型不支持。');}
+  for(const name of await readdir(dir)){const absolute=path.join(dir,name),relative=prefix+name,stat=await lstat(absolute);if(stat.isSymbolicLink())throw Error('构建产物不能包含符号链接。');if(stat.isDirectory())await walk(absolute,relative+'/');else if(stat.isFile()){totalBytes+=stat.size;if(stat.size>LIMITS.file||totalBytes>LIMITS.unpacked||files.size>=LIMITS.files)throw Error('构建产物超过单文件、总大小或文件数量限制。');files.set(relative,await readFile(absolute));}else throw Error('构建产物类型不支持。');}
 }
 await walk(output);
 if(!files.has('index.html'))throw Error('构建没有生成根目录 index.html。');

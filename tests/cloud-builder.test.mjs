@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {allowOutbound,readLimited,safeError,validId,json} from '../cloud-builder/src/protocol.mjs';
+import {HTML_MAX_BYTES} from '../lib/funtrack/limits.mjs';
+import {BuildEngine} from '../cloud-builder/runner/build.mjs';
+import {gzipSync} from 'node:zlib';
 
 const id='88888888-1111-4111-8111-111111111111';
 const source=readFileSync(new URL('../cloud-builder/src/index.mjs',import.meta.url),'utf8')
@@ -23,7 +26,7 @@ function fixture(initial,{claim}={}){
   class DurableObject{constructor(ctx,env){this.ctx=ctx;this.env=env;}}
   class WorkerEntrypoint{}
   const api=async(env,path,body)=>{calls.push(['api',path,body]);if(path==='claim'){if(claim)return claim();return{build:{repository:'owner/game',commitSha:'a'.repeat(40),leaseId:'77777777-1111-4111-8111-111111111111'}};}return{active:true};};
-  const deps={DurableObject,WorkerEntrypoint,validId,readLimited,json,api,enqueue:()=>{},safeError,allowOutbound};
+  const deps={DurableObject,WorkerEntrypoint,validId,readLimited,json,api,enqueue:()=>{},safeError,allowOutbound,HTML_MAX_BYTES};
   const names=Object.keys(deps),{BuildJob}=new Function(...names,source+'\nreturn {BuildJob,worker};')(...names.map(k=>deps[k]));
   return{job:new BuildJob(ctx,{FUNTRACK_BUILD_RUNNER_TOKEN:'platform-secret-is-never-in-container'}),records,calls,rules,container,get alarm(){return alarm;}};
 }
@@ -60,4 +63,20 @@ test('cloud build disables downloads before build, never passes platform token a
   const finished=f.calls.findIndex(x=>x[1]===`${id}/complete`);assert.ok(f.calls.findIndex(x=>x[0]==='destroy')<finished);
   const form=f.calls[finished][2];assert.equal(JSON.parse(form.get('metadata')).execution.provider,'cloudflare-containers');assert.equal(f.container.running,false);assert.equal(f.records.get('task').outcome,'ready');assert.equal(f.alarm,null);
   assert.equal(JSON.stringify(f.records.get('task')).includes(start.env.FUNTRACK_CONTAINER_CONTROL_TOKEN),false);
+});
+test('cloud engine imports an existing standalone entry without installation or repository command execution',async()=>{
+  const html='<!doctype html><html><head><title>Prebuilt</title></head><body>Ready</body></html>',bytes=Buffer.from(html),header=Buffer.alloc(512);
+  header.write('root/dist/index.html');header.write('0000644\0',100);header.write(bytes.length.toString(8).padStart(11,'0')+'\0',124);header.fill(32,148,156);header[156]=48;
+  let sum=0;for(const byte of header)sum+=byte;header.write(sum.toString(8).padStart(6,'0')+'\0 ',148);
+  const archive=gzipSync(Buffer.concat([header,bytes,Buffer.alloc((512-bytes.length%512)%512),Buffer.alloc(1024)])),previous=globalThis.fetch,calls=[];
+  globalThis.fetch=async(url,options)=>{calls.push({url,options});const response=new Response(archive);Object.defineProperty(response,'url',{value:url});return response;};
+  const engine=new BuildEngine();
+  try{
+    const prepared=await engine.prepare({repository:'owner/game',commitSha:'a'.repeat(40)});
+    assert.equal(prepared.metadata.framework,'prebuilt-html');assert.equal(engine.phase,'prepared');
+    const built=await engine.build();assert.equal(engine.phase,'ready');assert.equal(built.metadata.framework,'prebuilt-html');assert.deepEqual(built.metadata.buildCommands,[]);
+    assert.equal(built.metadata.execution.projectScriptsExecuted,false);assert.equal(built.metadata.execution.dependenciesInstalled,false);
+    assert.equal(built.metadata.sourcePath,'dist/index.html');assert(engine.artifact.toString().includes('<title>Prebuilt</title>'));
+    assert.equal(calls.length,1);assert.match(calls[0].url,/^https:\/\/codeload.github.com\/owner\/game\/tar.gz\/[a-f0-9]{40}$/);
+  }finally{globalThis.fetch=previous;clearTimeout(engine.deadline);}
 });

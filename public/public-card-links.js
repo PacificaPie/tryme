@@ -19,7 +19,13 @@ export function publicPlaySignInPath(cardId, workId) {
   const target = snapshotPlayPath(cardId, workId);
   return target ? '/auth/sign-in.html?return_to=' + encodeURIComponent(target) : null;
 }
+export function publicCardRemixSignInPath(cardId) {
+  if (!isCardId(cardId)) return null;
+  return '/auth/sign-in.html?return_to=' + encodeURIComponent('/site.html#/cards/me?templateFrom=' + cardId.toLowerCase());
+}
 export function publicCardBackPath(returnTo) {
+  const remix=typeof returnTo==='string'&&/^\/site(?:\.html)?#\/cards\/me\?([^#]*)$/.exec(returnTo);
+  if(remix){const id=new URLSearchParams(remix[1]).get('templateFrom');return publicCardPath(id);}
   const match=typeof returnTo==='string'&&/^\/site(?:\.html)?#\/work\/([^/?#]+)\?([^#]*)$/.exec(returnTo);
   if(!match||!isPublicWorkId(match[1]))return null;
   const params=new URLSearchParams(match[2]),cardId=params.get('card');
