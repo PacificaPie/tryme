@@ -6,9 +6,9 @@
 
 | 顺序 | 工作 | 验收标准 | 当前状态 |
 | --- | --- | --- | --- |
-| P01 | 确定并取得域名 | 具体域名、注册商、费用和管理账号明确 | Cloudflare 结算页显示 `trymecard.com` 注册一年 $11.17，另计适用税费；默认自动续费 $11.17/年。待用户补充注册人信息并付款，未购买 |
+| P01 | 确定并取得域名 | 具体域名、注册商、费用和管理账号明确 | 已完成：用户购买 `trymecard.com`，Cloudflare 状态 Active；到期日 2027-11-17，自动续费开启，当前续费价 $11.17/年 |
 | P02 | 整合发布基线 | 保留作者主页/导入增强和 main 评论修复，检查、测试、构建通过 | 本分支已整合，见下方验证；待 PR 审阅与合并 |
-| P03 | 配置域名与登录 | HTTPS、站点 origin、Clerk 生产实例、回调与资源绑定一致 | 依赖域名和认证配置；没有用占位生产配置发布 |
+| P03 | 配置域名与登录 | HTTPS、站点 origin、Clerk 生产实例、回调与资源绑定一致 | 进行中：正式 Clerk、DNS、D1/R2 和生产配置已准备；主站/构建器 dry-run 通过，待证书与实际发布 |
 | P04 | 验收正式域名 | 新旧账号方案、上传、作品、版本、名片分享、登录回跳通过 | 待 P03；本地验收不替代正式域名验收 |
 
 ### P02 的变更范围
@@ -53,14 +53,27 @@
 5. 对确定要保留的作品/版本/名片核对引用和文件 hash；新 Clerk 实例的用户不会自动复制，不能把同名或同邮箱视为归属证明。
 6. 用正式域名验证真实登录、上传、旧内容访问、名片/二维码和回跳，再进入功能阶段。
 
-域名购买、生产账号/密钥设置和实际数据迁移尚未完成。Cloudflare CLI 与网页均已登录，域名结算页已交给用户填写注册人信息、核对自动续费并付款；最终金额与注册结果以付款页面及确认信息为准。
+用户已完成域名购买。Cloudflare CLI 与网页均已登录；实际扣款以用户账单为准，不在仓库保存注册人联系方式或付款资料。
 
-### P03 已核对的生产资源
+### P03 已完成的生产准备
 
-- 独立 D1 `funtrack-production`（`106c5ea7-2c17-44ea-93f5-5383168365c0`）存在。只读查询确认迁移账仅有 `0000`–`0006` 共 7 项；正式发布前需核对并应用当前基线的 `0007`–`0014`，不能照搬 staging 的“无待应用迁移”结论。
-- 生产 D1 的作品、作品版本、名片、资料、评论和事件六张表当前均为 0 条。本次仅核对这些表计数，没有读取用户内容或写入数据。
-- Cloudflare R2 列表当前只有 `funtrack-staging`，尚无 production bucket。生产 R2、Worker、构建器和 Clerk production 配置仍需补齐。
-- 旧内容仍按原环境保留；实际复制前需明确范围、身份映射与校验方式。以上查询不代表迁移已执行或正式站已上线。
+- 正式 origin：`https://trymecard.com`。主站配置为 `wrangler.standalone.production.jsonc`；私有构建器配置为 `cloud-builder/wrangler.production.jsonc`。生产 Worker 与构建器分别为 `funtrack-production` 和 `funtrack-builder-production`，不使用 staging 绑定。
+- Clerk production 实例：`ins_3MGNuVSO1Wsq2JmBzyUnucNUTcD`。用户确认首版仅用邮箱验证码，Google 登录后补；生产实例实际查询确认 Google `enabled:false`，邮箱注册和登录均使用 `email_code`，注册必须验证邮箱。
+- Clerk 的 Frontend API、Account Portal、邮件 3 条记录均已在 Cloudflare 以 DNS only CNAME 配置，控制台显示全部 Verified。SSL 证书仍在签发，未把 DNS 验证当作证书完成。
+- 登录/注册路径为 `/auth/sign-in.html`，首页及退出后路径为 `/site`。生产 secret 仅存于 Git 忽略、权限 0600 的 `.env.clerk-production.local`；真实 Clerk Backend API 已接受该密钥，生产用户计数为 0。未将服务端密钥写入源码或 PR。
+- 独立 D1 `funtrack-production`（`106c5ea7-2c17-44ea-93f5-5383168365c0`）原有 `0000`–`0006`。先导出到忽略目录 `.preview/production-launch/before-launch.sql`，核对 SQL 后应用 `0007`–`0014`；复查无待应用迁移。迁移前作品、作品版本、名片、资料、评论、事件六张表均为 0 条。
+- 独立 R2 `funtrack-production` 已创建。旧 staging D1/R2、用户与内容仍按原环境保留；实际复制前需明确范围、身份映射与校验方式。生产新身份不会自动拥有测试站旧作品。
+- 生产配置预检、正式产物构建、产物预检、主站 deploy dry-run、构建器镜像构建与 deploy dry-run 全部通过。配置/认证/构建相关 45 项测试通过。
+
+### 正式发布顺序
+
+1. 完成 PR 审阅与合并，并确认正式 Clerk 证书可用。
+2. 从已合并提交重新构建生产产物。安全设置主站 `CLERK_SECRET_KEY`；首次设置可创建无域名路由的主站 Worker，作为私有构建器回调目标。
+3. 部署独立私有构建器；生成独立生产 runner token，通过 stdin 配置到主站和构建器，不复用或轮换 staging token。
+4. 对生产产物再次预检后发布主站，绑定 `trymecard.com` Custom Domain。记录 Worker/构建器版本与容器镜像。
+5. 正式域名验证首页、邮箱注册/登录/退出/回跳、上传、版本、名片及云构建。真实邮箱验证码步骤由账号持有人完成；不创建虚构的生产身份冒充真人验收。
+
+当前没有发布生产主站或构建器，没有复制旧业务数据、改写 owner 或迁移旧账号。PR 通过与 dry-run 成功不等于正式上线验收完成。
 
 ## 第二里程碑：完善网页功能
 
@@ -82,4 +95,4 @@ P13 由王、孙以真实作品完成使用测试，Pacifica 修复阻塞；P14 
 - [Cloudflare Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/)
 - [Clerk production 部署](https://clerk.com/docs/guides/development/deployment/production)
 
-此文件记录计划与已观察到的结果；不表示域名已购、正式站已部署或真人全流程验收已完成。
+此文件记录计划与已观察到的结果；域名已购买，但正式站部署与真人全流程验收尚未完成。

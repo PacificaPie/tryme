@@ -1,0 +1,58 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "funtrack-production",
+  "account_id": "26ecbb83a9773e88121606953aeca69f",
+  "main": "./worker/standalone.ts",
+  "compatibility_date": "2026-05-15",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "workers_dev": false,
+  "preview_urls": false,
+  "vars": {
+    "APP_ORIGIN": "https://trymecard.com",
+    "FUNTRACK_BUILD_MODE": "cloud",
+    "CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsudHJ5bWVjYXJkLmNvbSQ",
+    "FUNTRACK_AUTO_COVER_ENABLED": "1"
+  },
+  "secrets": {
+    "required": [
+      "CLERK_SECRET_KEY"
+    ]
+  },
+  "services": [
+    {
+      "binding": "FUNTRACK_CLOUD_BUILDER",
+      "service": "funtrack-builder-production"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "funtrack-production",
+      "database_id": "106c5ea7-2c17-44ea-93f5-5383168365c0",
+      "migrations_dir": "drizzle",
+      "migrations_table": "d1_migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      "bucket_name": "funtrack-production"
+    }
+  ],
+  "browser": {
+    "binding": "BROWSER"
+  },
+  "triggers": {
+    "crons": [
+      "* * * * *"
+    ]
+  },
+  "routes": [
+    {
+      "pattern": "trymecard.com",
+      "custom_domain": true
+    }
+  ]
+}
