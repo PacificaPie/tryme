@@ -1,0 +1,4 @@
+.site-header .brand,.auth-brand,.information-brand{display:inline-flex;align-items:center;gap:9px;flex-shrink:0}
+.tryme-brand-mark{display:block;width:29px;height:29px;flex:none}
+:root[data-theme=dark] .tryme-brand-mark{filter:brightness(0) invert(1)}
+@media(max-width:700px){.tryme-brand-mark{width:25px;height:25px}.site-header .brand,.auth-brand,.information-brand{gap:6px}}
