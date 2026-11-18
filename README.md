@@ -1,4 +1,4 @@
-# Funtrack
+# TryMe
 
 新合作者请先看 [协作开发交接](docs/collaboration-handoff.md)：包含环境安装、目录分工、分支/PR、迁移与名片快照契约，以及已完成和待验收的边界。当前独立站使用 Cloudflare Worker + D1 + R2 + Clerk；配置见 [独立部署](docs/independent-deployment.md)，本轮分享入口见 [公开名片方案](docs/public-card-sharing-plan.md)。
 

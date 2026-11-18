@@ -24,7 +24,7 @@ const link = (label, href, secondary = false) => `<a class="auth-button${seconda
 function render() {
   const english = getLocale() === 'en';
   document.documentElement.lang = getLocale();
-  document.title = `${t(action === 'sign-out' ? '退出登录' : '登录')} · Funtrack`;
+  document.title = `${t(action === 'sign-out' ? '退出登录' : '登录')} · TryMe`;
   localeButton.textContent = english ? '中文' : 'EN';
   localeButton.setAttribute('aria-label', english ? '切换到中文' : 'Switch to English');
   localeButton.disabled = signingOut;

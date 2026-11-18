@@ -8,7 +8,7 @@ registerMessages({
   '这张名片不存在或已不可访问。':'This card does not exist or is no longer available.',
   '连接暂时中断，请重试。':'The connection was interrupted. Please try again.',
   '重试':'Retry', '关闭作品':'Close work', '登录后试玩':'Sign in to play',
-  '加入 Funtrack':'Join Funtrack', '查看作品':'View work', '名片中的版本':'Version saved in this card',
+  '加入 TryMe':'Join TryMe', '查看作品':'View work', '名片中的版本':'Version saved in this card',
   '正在加载 3D 名片…':'Loading 3D card…', '重新加载 3D':'Reload 3D',
   '3D 名片加载超时，请重试。':'The 3D card took too long to load. Try again.',
   '当前浏览器暂未显示 3D，作品列表仍可查看。':'3D is unavailable in this browser. Your works are still available below.',
@@ -65,9 +65,9 @@ function mountPublicPage(root) {
   }
   const payload=()=>({locale:getLocale(),author:{id:'public-card:'+card.id,name:card.name,bio:card.bio,avatarUrl:card.avatarUrl||'',headline:card.headline,signature:card.signature,website:website(card.website),backStyle:card.backStyle},works:card.works.map(work=>({id:work.id,name:work.name,desc:work.desc,cover:publicCoverPath(work.coverUrl,card.id,work.id),kind:work.source==='url'?'外链作品':'网页游戏',version:work.version})),...view});
   function render() {
-    bridge?.dispose();bridge=null;syncLocale();document.title=card.name+' · Funtrack';
+    bridge?.dispose();bridge=null;syncLocale();document.title=card.name+' · TryMe';
     const template=CARD_TEMPLATES.find(item=>item.id===card.template)||CARD_TEMPLATES[0];
-    root.innerHTML=`<h1 class="public-card-title">${escape(card.name)}</h1>${renderPublicCard(card)}<section class="public-card-remix"><div><h2>${escape(t(template.name))}</h2><p>${escape(t(template.description))}</p></div><a class="button" href="${escape(publicCardRemixSignInPath(card.id))}">${t('用同款制作')} ↗</a></section><footer class="public-card-footer"><a href="${joinPath}">${t('加入 Funtrack')} <span aria-hidden="true">↗</span></a></footer><dialog class="public-work-dialog" aria-labelledby="public-work-title"></dialog>`;
+    root.innerHTML=`<h1 class="public-card-title">${escape(card.name)}</h1>${renderPublicCard(card)}<section class="public-card-remix"><div><h2>${escape(t(template.name))}</h2><p>${escape(t(template.description))}</p></div><a class="button" href="${escape(publicCardRemixSignInPath(card.id))}">${t('用同款制作')} ↗</a></section><footer class="public-card-footer"><a href="${joinPath}">${t('加入 TryMe')} <span aria-hidden="true">↗</span></a></footer><dialog class="public-work-dialog" aria-labelledby="public-work-title"></dialog>`;
     const modal=dialog();modal.addEventListener('cancel',event=>{event.preventDefault();closeWork();});modal.addEventListener('click',event=>{if(event.target!==modal)return;const rect=modal.getBoundingClientRect();if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)closeWork();});
     const frame=root.querySelector('#public-gallery-frame');
     if(frame){

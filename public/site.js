@@ -709,7 +709,7 @@ document.addEventListener('click',async event=>{
 function renderChrome(){
   document.documentElement.lang=getLocale();
   $('.skip').textContent=t('跳至内容');
-  $('.brand').setAttribute('aria-label',t('Funtrack 首页'));
+  $('.brand').setAttribute('aria-label',t('TryMe 首页'));
   $('.site-header nav').setAttribute('aria-label',t('主导航'));
   $('[data-nav="studio"]').textContent=t('创作中心');
   $('[data-nav="cards"]').textContent=t('名片');

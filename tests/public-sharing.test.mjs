@@ -74,7 +74,7 @@ test('public sharing opens no games, sessions, events, account data, lists or mu
 test('share HTML serves escaped card-specific OG metadata and no-script content without authentication or telemetry',async t=>{
   const f=fixture(t),{work}=await f.publish({cover:true}),{card}=await save(f,work,'filmstrip',{name:'Rain <script>alert(1)</script>',bio:'A "quiet" game & room'}),sharing=service(f);
   const page=await sharing.page(anonymous('/c/'+card.id),card.id);assert.equal(page.status,200);const markup=await page.text();
-  assert(markup.includes('<title>Rain &lt;script&gt;alert(1)&lt;/script&gt; · Funtrack</title>'));
+  assert(markup.includes('<title>Rain &lt;script&gt;alert(1)&lt;/script&gt; · TryMe</title>'));
   assert(markup.includes('<link rel="canonical" href="https://share.funtrack.test/c/'+card.id+'">'));
   assert(markup.includes('property="og:image" content="https://share.funtrack.test/api/public/cards/'+card.id+'/works/'+work.id+'/cover"'));
   assert(markup.includes('A &quot;quiet&quot; game &amp; room'));assert(!markup.includes('<script>alert(1)</script>'));

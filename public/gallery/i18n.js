@@ -15,7 +15,7 @@ const chrome={
 const initial={gallery:{'#gallery-title':'卡中展厅','#gallery-status':'等待作品','#toggle':'展开展厅 ↗','#play-current':'试玩 ↗','#fallback-title':'正在准备名片','#summary-label':'作品与创作者'},collection:{'#fallback-title':'正在准备作品'}};
 export function applyGalleryLocale(kind,locale,{first=false}={}){
  if(locale==='en'||locale==='zh-CN')setLocale(locale);
- document.documentElement.lang=getLocale();document.title=kind==='gallery'?'Funtrack · '+t('卡中展厅'):t('点亮收藏');
+ document.documentElement.lang=getLocale();document.title=kind==='gallery'?'TryMe · '+t('卡中展厅'):t('点亮收藏');
  for(const [selector,attributes] of Object.entries({...shared,...chrome[kind]})){
   const element=document.querySelector(selector);if(!element)continue;
   for(const [attribute,message] of Object.entries(attributes)){if(attribute==='text')element.textContent=t(message);else element.setAttribute(attribute,t(message));}

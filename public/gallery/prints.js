@@ -45,7 +45,7 @@ function front(p,P,thumbs,caps,portrait){
   function X(x){return(x+W/2)*P;}function Y(y){return(H/2-y)*P;}
   g.fillStyle=INK;g.fillRect(0,0,c.width,c.height);g.textBaseline='alphabetic';g.fillStyle=BONE;
   g.font='500 '+(.056*P)+'px '+MONO;g.textAlign='left';g.fillText('CREATOR CARD',X(-FX),Y(2.075));
-  g.textAlign='right';g.fillText('FUNTRACK',X(FX),Y(2.075));g.fillRect(X(-FX),Y(1.99),2*FX*P,Math.max(1,.004*P));
+  g.textAlign='right';g.fillText('TRYME',X(FX),Y(2.075));g.fillRect(X(-FX),Y(1.99),2*FX*P,Math.max(1,.004*P));
   g.textAlign='left';SLOTS.forEach(function(q,i){
     if(thumbs&&thumbs[i])g.drawImage(thumbs[i],X(q.x-q.w/2),Y(q.y+q.h/2),q.w*P,q.h*P);
     g.fillStyle=BONE;fitText(g,('0'+(OFFSET+i+1)).slice(-2)+'  '+(caps[i]||''),X(q.x-q.w/2),Y(q.y-q.h/2-.075),q.w*P,.038*P,MONO,'500');
@@ -78,7 +78,7 @@ function back(p,P,hero){
   var grad=g.createRadialGradient(2.8*P,.3*P,.1*P,1.8*P,1.8*P,3*P);grad.addColorStop(0,palette.accent);grad.addColorStop(1,palette.bg);g.globalAlpha=.5;g.fillStyle=grad;g.fillRect(0,0,c.width,c.height);g.globalAlpha=1;
   // Broad embossed rings echo the collaborator's spotlight card back.
   g.strokeStyle=palette.fg;g.globalAlpha=.10;g.lineWidth=.012*P;for(var i=0;i<4;i++){g.beginPath();g.arc(2.75*P,.20*P,(.8+i*.30)*P,0,TAU);g.stroke();}g.globalAlpha=1;
-  g.textAlign='left';g.textBaseline='alphabetic';g.fillStyle=palette.muted;g.font='500 '+(.055*P)+'px '+MONO;g.fillText('FUNTRACK / CREATOR',.23*P,.25*P);
+  g.textAlign='left';g.textBaseline='alphabetic';g.fillStyle=palette.muted;g.font='500 '+(.055*P)+'px '+MONO;g.fillText('TRYME / CREATOR',.23*P,.25*P);
   g.fillStyle=palette.fg;fitText(g,p.n,.23*P,.65*P,2.54*P,.27*P,SERIF,'700');
   g.fillStyle=palette.muted;g.font='400 '+(.092*P)+'px '+DISP;lines(g,p.headline||p.h,.23*P,.86*P,2.54*P,.12*P,2);
   // The representative work is real selected material, not an invented QR or credential.
@@ -131,7 +131,7 @@ function floorPrint(P){
   g.textAlign='center';g.fillText('FOLD  B',X(0.72),Y(Y1-0.085));
   g.save();g.translate(X(-FX+0.085),Y(0.1));g.rotate(-Math.PI/2);g.fillText('FOLD  A',0,0);g.restore();
   g.save();g.translate(X(FX-0.085),Y(0.6));g.rotate(Math.PI/2);g.fillText('FOLD  C',0,0);g.restore();
-  g.fillText('FUNTRACK  /  FLOOR  /  1 : 1',X(0),Y(Y0+0.075));sp(g,0);
+  g.fillText('TRYME  /  FLOOR  /  1 : 1',X(0),Y(Y0+0.075));sp(g,0);
   return c;
 }
 
@@ -141,7 +141,7 @@ function backOut(len,h,P){
   gr.addColorStop(0,tc(0.04));gr.addColorStop(1,tc(0.46));g.fillStyle=gr;g.fillRect(0,0,c.width,c.height);
   g.strokeStyle=BONE;g.lineWidth=Math.max(1,0.005*P);g.strokeRect(0.06*P,0.06*P,c.width-0.12*P,c.height-0.12*P);
   g.fillStyle=BONE;g.textBaseline='alphabetic';g.font='500 '+(0.05*P)+'px '+MONO;sp(g,0.004*P);
-  g.textAlign='left';g.fillText('B  /  BACK WALL',0.12*P,0.17*P);g.textAlign='right';g.fillText('FUNTRACK',c.width-0.12*P,0.17*P);
+  g.textAlign='left';g.fillText('B  /  BACK WALL',0.12*P,0.17*P);g.textAlign='right';g.fillText('TRYME',c.width-0.12*P,0.17*P);
   g.textAlign='left';g.fillText('FOLD UP',0.12*P,c.height-0.12*P);sp(g,0);
   return c;
 }

@@ -217,7 +217,7 @@ if (!game) {
   ui.cover.src = new URL(`../assets/${kind}.svg`, import.meta.url).href;
   ui.stage.hidden = false;
   ui.toolbar.hidden = false;
-  document.title = `${game.title} · Funtrack`;
+  document.title = `${game.title} · TryMe`;
   const options = { signal: listeners.signal };
   ui.start.addEventListener('click', startSession, options);
   ui.restart.addEventListener('click', startSession, options);

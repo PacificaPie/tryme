@@ -41,7 +41,7 @@ test('all saved-card reads and idempotent replies resolve current profile identi
   assert.equal(f.database.prepare('SELECT snapshot_json FROM ft_cards WHERE id=?').get(id).snapshot_json,stored);
   const page=await sharing(f).page(new Request('https://site.test/c/'+id),id),html=await page.text();
   assert.equal(page.headers.get('cache-control'),'no-store');
-  assert(html.includes('<title>Current &lt;name&gt; · Funtrack</title>'));
+  assert(html.includes('<title>Current &lt;name&gt; · TryMe</title>'));
   assert(html.includes('property="og:description" content="Current &quot;bio&quot; &amp; details"'));
   assert(html.includes('<noscript><article><h1>Current &lt;name&gt;</h1>'));
   assert(!html.includes('Old snapshot'));assert(!html.includes('Different person'));
