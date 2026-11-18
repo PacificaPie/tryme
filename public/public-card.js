@@ -27,8 +27,8 @@ export function renderPublicCard(card, origin = globalThis.location?.origin) {
   const profile={headline:card.headline||'',signature:card.signature||'',website:website(card.website),backStyle:card.backStyle||'ink'};
   const safeCover=value=>{const work=card.works.find(item=>item.coverUrl===value);return work?publicCoverPath(value,card.id,work.id,origin):'';};
   const workHref=work=>'#work='+encodeURIComponent(work.id);
-  if (['fold','collection'].includes(card.template)) {
-    return `<section class="card-preview public-gallery"><div class="gallery-load-status" role="status" aria-live="polite">${spinner()}<span>${t('正在加载 3D 名片…')}</span></div><iframe id="public-gallery-frame" class="gallery-frame" src="/${card.template==='collection'?'collection':'gallery'}/?lang=${getLocale()}" title="${t(card.template==='collection'?'点亮收藏':'卡中展厅')}" loading="eager" aria-busy="true"></iframe></section>`;
+  if (['fold','collection','city'].includes(card.template)) {
+    return `<section class="card-preview public-gallery"><div class="gallery-load-status" role="status" aria-live="polite">${spinner()}<span>${t('正在加载 3D 名片…')}</span></div><iframe id="public-gallery-frame" class="gallery-frame" src="/${card.template==='city'?'lit-city':card.template==='collection'?'collection':'gallery'}/?lang=${getLocale()}" title="${t(card.template==='city'?'灯城名片':card.template==='collection'?'点亮收藏':'卡中展厅')}" loading="eager" aria-busy="true"></iframe></section>`;
   }
   if (['editorial','filmstrip'].includes(card.template)) return renderPortfolioCard(card,{profile,safeCover,workHref,from:'/card/'+card.id,cardId:card.id});
   return `<div class="card-preview"><article class="white-card"><header>${card.avatarUrl?avatarMarkup(card,{className:'card-profile-avatar'}):''}<h2>${escape(card.name)}</h2>${profile.headline?`<p class="card-headline">${escape(profile.headline)}</p>`:''}${card.bio?`<p class="bio">${escape(card.bio)}</p>`:''}${profile.website?`<a class="profile-website" href="${escape(profile.website)}" target="_blank" rel="noopener noreferrer">${escape(new URL(profile.website).hostname)} ↗</a>`:''}</header><div class="work-grid">${card.works.map(work=>{

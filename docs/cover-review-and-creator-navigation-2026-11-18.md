@@ -37,3 +37,10 @@ Cloudflare Browser Run 会话无用户登录态、无平台凭据，不自动点
 - 《隔窗有雨》演示录制：按钮实际为「走進公寓 ↗」，当前白名单未命中。建议确定性脚本进入公寓、查看信箱/密码轮、返回；避免猜测操作和剧透。当前未实现演示脚本，不将静态首屏误报为玩法演示。
 
 参考：[Browser Run guardrails](https://developers.cloudflare.com/browser-run/features/guardrails/)。
+# Production acceptance
+
+PR #14 merged as `6a040569271c7d758bd4c3c8cc1c0e23bd1d7c75`; migration 0016 applied. Worker version `a5d875f3-6ca5-481d-8f82-9dd29b13c345` deployed to trymecard.com.
+
+- Public Feed visually verified with natural cover ratios and the new + menu.
+- Real production Orbit HTML capture reached the private candidate stage, displaying use / retake / wait longer / upload controls. It was deliberately left for confirmation; the existing public cover remains in use.
+- At the user's explicit request, applied the cloud-verified Bingo Hero JPEG (69,496 bytes, 1200×750; readiness after ~8.1 seconds) to existing work `7cdc2587-38d4-452a-81a7-e18389b818aa` using operator D1/R2 access, not an impersonated owner session. The new immutable metadata was written with revision/current metadata/current version guards; revision moved from 1 to 2. Readback preserved author `clerk:user_3MI1u6XqSwIt2vD7s6nWCFj2Gxo` and version `59af94b6-c62c-476c-9270-6c90d3a4a294`. The audit actor is `operator:pacifica:codex-user-approved-bingo-cover`. Prior metadata and saved cards remain intact. Production Feed shows the completed Hero.

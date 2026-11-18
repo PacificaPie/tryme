@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>灯城名片 · TryMe</title><link rel="stylesheet" href="./style.css"></head>
+<body><main id="shell">
+  <header class="toolbar"><span id="edition">灯城名片</span><button id="flip" type="button">翻到背面 ↻</button></header>
+  <div id="card" class="card">
+    <section id="front" class="face front" aria-label="作品正面"><div id="stage"><canvas id="canvas" tabindex="0" aria-label="作品城市"></canvas><p id="fallback" hidden></p><p id="hover-title" aria-live="polite"></p></div><div class="front-foot"><span id="count"></span><span id="hint">轻触作品，走进它的世界 ↗</span></div></section>
+    <section id="back" class="face back" aria-label="身份背面" hidden><div class="back-top"><span>TRYME / CREATOR</span><span aria-hidden="true">✦</span></div><div class="identity"><img id="avatar" alt="" hidden><h1 id="name"></h1><p id="headline"></p><p id="bio"></p></div><footer class="back-footer"><p id="signature"></p><a id="website" target="_blank" rel="noopener noreferrer" hidden></a></footer></section>
+  </div>
+  <nav id="scene-controls" class="scene-controls" aria-label="城市视图"><button id="city" type="button" aria-pressed="false">展开城市</button><button id="replay" type="button">播放开场</button><button id="skip" type="button">跳过动画</button><span id="pager" hidden><button id="prev" type="button" aria-label="上一组作品">←</button><span id="page-label"></span><button id="next" type="button" aria-label="下一组作品">→</button></span></nav>
+  <details id="details"><summary id="list-title">作品目录</summary><ul id="works"></ul></details>
+  <p id="status" class="sr" role="status"></p>
+</main><script src="/gallery/vendor/three.min.js"></script><script src="./config.js"></script><script src="./shaders.js"></script><script src="./core.js"></script><script src="./kit.js"></script><script src="./plan.js"></script><script src="./scene.js"></script><script src="./camera.js"></script><script src="./player.js"></script><script type="module" src="./controller.js"></script></body></html>

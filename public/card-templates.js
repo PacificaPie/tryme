@@ -6,6 +6,7 @@ registerMessages({
   '制作步骤': 'Card steps', '选作品': 'Choose works', '选模板': 'Choose a layout', '生成名片': 'Generate card',
   '作品顺序': 'Work order', '调整作品顺序': 'Arrange works', '已选 {count} 件': '{count} selected',
   '你的名片': 'Your card', '返回名片': 'Back to cards', '保存并分享': 'Save and share',
+  '灯城名片':'Lit city','作品点亮一座城，翻面认识你':'A city of works, your identity on the back',
   '作品手记': 'Field notes', '代表作与创作故事': 'A lead work and its story',
   '放映册': 'Screening room', '逐件看作品': 'One work at a time',
   '上一件作品': 'Previous work', '下一件作品': 'Next work', '作品目录': 'Work index',
@@ -16,6 +17,7 @@ registerMessages({
 export const CARD_TEMPLATES = Object.freeze([
   { id:'wall', name:'白墙画展', description:'平铺浏览作品' },
   { id:'fold', name:'卡中展厅', description:'展开名片，进入展厅' },
+  { id:'city', name:'灯城名片', description:'作品点亮一座城，翻面认识你' },
   { id:'collection', name:'点亮收藏', description:'桌面卡片，轻触试玩' },
   { id:'editorial', name:'作品手记', description:'代表作与创作故事' },
   { id:'filmstrip', name:'放映册', description:'逐件看作品' },

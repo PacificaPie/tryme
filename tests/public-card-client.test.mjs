@@ -34,12 +34,12 @@ test('public covers never fall back to private media or arbitrary same-origin re
   for(const path of ['/media/'+workId,'/game/'+workId,cover+'?redirect=1','https://evil.test'+cover,cover.replace(workId,cardId)])assert.equal(publicCoverPath(path,cardId,workId,origin),'',path);
 });
 
-test('all five real templates render escaped creator content and only public cover/renderer resources',()=>{
-  for(const template of ['wall','editorial','filmstrip','fold','collection']){
+test('all real templates render escaped creator content and only public cover/renderer resources',()=>{
+  for(const template of ['wall','editorial','filmstrip','fold','collection','city']){
     const html=renderPublicCard({...card,template},origin);
     assert.ok(html.length>100);assert.doesNotMatch(html,/<script|<img src=x|href="javascript:|\/game\/|\/media\//);
-    if(['fold','collection'].includes(template)){
-      assert.match(html,new RegExp(`src="/${template==='fold'?'gallery':'collection'}/\\?lang=`));assert.match(html,/public-gallery-frame/);
+    if(['fold','collection','city'].includes(template)){
+      assert.match(html,new RegExp(`src="/${template==='city'?'lit-city':template==='fold'?'gallery':'collection'}/\\?lang=`));assert.match(html,/public-gallery-frame/);
     }else{assert.ok(html.includes(cover));assert.ok(html.includes('&lt;script&gt;'));assert.ok(html.includes('#work='+workId));}
   }
   assert.doesNotMatch(renderPublicCard({...card,works:[{...card.works[0],coverUrl:'/api/me'}]},origin),/src="\/api\/me"/);

@@ -31,8 +31,8 @@ test('the actual templates render interactive layouts with local sample destinat
     const html=renderTemplateSample(createTemplateSample(template,{name:'<script>bad</script>',avatarUrl:'/avatars/moon.svg'}));
     assert.doesNotMatch(html,/<script>|\/api\/|\/game\/|#\/work\//);
     for(const sample of ['arc-hoops','tiles','memory-tide'])assert(html.includes('/examples/'+sample+'.png'));
-    if(['fold','collection'].includes(template.id)){
-      assert(html.includes('data-template-frame'));assert(html.includes(`src="/${template.id==='fold'?'gallery':'collection'}/?lang=`));assert(html.includes('template-experience-fallback'));
+    if(['fold','collection','city'].includes(template.id)){
+      assert(html.includes('data-template-frame'));assert(html.includes(`src="/${template.id==='city'?'lit-city':template.id==='fold'?'gallery':'collection'}/?lang=`));assert(html.includes('template-experience-fallback'));
     }else{
       assert(html.includes('&lt;script&gt;'));assert(!html.includes('<iframe'));
       assert(html.includes(`href="#/cards/templates/${template.id}?sample=arc-hoops"`));
@@ -99,7 +99,7 @@ test('filmstrip keeps the real portfolio controller and intercepts both cover an
 });
 
 test('3D samples send only demonstration data, validate frame messages, and keep a usable retry fallback',async()=>{
-  for(const template of ['fold','collection']){
+  for(const template of ['fold','collection','city']){
     const f=fixture(template),bridge=f.bridges[0],frame=f.root.querySelector('[data-template-frame]');frame.contentWindow={};
     assert.equal(f.portfolios.length,0);const payload=bridge.options.payload();
     assert.equal(payload.author.id,'template-sample');assert.equal(payload.author.avatarUrl,'/avatars/moon.svg');assert.equal(payload.works.length,3);
