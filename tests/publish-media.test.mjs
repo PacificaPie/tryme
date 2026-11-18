@@ -80,3 +80,9 @@ test('manual cover, range requests, rollback and URL video constraints',async t=
  const u=await draft(f,{source:'url'});await assert.rejects(()=>capture(f,s,u,'video'),e=>e.code==='VIDEO_UNSUPPORTED');
  assert.equal(f.count('ft_play_sessions'),0);assert.equal(f.count('ft_events'),0);
 });
+
+test('damaged temporary media cannot become a public permanent resource',async t=>{
+ const f=fixture(t,{prepublish:true}),d=await draft(f),c=await capture(f,service(f),d);
+ const row=f.database.prepare('SELECT object_key FROM ft_publish_captures WHERE id=?').get(c.id);f.objects.set(row.object_key,new Uint8Array([1]));
+ assert.equal((await f.publish({extra:{...skip(d),coverChoice:'candidate',coverCaptureId:c.id}})).error.code,'DRAFT_CHANGED');assert.equal(f.count('ft_works'),0);
+});
