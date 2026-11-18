@@ -4,10 +4,15 @@ const imageRatios = new Map();
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 function hash(value) { let result = 2166136261; for (const character of String(value)) result = Math.imul(result ^ character.codePointAt(0), 16777619); return result >>> 0; }
 
-export function feedColumns(width) {
+export function feedColumns(width, itemCount = Infinity) {
   const gap = width < 600 ? 12 : 20;
-  const columns = width < 320 ? 1 : width < 600 ? 2 : clamp(Math.floor((width + gap) / 250), 2, 5);
-  return { columns, gap, rowGap: width < 600 ? 20 : 25, columnWidth: Math.max(0, (width - gap * (columns - 1)) / columns) };
+  const capacity = width < 320 ? 1 : width < 600 ? 2 : clamp(Math.floor((width + gap) / 280), 2, 4);
+  const columns = Math.min(capacity, Math.max(1, itemCount));
+  // Sparse results should not reserve empty columns or grow one card into a
+  // full-width hero. Center the occupied columns, with a readable size ceiling.
+  const columnWidth = Math.max(0, Math.min(400, (width - gap * (columns - 1)) / columns));
+  const offset = Math.max(0, (width - columnWidth * columns - gap * (columns - 1)) / 2);
+  return { columns, gap, rowGap: width < 600 ? 20 : 25, columnWidth, offset };
 }
 export function feedCoverRatio(id, naturalRatio = null) {
   const variation = hash(id) % 3;
@@ -16,12 +21,12 @@ export function feedCoverRatio(id, naturalRatio = null) {
   // with contain, or cuts off titles/controls with cover. Masonry packs the result.
   return naturalRatio;
 }
-export function shortestColumnLayout(heights, width, options = feedColumns(width)) {
-  const { columns, gap, rowGap, columnWidth } = options, bottoms = Array(columns).fill(0);
+export function shortestColumnLayout(heights, width, options = feedColumns(width, heights.length)) {
+  const { columns, gap, rowGap, columnWidth, offset = 0 } = options, bottoms = Array(columns).fill(0);
   const items = heights.map(height => {
     let column = 0;
     for (let i = 1; i < columns; i++) if (bottoms[i] < bottoms[column]) column = i;
-    const item = { x: column * (columnWidth + gap), y: bottoms[column], width: columnWidth, column };
+    const item = { x: offset + column * (columnWidth + gap), y: bottoms[column], width: columnWidth, column };
     bottoms[column] += Math.max(0, Number(height) || 0) + rowGap;
     return item;
   });
@@ -67,7 +72,7 @@ export function mountFeedLayout(grid, { host = grid } = {}) {
     const width = grid.clientWidth;
     if (!width) { measuring = false; return; }
     const before = grid.dataset.feedLayout === 'ready' ? anchor() : null;
-    const options = feedColumns(width), items = [...grid.children]; lastWidth = width;
+    const items = [...grid.children], options = feedColumns(width, items.length); lastWidth = width;
     grid.dataset.feedLayout = 'ready';
     for (const item of items) {
       setCover(item); item.style.width = `${options.columnWidth}px`;
