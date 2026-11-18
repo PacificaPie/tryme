@@ -52,3 +52,16 @@ test('removing the route host disconnects observers and cancels queued layout wo
     assert(observers.every(observer=>observer.disconnected));assert.deepEqual(cancelled,[17]);
   }finally{for(const [key,descriptor] of saved){if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key];}}
 });
+
+test('sparse results use occupied columns and center the group without oversized cards',()=>{
+  for(const width of [350,590,720,1180,1450])for(const count of [1,2,3]){
+    const layout=shortestColumnLayout(Array(count).fill(220),width);
+    assert(layout.columns<=count);assert(layout.columnWidth<=400);
+    const left=Math.min(...layout.items.map(item=>item.x));
+    const right=Math.max(...layout.items.map(item=>item.x+item.width));
+    assert(Math.abs(left-(width-right))<0.001,'occupied columns have equal side margins');
+  }
+  const three=shortestColumnLayout([260,260,260],1180);
+  assert.equal(three.columns,3);assert.equal(three.columnWidth,380);
+  assert.deepEqual(three.items.map(item=>item.x),[0,400,800]);
+});
