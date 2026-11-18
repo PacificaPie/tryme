@@ -69,6 +69,26 @@ test('failed summary refresh keeps an existing unread badge and never invents an
   assert.equal(model.state.summaryError,true);assert.equal(model.state.hasUnread,true);assert.equal(model.state.items.length,1);model.dispose();
 });
 
+test('older summary cannot erase a newer list badge or report a stale refresh failure',async()=>{
+  for(const fail of [false,true]){
+    const slow=deferred();
+    const model=createNotificationState({owner:'owner',api:async path=>path.includes('/summary')?slow.promise:data([row(2)])});
+    const old=model.refreshSummary(true);await model.load();
+    if(fail)slow.reject(Error('offline'));else slow.resolve(data([],{snapshot:1,hasUnread:false}));
+    await old;assert.equal(model.state.hasUnread,true);assert.equal(model.state.summaryError,false);assert.equal(model.state.items[0].unread,true);model.dispose();
+  }
+});
+
+test('older list cannot replace a newer summary, including read changes without a new event sequence',async()=>{
+  for(const hasUnread of [false,true]){
+    const slow=deferred();
+    const model=createNotificationState({owner:'owner',api:async path=>path.includes('/summary')?data([],{snapshot:2,hasUnread}):slow.promise});
+    const old=model.load();await model.refreshSummary(true);
+    slow.resolve(data([{...row(2),unread:!hasUnread}],{snapshot:2,hasUnread:!hasUnread}));await old;
+    assert.equal(model.state.hasUnread,hasUnread);assert.equal(model.state.loaded,true);model.dispose();
+  }
+});
+
 test('group member pagination is bounded by the API, deduplicated, and reset on refresh',async()=>{
   let members=0;
   const model=createNotificationState({owner:'owner',api:async path=>path.includes('/actors')?{recipientId:'owner',id:1,actors:++members===1?[{id:'a'},{id:'b'}]:[{id:'b'},{id:'c'}],nextCursor:members===1?'2':null}:data()});
