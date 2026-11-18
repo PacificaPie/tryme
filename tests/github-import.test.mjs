@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {resolveGithubHTML} from '../lib/funtrack/github-import.mjs';
 import {ApiError} from '../lib/funtrack/rules.mjs';
 import {HTML_MAX_BYTES} from '../lib/funtrack/limits.mjs';
@@ -143,7 +144,7 @@ test('reuses UTF-8 and HTML document validation',async()=>{
 });
 
 test('rejects external or relative markup, CSS and script dependencies',async()=>{
-  const cases=['<script src="./game.js"></script>','<link rel="stylesheet" href="https://cdn.example/style.css">','<img src="./sprite.png">','<audio src="sound.mp3"></audio>','<svg><image href="https://example.org/a.svg" /></svg>','<img srcset="data:image/png;base64,AAAA 1x, other.png 2x">','<style>@import "./style.css";</style>','<style>body{background:url(./image.png)}</style>','<div style="background:url(https://example.org/x)"></div>','<script>import x from "./game.js";</script>','<script>import("./game.js");</script>','<script>fetch("./level.json")</script>','<script>fetch(levelURL)</script>','<script>image.src="./sprite.png"</script>','<script>importScripts("data:text/javascript,", "./second.js")</script>','<base href="https://example.org">'];
+  const cases=['<script src="./game.js"></script>','<link rel="stylesheet" href="https://cdn.example/style.css">','<img src="./sprite.png">','<audio src="sound.mp3"></audio>','<svg><image href="https://example.org/a.svg" /></svg>','<img srcset="data:image/png;base64,AAAA 1x, other.png 2x">','<style>@import "./style.css";</style>','<style>body{background:url(./image.png)}</style>','<div style="background:url(https://example.org/x)"></div>','<script>import x from "./game.js";</script>','<script>import("./game.js");</script>','<script>fetch("./level.json")</script>','<script>image.src="./sprite.png"</script>','<script>importScripts("data:text/javascript,", "./second.js")</script>','<base href="https://example.org">'];
   for(const content of cases)await assert.rejects(resolveGithubHTML(blob,fixture({source:'<!doctype html><html><body>'+content+'</body></html>'})),errorCode('GITHUB_MULTIFILE_PROJECT'),content);
 });
 
@@ -177,4 +178,11 @@ test('GitHub HTML imports accept above 1 MiB and exactly 16 MiB, measuring UTF-8
 });
 test('anonymous access denial has a distinct code and does not imply a repository is private',async()=>{
   for(const status of [401,403])await assert.rejects(resolveGithubHTML(blob,fixture({override:()=>new Response('',{status})})),errorCode('GITHUB_INACCESSIBLE'));
+});
+
+
+test('direct GitHub HTML accepts retained loaders without rewriting the game',async()=>{
+  const source=readFileSync(new URL('./fixtures/prebuilt-loader.html',import.meta.url),'utf8');
+  const result=await resolveGithubHTML(blob,fixture({source}));
+  assert.equal(result.html,source);assert.equal(result.commitSha,sha);
 });

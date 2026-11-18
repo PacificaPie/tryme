@@ -65,7 +65,7 @@ test('cloud build disables downloads before build, never passes platform token a
   assert.equal(JSON.stringify(f.records.get('task')).includes(start.env.FUNTRACK_CONTAINER_CONTROL_TOKEN),false);
 });
 test('cloud engine imports an existing standalone entry without installation or repository command execution',async()=>{
-  const html='<!doctype html><html><head><title>Prebuilt</title></head><body>Ready</body></html>',bytes=Buffer.from(html),header=Buffer.alloc(512);
+  const html=readFileSync(new URL('./fixtures/prebuilt-loader.html',import.meta.url),'utf8'),bytes=Buffer.from(html),header=Buffer.alloc(512);
   header.write('root/dist/index.html');header.write('0000644\0',100);header.write(bytes.length.toString(8).padStart(11,'0')+'\0',124);header.fill(32,148,156);header[156]=48;
   let sum=0;for(const byte of header)sum+=byte;header.write(sum.toString(8).padStart(6,'0')+'\0 ',148);
   const archive=gzipSync(Buffer.concat([header,bytes,Buffer.alloc((512-bytes.length%512)%512),Buffer.alloc(1024)])),previous=globalThis.fetch,calls=[];
@@ -76,7 +76,7 @@ test('cloud engine imports an existing standalone entry without installation or 
     assert.equal(prepared.metadata.framework,'prebuilt-html');assert.equal(engine.phase,'prepared');
     const built=await engine.build();assert.equal(engine.phase,'ready');assert.equal(built.metadata.framework,'prebuilt-html');assert.deepEqual(built.metadata.buildCommands,[]);
     assert.equal(built.metadata.execution.projectScriptsExecuted,false);assert.equal(built.metadata.execution.dependenciesInstalled,false);
-    assert.equal(built.metadata.sourcePath,'dist/index.html');assert(engine.artifact.toString().includes('<title>Prebuilt</title>'));
+    assert.equal(built.metadata.sourcePath,'dist/index.html');assert.equal(engine.artifact.toString().replace(/\n<!--\nSource:[\s\S]*?-->\n/,''),html);
     assert.equal(calls.length,1);assert.match(calls[0].url,/^https:\/\/codeload.github.com\/owner\/game\/tar.gz\/[a-f0-9]{40}$/);
   }finally{globalThis.fetch=previous;clearTimeout(engine.deadline);}
 });
