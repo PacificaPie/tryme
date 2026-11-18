@@ -1,4 +1,5 @@
 import { renderCardDraftStart } from './card-draft-flow.js';
+import { createNotificationCenter } from './notifications.js';
 import { mountPublishWizard, publishProgress } from './publish-wizard.js';
 import { mountPublishMedia, sourceForm } from './publish-media.js';
 import {WORK_CATEGORIES,workCategoryLabel} from './work-categories.js';
@@ -40,7 +41,7 @@ import { renderWorkEdit, disposeWorkEdit, hasPendingWorkEdit } from './work-edit
 import { previewReferences, isPinnedPreview, prepareCardPreview, frozenAction } from './versioning-state.js';
 import { mountDiscovery, clearDiscovery, updateDiscoveryWork } from './discovery.js';
 import { HTML_UPLOAD_HINT, htmlFileError, htmlImportSizeNotice, isGithubHTMLURL, importErrorText, repositoryImportBlocked, buildAvailabilityMarkup, createBuildAvailability } from './import-status.js';
-let templateExperiencePanel=null;
+let templateExperiencePanel=null, notificationPage=null;
 registerMessages({'名片会自动使用你的最新个人资料。':'Your card automatically uses your latest profile.','模板已选好，继续制作你的名片。':'The template is selected. Continue making your card.','这个名片模板不存在。':'This card template does not exist.','登录后试玩':'Sign in to play'});
 const $ = (s, root=document) => root.querySelector(s);
 const $$ = (s, root=document) => [...root.querySelectorAll(s)];
@@ -87,9 +88,10 @@ async function api(path, options={}) {
   if(!response.ok){const error=new ApiError(data.error?.message||"暂时无法完成，请重试。",response.status,data.error?.code);for(const field of ['current','existingWork','existingVersion'])if(data.error?.[field])error[field]=data.error[field];throw error;}
   return data;
 }
+const notificationCenter=createNotificationCenter({header:$('#notification-entry'),api,esc,notify,onSessionChanged:()=>{me=null;authChecked=false;identity();}});
 function signinURL(){return authURL('sign-in','/site.html'+(location.hash||'#/'));}
 function signinLink(label=t("登录")){return `<a class="button primary" href="${esc(signinURL())}" target="_top">${esc(label)}</a>`;}
-function identity(){ $('#identity').innerHTML=me?`<details class="account-menu"><summary class="avatar" aria-label="${t("账号菜单")}">${avatarMarkup(me,{className:'account-avatar'})}</summary><div class="account-options"><span>${esc(me.name)}</span><a href="#/author/${encodeURIComponent(me.id)}">${t('个人主页')}</a><a href="#/following">${t('关注列表')}</a><button type="button" data-edit-profile>${t('编辑个人资料')}</button><a href="#/studio/works">${t("创作中心")}</a><a href="#/cards">${t("我的名片")}</a><a href="${esc(authURL('sign-out','/site.html#/feed'))}" target="_top">${t("退出登录")}</a></div></details><span class="identity-name">${esc(me.name)}</span>`:getAuthConfig().provider==='unknown'?'':`<a class="button quiet" href="${esc(signinURL())}" target="_top">${t("登录")}</a>`; }
+function identity(){ notificationCenter.setUser(me); $('#identity').innerHTML=me?`<details class="account-menu"><summary class="avatar" aria-label="${t("账号菜单")}">${avatarMarkup(me,{className:'account-avatar'})}</summary><div class="account-options"><span>${esc(me.name)}</span><a href="#/author/${encodeURIComponent(me.id)}">${t('个人主页')}</a><a href="#/following">${t('关注列表')}</a><button type="button" data-edit-profile>${t('编辑个人资料')}</button><a href="#/studio/works">${t("创作中心")}</a><a href="#/cards">${t("我的名片")}</a><a href="${esc(authURL('sign-out','/site.html#/feed'))}" target="_top">${t("退出登录")}</a></div></details><span class="identity-name">${esc(me.name)}</span>`:getAuthConfig().provider==='unknown'?'':`<a class="button quiet" href="${esc(signinURL())}" target="_top">${t("登录")}</a>`; }
 function editProfile(){
   if(!me)return;const owner=me.id;
   const profileAPI=(path,options)=>{if(me?.id!==owner||draftOwner!==owner)throw new ApiError(t('请重新登录后重试。'),401,'AUTH_SESSION_CHANGED');return api(path,options);};
@@ -122,7 +124,7 @@ function commentIcon(){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path
 
 
 function empty(title,description,action=''){const path=route().path;return emptyState({kind:path.includes('feedback')?'activity':path.startsWith('/cards')?'cards':'works',title,description,action});}
-function studio(content,tab){return `<div class="page"><div class="studio"><nav class="studio-nav" aria-label="${t("创作中心")}">${[['works',t("我的作品")],['data',t("数据")],['feedback',t("互动")]].map(([id,name])=>`<a href="#/studio/${id}" class="${tab===id?'active':''}">${name}</a>`).join('')}</nav><div class="studio-main">${content}</div></div></div>`;}
+function studio(content,tab){return `<div class="page"><div class="studio"><nav class="studio-nav" aria-label="${t("创作中心")}">${[['works',t("我的作品")],['data',t("数据")]].map(([id,name])=>`<a href="#/studio/${id}" class="${tab===id?'active':''}">${name}</a>`).join('')}</nav><div class="studio-main">${content}</div></div></div>`;}
 function cardsPage(content,tab='mine'){return `<div class="page cards-page ${tab==='mine'?'card-builder-page':''}">${content}</div>`;}
 function cardBuilderTop(saved=null){return `<div class="card-builder-top"><a class="back" href="#/cards">← ${t("返回名片")}</a>${saved?`<a class="text-link" href="#/card/${encodeURIComponent(saved.id)}">${t("我的已保存名片")} ↗</a>`:''}</div>`;}
 function cardProfile(card){return {signature:typeof card.signature==='string'?card.signature:'',headline:typeof card.headline==='string'?card.headline:'',website:safeExternal(card.website),backStyle:['ink','ivory','cobalt'].includes(card.backStyle)?card.backStyle:'ink'};}
@@ -167,6 +169,7 @@ async function renderRoute(options={}){
   const publicPath=(!authChecked||!me)&&legacyPublicCardPath(location.hash);
   if(publicPath){location.replace(publicPath);return;}
   if(!options.localeOnly)visitRecorded=false;
+  notificationPage?.dispose();notificationPage=null;notificationCenter.onRoute();
   const r=route(),number=++routeNumber;discussionPanel?.dispose();discussionPanel=null;publishWizard?.dispose();publishWizard=null;publishCoverDraft?.dispose();publishCoverDraft=null;publishedExternalCover?.dispose();publishedExternalCover=null;publishedAutoCover?.dispose();publishedAutoCover=null;publishedAutoPreview?.dispose();publishedAutoPreview=null;publishedVideos?.dispose();publishedVideos=null;stopBuildPolling();publishAvailability?.dispose();publishAvailability=null;disposeVersioning();disposeWorkEdit();disposePublicationControls();analyticsPanel?.dispose();analyticsPanel=null;discoveryPanel?.dispose();discoveryPanel=null;creatorPanel?.dispose();creatorPanel=null;templateExperiencePanel?.dispose();templateExperiencePanel=null;
   if(currentRoute&&currentRoute!==r.raw)scrolls.set(currentRoute,window.scrollY);
   endSession('exit');currentGallery?.dispose?.();currentGallery=null;currentRoute=r.raw;
@@ -190,7 +193,13 @@ async function renderRoute(options={}){
     else if(/^\/studio\/works\/[^/]+\/(update|versions)(\/[^/]+)?$/.test(r.path))await renderVersioning(r,{api,esc,owner:me.id,fileStore,signinURL,notify,go,workImage,startGame,isPlaying:()=>Boolean(activeSession),isCurrent:()=>number===routeNumber,render:html=>applyHTML(html,number),onChanged:()=>clearDiscovery()});
     else if(r.path==='/studio'||r.path==='/studio/works')await renderMyWorks(r,number);
     else if(r.path==='/studio/data')await renderData(r,number);
-    else if(r.path==='/studio/feedback')await renderFeedback(r,number);
+    else if(r.path==='/notifications'){
+      if(applyHTML(`<div class="page notifications-page"><a class="back" href="#/feed">${t('返回发现')}</a><section id="notification-page" aria-label="${t('互动消息')}"></section></div>`,number))notificationPage=notificationCenter.mountPage($('#notification-page'),{filter:r.params.get('filter')||'all',work:r.params.get('work')||'',returnTo:r.raw});
+    }
+    else if(r.path==='/studio/feedback'){
+      if(['legacy','history'].includes(r.params.get('tab')))await renderFeedback(r,number);
+      else{const params=new URLSearchParams({filter:'comment'});if(r.params.get('work'))params.set('work',r.params.get('work'));location.replace('#/notifications?'+params);}
+    }
     else if(r.path.startsWith('/cards/covers/')){const owner=me.id;await renderCardCoverUpdates(decodeURIComponent(r.path.split('/')[3]),{api,owner,esc,safeCover,root:main,isCurrent:()=>number===routeNumber&&me?.id===owner,render:html=>applyHTML(html,number),onSaved:card=>go('/card/'+encodeURIComponent(card.id)+'?saved=1')});}
     else if(r.path.startsWith('/cards/templates/'))renderTemplateExperience(r,number);
     else if(r.path.startsWith('/cards/me'))await renderBuilder(r,number);
@@ -314,13 +323,13 @@ async function renderFeedback(r,number){
   const work=r.params.get('work')||'',legacy=r.params.get('tab')==='legacy';
   const scope=work?'&work='+encodeURIComponent(work):'';
   const [data,works]=await Promise.all([api(legacy?'/api/feedback'+(work?'?work='+encodeURIComponent(work):''):'/api/comments?mine=1'+scope),readMine('all')]);
-  if(!works.length){applyHTML(studio(head(t('互动'))+empty(t('还没有作品'),t('发布作品后，评论会出现在这里。'),`<a class="button primary" href="#/publish">${t('发布作品')}</a>`),'feedback'),number);return;}
+  if(!works.length){applyHTML(studio(head(t('历史互动'))+empty(t('还没有作品'),t('发布作品后，评论会出现在这里。'),`<a class="button primary" href="#/publish">${t('发布作品')}</a>`),'feedback'),number);return;}
   const archivedWorkIds=new Set(works.filter(isArchived).map(w=>w.id));
   const archivedBadge=id=>archivedWorkIds.has(id)?`<span class="work-archived"> · ${t('已归档')}</span>`:'';
   const target=tab=>'/studio/feedback?tab='+tab+scope;
   const legacyRecords=(data.feedback||[]).map(f=>`<article class="feedback-record"><header><a href="#/work/${encodeURIComponent(f.workId)}">${esc(f.workName)} · ${esc(f.type)}</a>${archivedBadge(f.workId)}<time>${date(f.createdAt)}</time></header><p>${esc(f.text)}</p><span class="tiny muted">${esc(f.authorName||t("访客"))}</span></article>`).join('');
-  if(!applyHTML(studio(`${head(t("互动"))}<nav class="inbox-tabs" aria-label="${t("互动类型")}"><a class="${legacy?'':'active'}" href="#${target('comments')}">${t("评论")}</a><a class="${legacy?'active':''}" href="#${target('legacy')}">${t("历史私密反馈")}</a></nav><div class="field inbox-filter"><label for="feedback-work">${t("作品")}</label><select id="feedback-work"><option value="">${t("全部作品")}</option>${works.map(w=>`<option value="${esc(w.id)}" ${work===w.id?'selected':''}>${esc(w.name)}${isArchived(w)?' · '+t('已归档'):''}</option>`).join('')}</select></div><div id="inbox-records">${legacy?(legacyRecords||empty(t("暂无历史反馈"),'')):''}</div><p class="error" id="inbox-error" role="status"></p><button class="comments-more" id="inbox-more" hidden>${t("查看更多")}</button>`,'feedback'),number))return;
-  $('#feedback-work').addEventListener('change',e=>go('/studio/feedback?tab='+(legacy?'legacy':'comments')+(e.target.value?'&work='+encodeURIComponent(e.target.value):'')));
+  if(!applyHTML(studio(`${head(t("历史互动"),'',`<a class="text-link" href="#/notifications">${t("返回互动消息")}</a>`)}<nav class="inbox-tabs" aria-label="${t("互动类型")}"><a class="${legacy?'':'active'}" href="#${target('history')}">${t("全部评论记录")}</a><a class="${legacy?'active':''}" href="#${target('legacy')}">${t("历史私密反馈")}</a></nav><div class="field inbox-filter"><label for="feedback-work">${t("作品")}</label><select id="feedback-work"><option value="">${t("全部作品")}</option>${works.map(w=>`<option value="${esc(w.id)}" ${work===w.id?'selected':''}>${esc(w.name)}${isArchived(w)?' · '+t('已归档'):''}</option>`).join('')}</select></div><div id="inbox-records">${legacy?(legacyRecords||empty(t("暂无历史反馈"),'')):''}</div><p class="error" id="inbox-error" role="status"></p><button class="comments-more" id="inbox-more" hidden>${t("查看更多")}</button>`,'feedback'),number))return;
+  $('#feedback-work').addEventListener('change',e=>go('/studio/feedback?tab='+(legacy?'legacy':'history')+(e.target.value?'&work='+encodeURIComponent(e.target.value):'')));
   if(legacy)return;
   let comments=data.comments,nextCursor=data.nextCursor,pending=false;
   const draw=()=>{
