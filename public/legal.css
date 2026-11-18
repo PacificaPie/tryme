@@ -1,0 +1,18 @@
+/* Public information pages work without JavaScript or authentication. */
+.information-page{margin:0;background:#f8f8f4;color:#252621;font:16px/1.85 system-ui,-apple-system,"PingFang SC",sans-serif}
+.information-header,.information-main,.information-footer{width:min(760px,calc(100% - 40px));margin-inline:auto}
+.information-header{display:flex;justify-content:space-between;align-items:center;gap:20px;padding-block:28px;border-bottom:1px solid #d9dcd2}
+.information-header a,.information-page a{color:inherit;text-underline-offset:4px}
+.information-brand{font-weight:750;text-decoration:none;letter-spacing:-.03em}
+.information-main{padding-block:40px 64px;overflow-wrap:anywhere}
+.information-main h1{font-size:clamp(28px,6vw,40px);line-height:1.25;letter-spacing:-.04em;margin:0 0 12px}
+.information-main h2{font-size:20px;line-height:1.5;margin:32px 0 8px}
+.information-main p,.information-main ul{margin:12px 0}
+.information-main ul{padding-left:24px}.information-main li+li{margin-top:8px}
+.information-meta{color:#62665b;font-size:14px}
+.information-footer{padding-block:24px 40px;border-top:1px solid #d9dcd2;display:flex;flex-wrap:wrap;gap:16px;font-size:14px}
+.site-information{max-width:1240px;margin:24px auto 0;padding:24px 42px 36px;border-top:1px solid var(--line,#d9dcd2);font:12px/1.8 system-ui,-apple-system,"PingFang SC",sans-serif;color:var(--muted,#62665b)}
+.site-information p{margin:0 0 10px}.site-information nav{display:flex;flex-wrap:wrap;gap:10px 22px}.site-information a{color:inherit;text-decoration:underline;text-underline-offset:3px}
+.information-page a:focus-visible,.site-information a:focus-visible{outline:2px solid currentColor;outline-offset:4px}
+@media(max-width:650px){.information-header{padding-block:20px}.information-main{padding-block:30px 44px}.site-information{padding:20px}}
+@media(prefers-color-scheme:dark){.information-page{background:#171915;color:#e5e8df}.information-meta{color:#aeb5a5}.information-header,.information-footer{border-color:#3b4035}}
