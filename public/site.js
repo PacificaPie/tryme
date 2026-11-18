@@ -1,3 +1,4 @@
+import { mountPublishWizard, publishProgress } from './publish-wizard.js';
 import { mountCoverDraft } from './cover-draft.js';
 import {WORK_CATEGORIES,workCategoryLabel} from './work-categories.js';
 import { creationMenuMarkup } from './creation-menu.js';
@@ -43,7 +44,7 @@ const $ = (s, root=document) => root.querySelector(s);
 const $$ = (s, root=document) => [...root.querySelectorAll(s)];
 const main = $('#main');
 mountMenus();
-let finishRouteLoading = null, publishedExternalCover = null, publishCoverDraft = null, publishedAutoCover = null, publishedAutoPreview = null, publishedVideos = null;
+let finishRouteLoading = null, publishedExternalCover = null, publishCoverDraft = null, publishWizard = null, publishedAutoCover = null, publishedAutoPreview = null, publishedVideos = null;
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid = () => crypto.randomUUID();
 const read = (key, fallback) => { try { return JSON.parse(sessionStorage.getItem(key)) ?? fallback; } catch { return fallback; } };
@@ -152,7 +153,7 @@ async function renderRoute(options={}){
   const publicPath=(!authChecked||!me)&&legacyPublicCardPath(location.hash);
   if(publicPath){location.replace(publicPath);return;}
   if(!options.localeOnly)visitRecorded=false;
-  const r=route(),number=++routeNumber;publishCoverDraft?.dispose();publishCoverDraft=null;publishedExternalCover?.dispose();publishedExternalCover=null;publishedAutoCover?.dispose();publishedAutoCover=null;publishedAutoPreview?.dispose();publishedAutoPreview=null;publishedVideos?.dispose();publishedVideos=null;stopBuildPolling();publishAvailability?.dispose();publishAvailability=null;disposeVersioning();disposeWorkEdit();disposePublicationControls();analyticsPanel?.dispose();analyticsPanel=null;discoveryPanel?.dispose();discoveryPanel=null;creatorPanel?.dispose();creatorPanel=null;templateExperiencePanel?.dispose();templateExperiencePanel=null;
+  const r=route(),number=++routeNumber;publishWizard?.dispose();publishWizard=null;publishCoverDraft?.dispose();publishCoverDraft=null;publishedExternalCover?.dispose();publishedExternalCover=null;publishedAutoCover?.dispose();publishedAutoCover=null;publishedAutoPreview?.dispose();publishedAutoPreview=null;publishedVideos?.dispose();publishedVideos=null;stopBuildPolling();publishAvailability?.dispose();publishAvailability=null;disposeVersioning();disposeWorkEdit();disposePublicationControls();analyticsPanel?.dispose();analyticsPanel=null;discoveryPanel?.dispose();discoveryPanel=null;creatorPanel?.dispose();creatorPanel=null;templateExperiencePanel?.dispose();templateExperiencePanel=null;
   if(currentRoute&&currentRoute!==r.raw)scrolls.set(currentRoute,window.scrollY);
   endSession('exit');currentGallery?.dispose?.();currentGallery=null;currentRoute=r.raw;
   const activeNav=r.path.startsWith('/cards')||r.path.startsWith('/card/')?'cards':r.path.startsWith('/studio')||r.path==='/publish'?'studio':r.path.startsWith('/author/')||r.path==='/following'?null:'feed';
@@ -333,7 +334,7 @@ function refreshPublishState(){
   const form=$('#publish-form');if(!form)return;
   const d=publishDraft,build=matchingBuild(),building=activeBuild(build),ready=githubReady(),isFile=githubFileLink(d.githubURL),availability=publishAvailability?.state||{status:'checking'},blocked=repositoryImportBlocked(availability,d.githubURL);
   for(const source of ['html','url','github'])$('#'+source+'-field').hidden=d.source!==source;
-  $$('input,textarea',form).forEach(input=>input.disabled=publishPending);
+  $$('input,textarea,select',form).forEach(input=>input.disabled=publishPending);
   $('#publish-url').disabled=publishPending||d.source!=='url';
   $('#github-url').disabled=publishPending||d.source!=='github'||building;
   const readButton=$('#github-read');readButton.disabled=publishPending||githubPending||building||!d.githubURL?.trim()||blocked;readButton.textContent=githubPending?t("正在导入…"):building?t("构建中…"):isFile?t("读取文件"):build?.status==='failed'||build?.status==='cancelled'?t("重新构建"):t("导入并构建");
@@ -357,11 +358,12 @@ function refreshPublishState(){
   $('#cover-upload-hint').textContent=t(d.source==='url'?'输入网址后自动截图，可继续填写作品信息。':'封面可不上传，发布后会自动截图，确认满意后再使用。');
   const selectedCover=$('#cover-preview');if(coverPreview){if(selectedCover.getAttribute('src')!==coverPreview)selectedCover.src=coverPreview;selectedCover.hidden=false;}else{selectedCover.removeAttribute('src');selectedCover.hidden=true;}
   if(d.source!=='url')$('#cover-upload-hint').textContent+=' '+t('发布后自动录制约 8 秒静音预览，不影响发布与试玩。');
-  const draftRoot=$('#publish-cover-draft');draftRoot.hidden=d.source!=='url';publishCoverDraft?.sync(d.source==='url'?d.url:'',{manual:Boolean(coverFile&&!d.coverSourceURL),selected:Boolean(coverFile&&d.coverSourceURL===d.url.trim())});
+  const draftRoot=$('#publish-cover-draft');draftRoot.hidden=d.source!=='url';draftRoot.inert=publishPending;publishCoverDraft?.sync(d.source==='url'?d.url:'',{manual:Boolean(coverFile&&!d.coverSourceURL),selected:Boolean(coverFile&&d.coverSourceURL===d.url.trim())});
   const submit=$('[type="submit"]',form);submit.disabled=(d.source==='url'&&!coverFile&&publishCoverDraft&&!publishCoverDraft.canPublish)||publishPending||githubPending||(d.source==='github'&&!ready);submit.classList.toggle('primary',d.source!=='github'||ready);submit.textContent=publishPending?t("正在发布…"):t("发布作品");
   $('#publish-error').textContent=t(publishError||(d.source==='github'&&build?.status==='failed'?importErrorText(build):''));
   const related=$('#publish-related');if(related){let repository='';try{const u=new URL(d.githubURL);if(u.hostname==='github.com')repository=u.pathname.replace(/^\/|\/$/g,'').replace(/\.git$/i,'').toLowerCase();}catch{}const matches=d.source==='github'&&repository?publishRelatedWorks.filter(w=>w.source==='html'&&w.build?.repository?.toLowerCase()===repository):[];related.hidden=!matches.length;related.innerHTML=matches.length?`<summary>${t('已有同源作品')}</summary><div>${matches.slice(0,5).map(w=>`<a class="text-link" href="#/studio/works/${encodeURIComponent(w.id)}/update">${esc(t('更新 {name}',{name:w.name}))}</a>`).join('')}</div>`:'';}
   const actions=$('#publish-recovery');if(actions){actions.innerHTML=publishFailure&&publishError===publicationFailureMessage(publishFailure)?publicationFailureActions(publishFailure,{esc}):'';actions.hidden=!actions.innerHTML;}
+  publishWizard?.refresh();
 }
 async function pollGithubBuild(){
   clearTimeout(buildPollTimer);const build=matchingBuild();if(route().path!=='/publish'||publishDraft.source!=='github'||!activeBuild(build))return;
@@ -429,6 +431,7 @@ function renderPublish(number){
     if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>2*1024*1024){publishError="请选择不超过 2 MB 的 PNG、JPG 或 WebP 图片。";event.target.value='';refreshPublishState();return;}
     coverFile=file;delete publishDraft.coverSourceURL;publishDraft.key=uid();publishError='';savePublish();refreshCoverPreview();refreshPublishState();const img=$('#cover-preview');img.src=coverPreview;img.hidden=false;await fileStore('put','cover',file);
   });
+  publishWizard=mountPublishWizard(form,{initialStep:d.step,getState:()=>({...publishDraft,file:publishFile,ready:githubReady(),pending:publishPending||githubPending,cover:Boolean(coverFile),captureStatus:publishDraft.coverDraft?.status}),onStep:step=>{publishDraft.step=step;savePublish();},onError:message=>{publishError=message;refreshPublishState();}});
   form.addEventListener('submit',event=>{event.preventDefault();submitPublish(form);});
 }
 async function importGithub(){
@@ -472,7 +475,7 @@ async function submitPublish(form){
 }
 async function renderPublished(r,number){
   const {work}=await api('/api/works/'+encodeURIComponent(r.path.split('/')[2]));
-  if(!applyHTML(`<div class="page narrow">${head(t("作品已发布"),work.name)}<div id="published-work-tile" class="work-grid" style="max-width:560px;grid-template-columns:1fr">${workTile(work)}</div><div id="published-external-cover"></div><div id="published-auto-preview"></div><div class="form-footer"><a class="button primary" href="${esc(workHref(work,'/studio/works'))}">${t("试玩作品")}</a><details class="version-secondary"><summary>${t('更多')}</summary><a class="button quiet" href="#${discoveryPath(work.id)}">${t('展示设置')}</a><a class="button quiet" href="#/cards/me">${t("放进名片")}</a><a class="button quiet" href="#/studio/works">${t("我的作品")}</a></details></div></div>`,number))return;
+  if(!applyHTML(`<div class="page narrow published-result">${publishProgress(3)}${head(t("作品已发布"),work.name)}<p class="published-result-note">${t(work.source==='url'?(work.coverUrl?'外链封面已保存，可以查看作品的展示效果。':'作品已发布，可以在这里完善封面。'):'作品已发布，可以在这里确认自动封面、查看视频。')}</p><div id="published-work-tile" class="work-grid" style="max-width:560px;grid-template-columns:1fr">${workTile(work)}</div><div id="published-external-cover"></div><div id="published-auto-preview"></div><div class="form-footer"><a class="button primary" href="#/feed">${t("完成，去看 Feed")}</a><a class="button quiet" href="${esc(workHref(work,'/studio/works'))}">${t("试玩作品")}</a><details class="version-secondary"><summary>${t('更多')}</summary><a class="button quiet" href="#${discoveryPath(work.id)}">${t('展示设置')}</a><a class="button quiet" href="#/cards/me">${t("放进名片")}</a><a class="button quiet" href="#/studio/works">${t("我的作品")}</a></details></div></div>`,number))return;
   publishedVideos=mountVideoPreviews($('#published-work-tile'));
   publishedAutoPreview=mountAutoPreview($('#published-auto-preview'),{work,owner:me.id,api,onReady:async()=>{const {work:latest}=await api('/api/works/'+encodeURIComponent(work.id));if(number!==routeNumber)return;$('#published-work-tile').innerHTML=workTile(latest);publishedVideos?.refresh();clearDiscovery();}});
   publishedExternalCover=mountCoverReview($('#published-external-cover'),{work,owner:me.id,api,onAccepted:async()=>{const {work:latest}=await api('/api/works/'+encodeURIComponent(work.id));if(number!==routeNumber)return;$('#published-work-tile').innerHTML=workTile(latest);publishedVideos?.refresh();clearDiscovery();}});

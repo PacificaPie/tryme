@@ -89,6 +89,7 @@ export function mountAutoPreview(root, { work, owner, api, onReady = () => {} })
   const render = () => {
     const state = controller?.state || { status: 'checking' }, view = previewStatusView(state), url = safePreviewURL(state.preview?.url);
     root.className = 'auto-preview-panel';
+    root.dataset.state=state.status;
     root.innerHTML = `<h2>${t('自动视频预览')}</h2><p role="status" aria-live="polite">${t(view.message)}</p>${state.status === 'ready' && url ? `<video controls muted playsinline preload="none" src="${url}" aria-label="${t('自动视频预览')}"></video><p class="muted">${t('自动录制开场；识别到开始按钮时会进入作品，不计入试玩数据。')}</p>` : ''}${view.action ? `<button type="button" class="button quiet small" data-auto-preview="${view.action}" ${state.pending ? 'disabled' : ''}>${t(view.label)}</button>` : ''}`;
   };
   controller = createAutoCoverController({ api, work, resource: 'auto-preview', onChange: render, onReady });

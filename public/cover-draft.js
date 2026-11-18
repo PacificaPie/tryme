@@ -52,6 +52,7 @@ export function mountCoverDraft(root,{api,saved,onPersist,onChange,fetchImage,on
  const render=()=>{
   const s=controller?.state||{status:'empty'},button=(action,label,primary=false)=>`<button type="button" class="button ${primary?'primary':'quiet'} small" data-draft-action="${action}" ${selecting?'disabled':''}>${t(label)}</button>`;
   const labels={empty:'输入网址后自动截图，可继续填写作品信息。',waiting:'正在等待截图位置…',running:'正在加载网站并等待开屏完成…',candidate:'这张封面怎么样？',selected:'已选用，发布时会一起保存。',skipped:'你已选择暂不设置封面。',failed:'截图未完成，可以重试或上传自己的封面。'};
+  root.dataset.state=s.status;
   root.innerHTML=`<div class="external-cover-heading"><strong>${t('发布前选好封面')}</strong><span role="status" aria-live="polite">${t(selecting?'正在保存封面…':s.error||labels[s.status])}</span></div>${s.status==='candidate'?`<img class="external-cover-image" src="${s.imageUrl}" alt="${t('发布前候选封面')}" width="1200" height="750">`:''}<div class="external-cover-actions">${s.status==='candidate'?button('select','使用这张封面',true):''}${['candidate','failed','skipped','selected'].includes(s.status)?button('retake','重新截图')+button('later','再等几秒截图'):''}${!['selected','skipped','empty'].includes(s.status)?button('skip','先不设置封面'):''}</div>`;
   onChange?.(s);
  };
