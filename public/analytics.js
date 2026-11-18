@@ -19,8 +19,16 @@ const METRICS = {
   outboundClicks: { label: '外链点击', unit: '次' },
 };
 const PRIMARY = ['pv', 'uv', 'players', 'avgActiveMs'];
-const SORTABLE = ['feedViewers', 'uv', 'pv', 'players', 'avgActiveMs', 'totalActiveMs'];
+const SORTABLE = ['feedViewers', 'uv', 'pv', 'players', 'avgActiveMs', 'totalActiveMs', 'outboundClicks', 'comments'];
 const TREND_METRICS = Object.keys(METRICS).filter(key => key !== 'returningPlayers');
+const PLAY_METRICS = new Set(['players', 'avgActiveMs', 'totalActiveMs', 'opens', 'starts', 'completions', 'returningPlayers']);
+export function analyticsMetricSet(external = false, mixed = false) {
+  return {
+    primary: external ? ['uv', 'pv', 'outboundClicks', 'comments'] : mixed ? ['uv', 'pv', 'players', 'outboundClicks'] : ['uv', 'pv', 'players', 'avgActiveMs'],
+    trend: TREND_METRICS.filter(key => !external || !PLAY_METRICS.has(key)),
+    sortable: external ? ['uv','pv','outboundClicks','comments'] : mixed ? ['uv','pv','players','outboundClicks','comments'] : ['uv','pv','players','avgActiveMs','comments'],
+  };
+}
 const DAY = 86400000;
 let instanceId = 0;
 const validNumber = value => typeof value === 'number' && Number.isFinite(value) && value >= 0;
@@ -159,11 +167,12 @@ export async function mountAnalytics(root, { api, esc, initial = {}, onQuery = (
   const alive = () => !disposed && root.isConnected !== false;
   const emit = () => onQuery(analyticsQuery(state, true));
   const selectedExternal = () => Boolean(state.work && owned.get(state.work)?.source === 'url');
+  const externalScope = () => selectedExternal() || data?.funnel?.supported === false;
   const clearSlowTimer = () => { if (slowTimer !== null) timers.clearTimeout(slowTimer); slowTimer = null; };
   const dispose = () => { if (disposed) return; disposed = true; revision++; clearSlowTimer(); controller?.abort(); resizeObserver?.disconnect(); root.removeEventListener('click', handleClick); root.removeEventListener('change', handleChange); root.removeEventListener('submit', handleSubmit); root.removeEventListener('keydown', handleKeydown); };
 
   root.classList.add('analytics');
-  root.innerHTML = `<header class="an-header"><div class="an-heading"><button type="button" class="an-back" data-an-back hidden>${t('← 全部作品')}</button><h1>${t('数据概览')}</h1><p class="an-range" data-an-range></p></div><div class="an-period" aria-label="${t('统计期间')}">${[7, 30, 90].map(days => `<button type="button" data-an-days="${days}">${t('{days} 天', { days: localeNumber(days) })}</button>`).join('')}<details class="an-calendar"><summary>${t('自定义')}</summary><form class="an-date-form"><label>${t('开始日期')}<input type="date" name="from" required min="1970-01-01" max="${todayUTC()}"></label><span aria-hidden="true">—</span><label>${t('结束日期')}<input type="date" name="to" required min="1970-01-01" max="${todayUTC()}"></label><p class="an-date-error" role="alert"></p><button class="an-apply" type="submit">${t('应用日期')}</button></form></details></div></header><div class="an-filters"><label class="an-select"><span class="an-sr-only">${t('作品')}</span><select data-an-work><option value="">${t('全部作品')}</option></select></label><details class="an-advanced"><summary>${t('筛选')}<span data-an-filter-count></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></summary><div class="an-advanced-panel"><label class="an-select an-version-select" hidden><span>${t('版本')}</span><select data-an-version><option value="">${t('所有版本')}</option></select></label><label class="an-self"><input type="checkbox" data-an-self><span>${t('不计入我的活动')}</span></label><p>${t('只过滤你的访问、试玩和互动，作品仍保留。')}</p></div></details><button type="button" class="an-refresh" data-an-refresh aria-label="${t('刷新数据')}" title="${t('刷新数据')}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 8A8 8 0 1 0 20 14M19 3v5h-5"/></svg></button></div><div class="an-request-status" role="status" aria-live="polite"></div><div class="an-content" aria-busy="true"></div>`;
+  root.innerHTML = `<header class="an-header"><div class="an-heading"><button type="button" class="an-back" data-an-back hidden>${t('← 全部作品')}</button><h1>${t('数据概览')}</h1><p class="an-intro">${t('先看访问，再看参与和反馈。')}</p><p class="an-range" data-an-range></p></div><div class="an-period" aria-label="${t('统计期间')}">${[7, 30, 90].map(days => `<button type="button" data-an-days="${days}">${t('{days} 天', { days: localeNumber(days) })}</button>`).join('')}<details class="an-calendar"><summary>${t('自定义')}</summary><form class="an-date-form"><label>${t('开始日期')}<input type="date" name="from" required min="1970-01-01" max="${todayUTC()}"></label><span aria-hidden="true">—</span><label>${t('结束日期')}<input type="date" name="to" required min="1970-01-01" max="${todayUTC()}"></label><p class="an-date-error" role="alert"></p><button class="an-apply" type="submit">${t('应用日期')}</button></form></details></div></header><div class="an-filters"><label class="an-select"><span class="an-sr-only">${t('作品')}</span><select data-an-work><option value="">${t('全部作品')}</option></select></label><details class="an-advanced"><summary>${t('筛选')}<span data-an-filter-count></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></summary><div class="an-advanced-panel"><label class="an-select an-version-select" hidden><span>${t('版本')}</span><select data-an-version><option value="">${t('所有版本')}</option></select></label><label class="an-self"><input type="checkbox" data-an-self><span>${t('不计入我的活动')}</span></label><p>${t('只过滤你的访问、试玩和互动，作品仍保留。')}</p></div></details><button type="button" class="an-refresh" data-an-refresh aria-label="${t('刷新数据')}" title="${t('刷新数据')}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 8A8 8 0 1 0 20 14M19 3v5h-5"/></svg></button></div><div class="an-request-status" role="status" aria-live="polite"></div><div class="an-content" aria-busy="true"></div>`;
 
   function drawControls() {
     root.querySelectorAll('[data-an-days]').forEach(button => { const selected = Number(button.dataset.anDays) === state.days; button.classList.toggle('is-active', selected); button.setAttribute('aria-pressed', String(selected)); });
@@ -206,22 +215,25 @@ export async function mountAnalytics(root, { api, esc, initial = {}, onQuery = (
     resizeObserver?.disconnect(); geometry = null; focusIndex = null;
     if (!state.work && !data.byWork.length) { drawEmpty(); return; }
     root.classList.remove('is-empty');
-    const observations = insights(data, state);
+    const observations = insights(data, state), metrics = analyticsMetricSet(externalScope(),!state.work&&(data.byWork||[]).some(work=>work.source==='url'));
+    if (!metrics.trend.includes(state.metric)) { state.metric = 'outboundClicks'; emit(); }
+    if (!metrics.sortable.includes(state.sort)) { state.sort = 'uv'; emit(); }
     $('.an-content').innerHTML = `
-      <div class="an-metrics">${PRIMARY.map(metricCard).join('')}</div>
+      <div class="an-metrics">${metrics.primary.map(metricCard).join('')}</div>
       <p class="an-comparison">${esc(t('对比 {range}', { range: dateRange(data.meta.previousFrom, data.meta.previousTo) }))}</p>
       <section class="an-chart-section" aria-labelledby="${id}-trend-title">
         <div class="an-section-head"><h2 id="${id}-trend-title">${t('趋势')}</h2>
-          <div class="an-chart-controls"><label><span class="an-sr-only">${t('趋势指标')}</span><select data-an-metric-select>${TREND_METRICS.map(key => `<option value="${key}" ${state.metric === key ? 'selected' : ''}>${t(METRICS[key].label)}</option>`).join('')}</select></label>
+          <div class="an-chart-controls"><label><span class="an-sr-only">${t('趋势指标')}</span><select data-an-metric-select>${metrics.trend.map(key => `<option value="${key}" ${state.metric === key ? 'selected' : ''}>${t(METRICS[key].label)}</option>`).join('')}</select></label>
             <div class="an-granularity" aria-label="${t('趋势粒度')}"><button type="button" data-an-granularity="day" aria-pressed="${state.granularity === 'day'}">${t('天')}</button><button type="button" data-an-granularity="week" aria-pressed="${state.granularity === 'week'}">${t('周')}</button></div>
           </div>
         </div>
         <div class="an-chart-host"></div>
         <details class="an-series-data"><summary>${t('查看趋势数据')}</summary><div class="an-table-scroll" tabindex="0" aria-label="${t('趋势数据表')}"><table><thead><tr><th scope="col">${t('日期（UTC）')}</th><th scope="col">${t(METRICS[state.metric].label)}</th></tr></thead><tbody>${(data.series || []).map(row => `<tr><th scope="row">${esc(bucketLabel(row.date, data.meta))}</th><td>${valueLabel(state.metric, row[state.metric])}</td></tr>`).join('')}</tbody></table></div></details>
       </section>
-      ${engagementSummary()}
-      ${observations.length ? `<section class="an-observations" aria-label="${t('数据观察')}">${observations.map(item => `<div><span>${item.title}</span><p>${esc(item.body)}</p></div>`).join('')}</section>` : ''}
       <section class="an-works-section" aria-labelledby="${id}-works-title"><div class="an-section-head"><h2 id="${id}-works-title">${t(state.work ? '作品汇总' : '作品比较')}</h2><span class="an-work-count">${t((data.byWork || []).length === 1 ? '1 件' : '{count} 件', { count: localeNumber((data.byWork || []).length) })}</span></div><div class="an-work-table"></div></section>
+      <h2 class="an-behavior-title">${t('参与详情')}</h2>
+      ${engagementSummary()}
+      ${observations.length ? `<details class="an-insights"><summary>${t('数据观察')}</summary><section class="an-observations" aria-label="${t('数据观察')}">${observations.map(item => `<div><span>${item.title}</span><p>${esc(item.body)}</p></div>`).join('')}</section></details>` : ''}
       <details class="an-secondary"><summary>${t('更多统计')}</summary><div class="an-secondary-content"></div></details>
       ${methodology()}`;
     $('.an-content').setAttribute('aria-busy', String(loading));
@@ -283,15 +295,16 @@ export async function mountAnalytics(root, { api, esc, initial = {}, onQuery = (
   }
   function hidePoint() { $('[data-an-chart-focus]')?.setAttribute('hidden', ''); if ($('.an-tooltip')) $('.an-tooltip').hidden = true; }
   function drawWorks() {
+    const columns = analyticsMetricSet(externalScope(),!state.work&&(data.byWork||[]).some(work=>work.source==='url')).sortable;
     const rows = sortAnalyticsWorks(data.byWork || [], state.sort, state.direction), max = Math.max(0, ...rows.map(work => validNumber(work.uv) ? work.uv : 0));
     if (!rows.length) { $('.an-work-table').innerHTML = `<div class="an-table-empty">${t('还没有作品')}</div>`; return; }
-    $('.an-work-table').innerHTML = `<div class="an-table-scroll" tabindex="0" aria-label="${t('作品比较表')}"><table><thead><tr><th scope="col">${t('作品')}</th>${SORTABLE.map(metric => `<th scope="col" aria-sort="${state.sort === metric ? state.direction === 'asc' ? 'ascending' : 'descending' : 'none'}"><button type="button" data-an-sort="${metric}">${t(METRICS[metric].label)}<span aria-hidden="true">${state.sort === metric ? state.direction === 'asc' ? ' ↑' : ' ↓' : ''}</span></button></th>`).join('')}</tr></thead><tbody>${rows.map(work => `<tr><th scope="row"><button type="button" class="an-work-name" data-an-drill="${esc(work.workId)}">${esc(work.name)}</button>${isArchived(work)?`<span class="work-archived"> · ${t('已归档')}</span>`:''}${work.source === 'url' ? `<span class="an-external">${t('外链')}</span>` : ''}</th>${SORTABLE.map(metric => `<td>${metric === 'uv' ? `<span class="an-table-number">${valueLabel(metric, work[metric], true)}<i style="--an-bar:${max && validNumber(work.uv) ? work.uv / max * 100 : 0}%" aria-hidden="true"></i></span>` : valueLabel(metric, work[metric], true)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    $('.an-work-table').innerHTML = `<div class="an-table-scroll" tabindex="0" aria-label="${t('作品比较表')}"><table><thead><tr><th scope="col">${t('作品')}</th>${columns.map(metric => `<th scope="col" aria-sort="${state.sort === metric ? state.direction === 'asc' ? 'ascending' : 'descending' : 'none'}"><button type="button" data-an-sort="${metric}">${t(METRICS[metric].label)}<span aria-hidden="true">${state.sort === metric ? state.direction === 'asc' ? ' ↑' : ' ↓' : ''}</span></button></th>`).join('')}</tr></thead><tbody>${rows.map(work => `<tr><th scope="row"><button type="button" class="an-work-name" data-an-drill="${esc(work.workId)}">${esc(work.name)}</button>${isArchived(work)?`<span class="work-archived"> · ${t('已归档')}</span>`:''}${work.source === 'url' ? `<span class="an-external">${t('外链')}</span>` : ''}</th>${columns.map(metric => `<td>${metric === 'uv' ? `<span class="an-table-number">${valueLabel(metric, work[metric], true)}<i style="--an-bar:${max && validNumber(work.uv) ? work.uv / max * 100 : 0}%" aria-hidden="true"></i></span>` : valueLabel(metric, work[metric], true)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
   }
   function drawSecondary() {
     $('.an-secondary-content').innerHTML = [
       ['试玩', ['opens', 'starts', 'totalActiveMs', 'completions', 'returningPlayers']],
       ['互动统计', ['feedImpressions', 'feedViewers', 'comments', 'likes', 'outboundClicks']],
-    ].map(([title, metrics]) => `<section class="an-detail-section"><h3>${t(title)}</h3><dl class="an-detail-metrics">${metrics.map(metric => `<div><dt>${t(METRICS[metric].label)}</dt><dd>${valueLabel(metric, data.summary?.[metric])}</dd></div>`).join('')}</dl></section>`).join('');
+    ].filter(([, metrics]) => !externalScope() || !metrics.every(metric => PLAY_METRICS.has(metric))).map(([title, metrics]) => `<section class="an-detail-section"><h3>${t(title)}</h3><dl class="an-detail-metrics">${metrics.map(metric => `<div><dt>${t(METRICS[metric].label)}</dt><dd>${valueLabel(metric, data.summary?.[metric])}</dd></div>`).join('')}</dl></section>`).join('');
   }
   function methodology() {
     return `<details class="an-methods"><summary>${t('统计口径')}</summary><dl><div><dt>${t('Feed 曝光')}</dt><dd>${t('卡片在前台至少一半可见并持续 1 秒才记曝光。同一账号、作品、UTC 日期只计一次；触达人数在所选期间跨作品去重。仅从本次上线开始采集，不补算历史；曝光没有版本归属，按版本筛选显示 —。它不表示点击、试玩或经过认证的真人数。')}</dd></div><div><dt>${t('访问')}</dt><dd>${t('PV 是作品详情访问次数；UV 按登录账号去重。同一账号浏览多件作品，整体 UV 只计一次。它不等于设备数或经过认证的真人数。')}</dd></div><div><dt>${t('试玩')}</dt><dd>${t('打开试玩统计创建的会话；收到首次操作才计为开始试玩。试玩人数按账号去重，期间回访指所选期间内至少两个 UTC 日期有试玩，不是次日留存。')}</dd></div><div><dt>${t('时长')}</dt><dd>${t('从首次操作后累计页面可见时间，仅统计已结束且包含新版时长样本的试玩。它不是持续操作时间；未结束和历史无样本会话不补算。没有样本显示 —，真实零时长显示 0 秒。')}</dd></div><div><dt>${t('完成与互动')}</dt><dd>${t('完成上报是游戏客户端报告完成，不表示验证过的通关或胜率。评论包含回复；点赞统计期间新增且目前仍保留的点赞。评论和点赞没有版本归属，按版本筛选时显示 —。')}</dd></div><div><dt>${t('访客与试玩')}</dt><dd>${t('三项仅统计站内作品，按同一期间、同一作品上的账号交集计算，再跨作品去重。它表示期间重叠人群，不承诺访问与试玩的先后或因果关系。外链作品没有站内试玩数据。')}</dd></div><div><dt>${t('时间与对比')}</dt><dd>${t('日期采用 UTC，起止日均包含；对比紧邻的等长前期。今天尚未结束时，当前期间数据仍会增加。周从周一开始，边界周只含选中日期；周与整体 UV 重新去重，不是每日 UV 相加。')}</dd></div></dl></details>`;

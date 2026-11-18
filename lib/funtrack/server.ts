@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { PUBLICATION_MAX_BYTES } from './limits.mjs';
+import { createCoverReviewService } from './cover-review-service.mjs';
 import { createAutoCoverService } from './auto-cover-service.mjs';
 import { captureHostedHTML } from './auto-cover-capture.mjs';
 import { createVideoPreviewService } from './video-preview-service.mjs';
@@ -26,13 +27,14 @@ type Row = Record<string, any>;
 type User = { id: string; name: string; email: string };
 const iso = () => new Date().toISOString();
 const uuid = () => crypto.randomUUID();
-const bindings = () => env as unknown as { DB?: D1Database; BUCKET?: R2Bucket; BROWSER?: Fetcher; FUNTRACK_AUTO_COVER_ENABLED?: string; FUNTRACK_VIDEO_PREVIEW_ENABLED?: string };
+const bindings = () => env as unknown as { DB?: D1Database; BUCKET?: R2Bucket; BROWSER?: Fetcher; FUNTRACK_AUTO_COVER_ENABLED?: string; FUNTRACK_VIDEO_PREVIEW_ENABLED?: string; FUNTRACK_COVER_REVIEW_ENABLED?: string };
 function db(): D1Database { const d=bindings().DB; if(!d)throw new ApiError(503,'STORAGE_UNAVAILABLE','数据库暂不可用'); return d; }
 function bucket(): R2Bucket { const b=bindings().BUCKET; if(!b)throw new ApiError(503,'STORAGE_UNAVAILABLE','文件存储暂不可用'); return b; }
 const sql=(query:string,...values:any[])=>db().prepare(query).bind(...values);
-const autoCovers=createAutoCoverService({db,bucket,configured:()=>bindings().FUNTRACK_AUTO_COVER_ENABLED==='1'&&typeof bindings().BROWSER?.fetch==='function',capture:(html:string)=>captureHostedHTML(bindings().BROWSER,html)});
+const autoCovers=createAutoCoverService({db,bucket,configured:()=>bindings().FUNTRACK_COVER_REVIEW_ENABLED!=='1'&&bindings().FUNTRACK_AUTO_COVER_ENABLED==='1'&&typeof bindings().BROWSER?.fetch==='function',capture:(html:string)=>captureHostedHTML(bindings().BROWSER,html)});
 const autoPreviews=createVideoPreviewService({db,bucket,configured:()=>bindings().FUNTRACK_VIDEO_PREVIEW_ENABLED==='1'&&typeof bindings().BROWSER?.fetch==='function',capture:async()=>{throw new Error('Video capture runs only in the scheduled worker');}});
-async function onPublished(workId:string,versionId:string,ownerId:string){await Promise.all([autoCovers.enqueue(workId,versionId,ownerId),autoPreviews.enqueue(workId,versionId,ownerId)]);}
+const coverReviews=createCoverReviewService({db,bucket,configured:()=>bindings().FUNTRACK_COVER_REVIEW_ENABLED==='1'&&typeof bindings().BROWSER?.fetch==='function',capture:async()=>{throw new Error('External capture runs only in the scheduled worker');}});
+async function onPublished(workId:string,versionId:string,ownerId:string){await Promise.all([autoCovers.enqueue(workId,versionId,ownerId),autoPreviews.enqueue(workId,versionId,ownerId),coverReviews.enqueue(workId,versionId,ownerId)]);}
 const first=(query:string,...values:any[])=>sql(query,...values).first<Row>();
 async function rows(query:string,...values:any[]):Promise<Row[]> { return (await sql(query,...values).all<Row>()).results; }
 export function json(value:unknown,status=200) { return Response.json(value,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}}); }
@@ -424,6 +426,7 @@ export async function handleAPI(request:Request) {
     const user=authenticate(request.headers),url=new URL(request.url),parts=url.pathname.replace(/^\/api\/?/,'').split('/').filter(Boolean);
     if(['POST','PATCH'].includes(request.method))verifyWrite(request);
     const creatorResponse=await creators.handle(request,user);if(creatorResponse)return creatorResponse;
+    const externalCoverResponse=await coverReviews.handle(request,user);if(externalCoverResponse)return externalCoverResponse;
     const autoCoverResponse=await autoCovers.handle(request,user);if(autoCoverResponse)return autoCoverResponse;
     const autoPreviewResponse=await autoPreviews.handle(request,user);if(autoPreviewResponse)return autoPreviewResponse;
     const previewMatch=/^\/api\/works\/([A-Za-z0-9_-]{8,128})\/preview\/([A-Za-z0-9_-]{8,128})$/.exec(url.pathname);

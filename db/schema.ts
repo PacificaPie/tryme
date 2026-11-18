@@ -156,3 +156,12 @@ export const videoPreviewJobs = sqliteTable('ft_video_preview_jobs', {
 export const videoPreviewAttempts = sqliteTable('ft_video_preview_attempts', {
   id: text('id').primaryKey(), jobId: text('job_id').notNull().references(()=>videoPreviewJobs.id), reservedSeconds: integer('reserved_seconds').notNull(), elapsedMs: integer('elapsed_ms'), outcome: text('outcome'), createdAt: text('created_at').notNull(),
 }, t=>[index('ft_video_preview_budget_time').on(t.createdAt)]);
+
+export const coverReviewJobs = sqliteTable('ft_cover_review_jobs', {
+  id: text('id').primaryKey(), workId: text('work_id').notNull().references(()=>works.id), versionId: text('version_id').notNull().references(()=>versions.id), ownerId: text('owner_id').notNull(),
+  status: text('status').notNull().default('queued'), attempts: integer('attempts').notNull().default(0), leaseId: text('lease_id'), leaseUntil: text('lease_until'), reason: text('reason'), metadataId: text('metadata_id'), baseRevision: integer('base_revision').notNull(), waitMs: integer('wait_ms').notNull().default(5000), candidateKey: text('candidate_key'), candidateId: text('candidate_id'),
+  createdAt: text('created_at').notNull(), updatedAt: text('updated_at').notNull(),
+}, t=>[uniqueIndex('ft_cover_review_work_version').on(t.workId,t.versionId),index('ft_cover_review_queue').on(t.status,t.createdAt)]);
+export const coverReviewAttempts = sqliteTable('ft_cover_review_attempts', {
+  id: text('id').primaryKey(), jobId: text('job_id').notNull().references(()=>coverReviewJobs.id), reservedSeconds: integer('reserved_seconds').notNull(), elapsedMs: integer('elapsed_ms'), outcome: text('outcome'), createdAt: text('created_at').notNull(),
+}, t=>[index('ft_cover_review_budget_time').on(t.createdAt)]);

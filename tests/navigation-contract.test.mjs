@@ -38,10 +38,12 @@ function siteFixture(){
   return {context,requests,renders,mounts,workspaces,identity,directory};
 }
 
-test('the primary card tab keeps its original card destination and label',()=>{
+test('primary navigation keeps discovery and moves creation and management to their dedicated menus',()=>{
   const shell=readFileSync(new URL('../public/site.html',import.meta.url),'utf8');
   const nav=/<nav aria-label="主导航">([\s\S]*?)<\/nav>/.exec(shell)?.[1];assert(nav);
-  assert.match(nav,/<a href="#\/cards" data-nav="cards">名片<\/a>/);
+  assert.match(nav,/href="#\/feed"/);
+  assert.doesNotMatch(nav,/data-nav="(?:cards|studio)"/);
+  assert.match(shell,/id="creation-menu"/);
   assert.doesNotMatch(nav,/>创作者<\/a>/);
 });
 

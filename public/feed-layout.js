@@ -12,10 +12,9 @@ export function feedColumns(width) {
 export function feedCoverRatio(id, naturalRatio = null) {
   const variation = hash(id) % 3;
   if (typeof naturalRatio !== 'number' || !Number.isFinite(naturalRatio) || naturalRatio <= 0) return [1.08, 1.3, 1.55][variation];
-  // Portrait/square art keeps its composition. Landscape images get modest,
-  // stable framing; object-fit:contain keeps the complete game image visible.
-  if (naturalRatio <= 1.25) return clamp(naturalRatio, 0.55, 2.1);
-  return Math.min(clamp(naturalRatio, 0.55, 2.1), [1.1, 1.34, 1.58][variation]);
+  // The frame follows the actual image. Artificial height creates letterboxing
+  // with contain, or cuts off titles/controls with cover. Masonry packs the result.
+  return naturalRatio;
 }
 export function shortestColumnLayout(heights, width, options = feedColumns(width)) {
   const { columns, gap, rowGap, columnWidth } = options, bottoms = Array(columns).fill(0);

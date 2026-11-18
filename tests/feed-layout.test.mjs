@@ -30,7 +30,8 @@ test('image framing is stable by work, keeps portrait ratios and never depends o
   assert.equal(feedCoverRatio('square',1),1);
   const ratio=feedCoverRatio('fixed-work',1.6);
   assert.equal(feedCoverRatio('fixed-work',1.6),ratio);
-  assert(ratio<=1.6&&ratio>=1.1);
+  assert.equal(ratio,1.6);
+  for(const natural of [0.3,0.75,1,1.6,2.8,4])for(const id of ['one','two','three'])assert.equal(feedCoverRatio(id,natural),natural,'loaded frames match their image without letterboxing');
   assert.equal(feedCoverRatio('fixed-work'),feedCoverRatio('fixed-work'));
   assert(Number.isFinite(feedCoverRatio('bad',NaN)));
 });

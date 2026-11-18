@@ -20,7 +20,7 @@ test('generated media fills independently without replacing covers, social state
   const ready=mergeGeneratedMedia(covered,{...original,coverUrl:'/different',preview});
   assert.equal(ready.coverUrl,'/cover');assert.deepEqual(ready.preview,preview);assert.equal(needsGeneratedMedia(ready),false);
   assert.equal(mergeGeneratedMedia(original,{...original,versionId:'v2',coverUrl:'/wrong-version'}),original);
-  assert.equal(needsGeneratedMedia({...original,source:'url'}),false);
+  assert.equal(needsGeneratedMedia({...original,source:'url'}),true);
 });
 test('visible pending work gains cover then video and stops polling when both exist',async()=>{
   const f=fixture();f.control.watch('/api/public/discover?limit=12',f.works);
@@ -46,9 +46,14 @@ test('a new query cancels old media refresh and never merges the old response',a
   f.calls[0].resolve({works:[{...f.works[0],coverUrl:'/old'}]});await settle();assert.equal(f.works[0].coverUrl,'');
   f.calls[1].resolve({works:[{...f.works[0],coverUrl:'/new'}]});await settle();assert.equal(f.works[0].coverUrl,'/new');f.control.dispose();
 });
-test('pagination uses the original public page URLs and external works never start polling',async()=>{
-  const f=fixture({works:[{id:'first',source:'html'},{id:'second',source:'html'},{id:'external',source:'url'}]});
+test('pagination uses the original public page URLs and external works with a confirmed cover do not wait for unsupported videos',async()=>{
+  const f=fixture({works:[{id:'first',source:'html'},{id:'second',source:'html'},{id:'external',source:'url',coverUrl:'/cover'}]});
   f.control.watch('/api/public/discover?limit=12',f.works.slice(0,1));f.control.watch('/api/public/discover?cursor=next',f.works.slice(1,2));f.control.watch('/external',f.works.slice(2));
   f.tick();f.calls[0].resolve({works:[]});await settle();f.tick();
   assert.deepEqual(f.calls.map(call=>call.url),['/api/public/discover?limit=12','/api/public/discover?cursor=next']);f.control.dispose();
+});
+
+test('an external work picks up its confirmed cover and then stops polling',async()=>{
+ const f=fixture({works:[{id:'external',source:'url',coverUrl:''}]});f.control.watch('/api/public/discover',f.works);f.tick();
+ f.calls[0].resolve({works:[{...f.works[0],coverUrl:'/confirmed'}]});await settle();assert.equal(f.works[0].coverUrl,'/confirmed');assert.equal(f.tasks.size,0);f.control.dispose();
 });
