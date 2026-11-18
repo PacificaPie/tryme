@@ -2,3 +2,13 @@
 .tryme-brand-mark{display:block;width:29px;height:29px;flex:none}
 :root[data-theme=dark] .tryme-brand-mark{filter:brightness(0) invert(1)}
 @media(max-width:700px){.tryme-brand-mark{width:25px;height:25px}.site-header .brand,.auth-brand,.information-brand{gap:6px}}
+
+/* Creation belongs to the plus; management belongs to the account menu. */
+.creation-menu{position:relative;flex-shrink:0}
+.creation-menu>summary{list-style:none;cursor:pointer;display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:var(--primary,var(--ink));color:var(--on-primary,#fff)}
+.creation-menu>summary::-webkit-details-marker{display:none}
+.creation-menu svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.creation-options{position:absolute;right:0;top:calc(100% + 10px);z-index:30;min-width:180px;padding:6px;background:var(--surface-raised,var(--surface,#fff));border:1px solid var(--border,var(--line));border-radius:12px;box-shadow:var(--shadow-soft,0 6px 20px #0002)}
+.creation-options>a{display:flex;align-items:center;gap:11px;padding:12px;border-radius:8px;font-size:13px;white-space:nowrap}
+.creation-options>a:hover{background:var(--soft)}
+@media(max-width:540px){.creation-menu>summary{width:36px;height:36px}.site-header nav{gap:12px}}

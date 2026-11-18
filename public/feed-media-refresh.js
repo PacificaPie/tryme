@@ -1,6 +1,6 @@
 // Covers and previews finish independently after publishing. Refresh only their
 // missing presentation fields; never reorder the Feed or reset social state.
-export const needsGeneratedMedia = work => work.source === 'html' && (!work.coverUrl || !work.preview?.url);
+export const needsGeneratedMedia = work => ['html','url'].includes(work.source) && (!work.coverUrl || work.source === 'html' && !work.preview?.url);
 export function mergeGeneratedMedia(work, fresh) {
   if (!needsGeneratedMedia(work) || !fresh || fresh.id !== work.id || (work.versionId && fresh.versionId !== work.versionId)) return work;
   if ((work.coverUrl || !fresh.coverUrl) && (work.preview?.url || !fresh.preview?.url)) return work;

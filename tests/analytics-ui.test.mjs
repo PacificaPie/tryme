@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {formatAnalyticsNumber,formatAnalyticsDuration,analyticsChange,validateAnalyticsDates,normalizeAnalyticsQuery,analyticsQuery,sortAnalyticsWorks} from '../public/analytics.js';
+import {formatAnalyticsNumber,formatAnalyticsDuration,analyticsChange,validateAnalyticsDates,normalizeAnalyticsQuery,analyticsQuery,sortAnalyticsWorks,analyticsMetricSet} from '../public/analytics.js';
 
 test('unknown duration stays unknown and known zero is not replaced by a missing value',()=>{
   assert.equal(formatAnalyticsDuration(null),'—');
@@ -41,4 +41,12 @@ test('missing duration sorts after known zero in both directions without changin
   assert.deepEqual(sortAnalyticsWorks(rows,'avgActiveMs').map(row=>row.workId),['long','zero','missing']);
   assert.deepEqual(sortAnalyticsWorks(rows,'avgActiveMs','asc').map(row=>row.workId),['zero','long','missing']);
   assert.equal(rows[0].workId,'missing');
+});
+
+test('overview prioritizes visits and separates hosted engagement from external clicks',()=>{
+ assert.deepEqual(analyticsMetricSet(true).primary,['uv','pv','outboundClicks','comments']);
+ assert.deepEqual(analyticsMetricSet(false,true).primary,['uv','pv','players','outboundClicks']);
+ assert(analyticsMetricSet(false).primary.includes('avgActiveMs'));
+ for(const key of ['players','avgActiveMs','totalActiveMs','opens','starts','completions'])assert(!analyticsMetricSet(true).trend.includes(key));
+ assert.equal(analyticsMetricSet(false,true).sortable.length,5);
 });

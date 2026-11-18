@@ -63,3 +63,5 @@ registerMessages({
   '请选择按日或按周查看': 'Choose a daily or weekly interval.', '排除本人参数无效': 'The exclude-me filter is invalid.',
   '作品或版本标识无效': 'The work or version identifier is invalid.', '服务暂不可用，请保留内容后重试': 'The service is temporarily unavailable. Keep your content and try again.',
 });
+
+registerMessages({'先看访问，再看参与和反馈。':'Understand visits, then engagement and feedback.','参与详情':'Engagement details'});
