@@ -44,14 +44,14 @@ function documentFor(entry, cover) {
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light">
 <meta name="referrer" content="no-referrer">
-<title>${entry.title} · Funtrack 本地测试作品</title>
+<title>${entry.title} · TryMe 本地测试作品</title>
 <style>
 :root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;color:#30332b;background:#fafaf7;-webkit-font-smoothing:antialiased}*{box-sizing:border-box}body{margin:0}button{font:inherit;cursor:pointer}button:disabled{cursor:default;opacity:.5}[hidden]{display:none!important}.player{width:min(100%,940px);margin:auto;padding:22px}.heading{margin-bottom:17px}h1{font-size:20px;font-weight:600;margin:0;letter-spacing:-.4px}.provenance{font-size:10px;color:#9b9e92;margin:5px 0 0}.instructions{font-size:12px;color:#777e6d;line-height:1.7;margin:9px 0 0}.stage{position:relative;overflow:hidden;aspect-ratio:45/28;border:1px solid #e2e6d9;border-radius:12px;background:#f3f0e9}.cover,.host{position:absolute;inset:0;width:100%;height:100%}.cover{object-fit:cover}.host canvas{width:100%!important;height:auto!important;border-radius:0!important;display:block}.start-layer{position:absolute;inset:0;display:grid;place-items:center;background:#fff2}.button{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:11px 18px;border:1px solid #dce1d2;border-radius:7px;background:#fff;color:#566048;font-size:13px}.button.primary{background:#35432b;border-color:#35432b;color:#fff}.button:hover:not(:disabled){filter:brightness(.96)}.button:focus-visible{outline:2px solid #7b8c68;outline-offset:4px}.toolbar{display:flex;justify-content:space-between;align-items:center;gap:15px;min-height:62px;padding-top:13px}.status{font-size:12px;line-height:1.7;color:#7c8570;margin:0}.error{font-size:12px;color:#985c48;line-height:1.7;margin-top:12px}@media(max-width:520px){.player{padding:16px 12px}.heading{margin-bottom:13px}h1{font-size:18px}.instructions{font-size:12px}.stage{border-radius:8px}.stage.tiles{aspect-ratio:1}.stage.tiles .host canvas{width:150%!important;max-width:none!important;margin-left:-25%;}.status{font-size:11px}.host canvas:focus-visible{outline-offset:-4px!important}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto;transition:none;animation:none}}
 </style>
 </head>
 <body>
 <main class="player" aria-labelledby="title">
-<header class="heading"><h1 id="title">${entry.title}</h1><p class="provenance">Funtrack 本地测试作品</p><p class="instructions">${entry.description}</p></header>
+<header class="heading"><h1 id="title">${entry.title}</h1><p class="provenance">TryMe 本地测试作品</p><p class="instructions">${entry.description}</p></header>
 <section class="stage ${entry.kind}" aria-label="游戏画面"><img class="cover" id="cover" src="data:${entry.mime};base64,${cover}" alt="游戏封面" width="900" height="560"><div class="host" id="game-host" hidden></div><div class="start-layer" id="start-layer"><button class="button primary" id="start" type="button">开始游戏</button></div></section>
 <div class="toolbar"><p class="status" id="status" role="status" aria-live="polite"></p><button class="button" id="end" type="button" disabled>结束游戏</button></div>
 <p class="error" id="error" role="alert" hidden></p>

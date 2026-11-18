@@ -2,15 +2,15 @@ import { t, registerMessages } from './i18n.js';
 import { closeDialog } from './experience.js?v=20261117-creator-actions';
 
 registerMessages({
-  '看看我在 Funtrack 制作的名片吧！': 'Take a look at the card I made on Funtrack!',
-  '来看看 {name} 在 Funtrack 的名片吧！': 'Take a look at {name}’s card on Funtrack!',
+  '看看我在 TryMe 制作的名片吧！': 'Take a look at the card I made on TryMe!',
+  '来看看 {name} 在 TryMe 的名片吧！': 'Take a look at {name}’s card on TryMe!',
   '分享给朋友': 'Share with friends', '分享文案': 'Share message',
   '复制文案和链接': 'Copy message and link', '只复制链接': 'Copy link only',
   '文案和链接已复制，发给朋友吧！': 'Message and link copied. Send it to a friend!',
   '请选中上方内容手动复制。': 'Select the text above to copy it manually.',
 });
 
-export const cardShareText = (card, own) => own ? t('看看我在 Funtrack 制作的名片吧！') : t('来看看 {name} 在 Funtrack 的名片吧！', { name: card.name });
+export const cardShareText = (card, own) => own ? t('看看我在 TryMe 制作的名片吧！') : t('来看看 {name} 在 TryMe 的名片吧！', { name: card.name });
 export const shareMessage = (text, url) => text ? `${text}\n${url}` : url;
 
 export function openShareDialog({ url, title = '', text = '' }) {
@@ -38,7 +38,7 @@ export function openShareDialog({ url, title = '', text = '' }) {
   q('.share-copy').onclick = event => copy(message, event.currentTarget);
   q('.share-link-only').onclick = event => copy(url, event.currentTarget);
   q('.share-native').onclick = async () => {
-    try { await navigator.share({ title: title || 'Funtrack', text, url }); }
+    try { await navigator.share({ title: title || 'TryMe', text, url }); }
     catch (error) { if (error?.name !== 'AbortError') q('.share-status').textContent = t('未能打开系统分享，请复制链接。'); }
   };
   q('.share-close').onclick = () => closeDialog(dialog);

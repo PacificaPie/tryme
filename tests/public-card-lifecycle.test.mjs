@@ -36,7 +36,7 @@ test('restoring a public card from browser history refetches live identity while
   assert.match(f.root.innerHTML,/正在加载名片/);assert.doesNotMatch(f.root.innerHTML,/Old identity/);
   f.requests[1].resolve({...initial,name:'Current identity',bio:'',avatarUrl:'/avatars/moon.svg'});await settle();
   assert.match(f.root.innerHTML,/Current identity/);assert.match(f.root.innerHTML,/\/avatars\/moon.svg/);assert.match(f.root.innerHTML,/Pinned work title/);assert.doesNotMatch(f.root.innerHTML,/Old identity|Old bio/);
-  assert.equal(f.document.title,'Current identity · Funtrack');assert.equal(f.timers.size,0);
+  assert.equal(f.document.title,'Current identity · TryMe');assert.equal(f.timers.size,0);
 });
 
 test('an unavailable restored card cannot be resurrected by switching language',async()=>{
@@ -49,5 +49,5 @@ test('an unavailable restored card cannot be resurrected by switching language',
 test('a superseded public-card response cannot replace the current identity on a later locale render',async()=>{
   const f=fixture();f.events.fire('pageshow',{persisted:true});assert.equal(f.requests[0].options.signal.aborted,true);
   f.requests[1].resolve({...initial,name:'Current identity'});await settle();f.requests[0].resolve(initial);await settle();f.localeButton.fire('click');
-  assert.match(f.root.innerHTML,/Current identity/);assert.doesNotMatch(f.root.innerHTML,/Old identity/);assert.equal(f.document.title,'Current identity · Funtrack');
+  assert.match(f.root.innerHTML,/Current identity/);assert.doesNotMatch(f.root.innerHTML,/Old identity/);assert.equal(f.document.title,'Current identity · TryMe');
 });

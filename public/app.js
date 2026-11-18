@@ -182,7 +182,7 @@ function card(id,params){
   const tiles=list.slice(0,6).map(w=>`<a href="#/work/${w.id}" aria-label="试玩 ${esc(w.title)}"><img src="${esc(w.cover)}" alt="${esc(w.title)}"></a>`).join('');
   const feedbackCount=state().feedback.filter(f=>list.some(w=>w.id===f.workId)).length;
   view.innerHTML=`<div class="card-page ${generated?'':'card-pending'}">${heading(me?(generated?'我的名片':'生成名片'):`${name}的名片`)}
-    <div class="exhibition-stage" id="exhibition-stage"><div class="card-face"><article class="creator-card" aria-label="${esc(name)}的创作者名片"><div class="card-heading"><div class="monogram">${esc(name.slice(0,1))}</div><span class="card-note">funtrack</span></div><h2>${esc(name)}</h2>${bio?`<p class="card-bio">${esc(bio)}</p>`:''}<div class="card-mosaic count-${Math.min(3,list.length)}">${tiles}</div><div class="card-foot"><span>${list.length} 件作品</span>${feedbackCount?`<span>${feedbackCount} 条反馈</span>`:''}</div></article></div>
+    <div class="exhibition-stage" id="exhibition-stage"><div class="card-face"><article class="creator-card" aria-label="${esc(name)}的创作者名片"><div class="card-heading"><div class="monogram">${esc(name.slice(0,1))}</div><span class="card-note">TryMe</span></div><h2>${esc(name)}</h2>${bio?`<p class="card-bio">${esc(bio)}</p>`:''}<div class="card-mosaic count-${Math.min(3,list.length)}">${tiles}</div><div class="card-foot"><span>${list.length} 件作品</span>${feedbackCount?`<span>${feedbackCount} 条反馈</span>`:''}</div></article></div>
     <div class="room" id="room" inert aria-hidden="true" aria-label="${esc(name)}的作品展厅"><div class="room-back" aria-hidden="true"></div><div class="room-left" aria-hidden="true"></div><div class="room-right" aria-hidden="true"></div><div class="room-floor" aria-hidden="true"></div><div class="room-works count-${Math.min(3,list.length)}">${list.map(w=>`<a class="room-work" href="#/work/${w.id}" aria-label="试玩 ${esc(w.title)}"><img src="${esc(w.cover)}" alt=""><span>${esc(w.title)}</span></a>`).join('')}</div><p class="room-label">${esc(name)}</p></div></div>
     <div class="card-controls"><button class="button primary" data-action="${generated?'toggle-card':'generate-card'}" aria-controls="exhibition-stage" ${generated?'aria-expanded="false"':''}>${generated?'展开名片':'生成名片'}</button></div></div>`;
 }
@@ -235,7 +235,7 @@ function render(){
   else if(r.path.startsWith('/work/'))detail(decodeURIComponent(r.path.slice(6)));
   else if(r.path.startsWith('/card/'))card(decodeURIComponent(r.path.slice(6)),r.params);
   else notFound();
-  document.title=`${$('h1',view)?.textContent||'发现游戏'} · Funtrack`;
+  document.title=`${$('h1',view)?.textContent||'发现游戏'} · TryMe`;
   if(renderCount++)view.focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});
 }
 history.replaceState({ftDepth:history.state?.ftDepth||0},'',location.hash?location.href:'#/discover');

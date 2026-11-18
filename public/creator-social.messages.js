@@ -10,6 +10,6 @@ registerMessages({
  '继续原草稿':'Continue draft','返回名片':'Back to card','同款模板已选好，先选择自己的作品。':'The template is ready. Choose your own works first.',
  '这张名片暂时无法用于同款制作。':'This card is unavailable for creating a new card.',
  '当前名片':'Current card','查看作者主页':'View creator profile','分享主页':'Share profile',
- '来看看 {name} 在 Funtrack 的作品和名片吧！':'Explore {name}’s works and creator card on Funtrack!',
+ '来看看 {name} 在 TryMe 的作品和名片吧！':'Explore {name}’s works and creator card on TryMe!',
  '先发布一件自己的作品，再来制作同款名片。':'Publish a work of your own before making a card with this template.',
 });
