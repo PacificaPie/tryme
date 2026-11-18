@@ -130,7 +130,7 @@ test('a late old save success or deleted-card error cannot navigate away from or
     if(outcome==='success')f.calls[0].resolve({card:{id:cardId}});else f.calls[0].reject(Object.assign(new Error('Old card deleted'),{code:'CARD_DELETED'}));
     await pending;
     assert.equal(f.context.preview,newPreview);assert.deepEqual(f.navigations,[]);assert.deepEqual(f.writes,[]);assert.deepEqual(f.notices,[]);
-    assert.equal(f.context.cardPending,false);assert.equal(f.buttons.get('#save-card').disabled,false);assert.equal(f.buttons.get('#save-card').textContent,'保存名片');
+    assert.equal(f.context.cardPending,false);assert.equal(f.buttons.get('#save-card').disabled,false);assert.equal(f.buttons.get('#save-card').textContent,'保存为新名片');
   }
 });
 

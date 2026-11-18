@@ -1,3 +1,4 @@
+import { renderCardDraftStart } from './card-draft-flow.js';
 import { mountPublishWizard, publishProgress } from './publish-wizard.js';
 import { mountPublishMedia, sourceForm } from './publish-media.js';
 import {WORK_CATEGORIES,workCategoryLabel} from './work-categories.js';
@@ -496,12 +497,18 @@ async function submitPublish(form){
 }
 async function renderPublished(r,number){
   const {work}=await api('/api/works/'+encodeURIComponent(r.path.split('/')[2]));
-  if(!applyHTML(`<div class="page narrow published-result">${publishProgress(3)}${head(t("作品已发布"),work.name)}<p class="published-result-note">${t('作品已发布，已保存你确认的封面和视频选择。')}</p><div id="published-work-tile" class="work-grid" style="max-width:560px;grid-template-columns:1fr">${workTile(work)}</div><div class="form-footer"><a class="button primary" href="#/feed">${t("完成，去看 Feed")}</a><a class="button quiet" href="${esc(workHref(work,'/studio/works'))}">${t("试玩作品")}</a><details class="version-secondary"><summary>${t('更多')}</summary><a class="button quiet" href="#${discoveryPath(work.id)}">${t('展示设置')}</a><a class="button quiet" href="#/cards/me">${t("放进名片")}</a><a class="button quiet" href="#/studio/works">${t("我的作品")}</a></details></div></div>`,number))return;
+  if(!applyHTML(`<div class="page narrow published-result">${publishProgress(3)}${head(t("作品已发布"),work.name)}<p class="published-result-note">${t('作品已发布，已保存你确认的封面和视频选择。')}</p><div id="published-work-tile" class="work-grid" style="max-width:560px;grid-template-columns:1fr">${workTile(work)}</div><div class="form-footer"><a class="button primary" href="#/cards/me?addWork=${encodeURIComponent(work.id)}">${t("加入或更新名片")}</a><a class="button quiet" href="#/feed">${t("完成，去看 Feed")}</a><a class="button quiet" href="${esc(workHref(work,'/studio/works'))}">${t("试玩作品")}</a><details class="version-secondary"><summary>${t('更多')}</summary><a class="button quiet" href="#${discoveryPath(work.id)}">${t('展示设置')}</a><a class="button quiet" href="#/studio/works">${t("我的作品")}</a></details></div></div>`,number))return;
   publishedVideos=mountVideoPreviews($('#published-work-tile'));
 
 }
 const steps = current => `<nav class="steps" aria-label="${t("制作步骤")}">${[t("选作品"),t("选模板"),t("生成名片")].map((name,index)=>index<current?`<a href="${index===0?'#/cards/me':'#/cards/me/template'}"><b>${index+1}</b>${name}</a>`:`<span class="${index===current?'active':''}" ${index===current?'aria-current="step"':''}><b>${index+1}</b>${name}</span>`).join('')}</nav>`;
 async function renderBuilder(r,number){
+  if(r.params.has('addWork')||r.params.has('editCard')){
+    const owner=draftOwner;
+    return renderCardDraftStart(r,{api,readMine,owner,current:()=>number===routeNumber&&draftOwner===owner&&me?.id===owner,getDraft:()=>cardDraft,getPreview:()=>preview,
+      commit:draft=>{cardDraft=draft;preview=null;cardError='';cardKey=uid();saveCardDraft();write(storage.preview,null);},
+      render:html=>applyHTML(html,number),esc,notify,go});
+  }
   if(r.params.has('templateFrom'))return renderCardRemix(r,number);
   const owner=draftOwner,current=()=>number===routeNumber&&draftOwner===owner&&me?.id===owner;
   const works=await readMine();if(!current())return;
@@ -538,7 +545,7 @@ async function renderBuilder(r,number){
       preview=prepareCardPreview(preview,{...next,fingerprint:cardPreviewFingerprint(next)},uid());write(storage.preview,preview);go('/cards/me/preview');
     });return;
   }
-  if(!applyHTML(cardsPage(`${cardBuilderTop()}${steps(2)}<h1 class="card-preview-title">${t("名片预览")}</h1><div class="card-actions"><a class="button quiet" href="#/cards/me/template">${t("← 返回选模板")}</a><button class="button primary" id="save-card" ${cardPending?'disabled':''}>${cardPending?t("正在保存…"):!isPinnedPreview(preview)?t("重新生成预览"):cardError?t("重试保存"):t("保存名片")}</button></div><p id="card-error" class="error" role="alert">${esc(t(cardError)||(!isPinnedPreview(preview)?t("这份预览来自旧版，请重新生成后保存。"):''))}</p>${cardMarkup(preview,'/cards/me/preview')}`,'mine'),number))return;
+  if(!applyHTML(cardsPage(`${cardBuilderTop()}${steps(2)}<h1 class="card-preview-title">${t("名片预览")}</h1><p class="card-save-note">${t("保存会生成新链接，旧名片链接与作品快照保持不变。")}</p><div class="card-actions"><a class="button quiet" href="#/cards/me/template">${t("← 返回选模板")}</a><button class="button primary" id="save-card" ${cardPending?'disabled':''}>${cardPending?t("正在保存…"):!isPinnedPreview(preview)?t("重新生成预览"):cardError?t("重试保存"):t("保存为新名片")}</button></div><p id="card-error" class="error" role="alert">${esc(t(cardError)||(!isPinnedPreview(preview)?t("这份预览来自旧版，请重新生成后保存。"):''))}</p>${cardMarkup(preview,'/cards/me/preview')}`,'mine'),number))return;
   mountCard(preview,'/cards/me/preview');$('#save-card').addEventListener('click',saveCard);
 }
 async function renderCardRemix(r,number){
@@ -608,13 +615,13 @@ async function saveCard(){
     if(cardPending===operation){
       cardPending=false;
       // A newer preview may have been opened while this save was in flight.
-      const activeButton=$('#save-card');if(activeButton){activeButton.disabled=false;activeButton.textContent=t(!isPinnedPreview(preview)?'重新生成预览':cardError?'重试保存':'保存名片');}
+      const activeButton=$('#save-card');if(activeButton){activeButton.disabled=false;activeButton.textContent=t(!isPinnedPreview(preview)?'重新生成预览':cardError?'重试保存':'保存为新名片');}
     }
   }
 }
 async function renderCard(r,number,countView=true){
   const {card}=await api('/api/cards/'+encodeURIComponent(decodeURIComponent(r.path.split('/')[2]))),own=card.authorId===me.id,shared=location.origin+publicCardPath(card.id),template=CARD_TEMPLATES.find(item=>item.id===card.template)||CARD_TEMPLATES[0];
-  if(!applyHTML(`<div class="page card-view"><div class="card-view-top"><a class="back" href="#/cards">← ${t("名片")}</a>${r.params.has('saved')?`<span class="saved-label" role="status">${t("已保存")}</span>`:''}<button class="button small" data-share-url="${esc(shared)}" data-share-title="${esc(card.name)}" data-share-text="${esc(cardShareText(card,own))}">${t("分享名片")}</button></div>${cardMarkup(card,r.raw,card.id)}<section class="card-template-reuse"><div><h2>${esc(t(template.name))}</h2><p>${esc(t(template.description))}</p></div><a class="button" href="#/cards/me?templateFrom=${encodeURIComponent(card.id)}">${t('用同款制作')} ↗</a></section><div class="card-management"><a class="text-link" href="#/author/${encodeURIComponent(card.authorId)}">${t('查看作者主页')}</a>${own?`<a class="text-link" href="#/cards/me">${t("重新制作")}</a><a class="text-link" href="#/cards/covers/${encodeURIComponent(card.id)}">${t("更新名片封面")}</a>`:''}<button class="button quiet small" data-copy-url="${esc(shared)}">${t("复制名片链接")}</button>${own?`<button type="button" class="button quiet small danger-text" data-delete-card="${esc(card.id)}" data-card-name="${esc(card.name)}">${t('删除名片')}</button>`:''}<p class="tiny muted">${t("朋友无需登录即可查看名片，试玩时再登录。")}</p></div></div>`,number))return;
+  if(!applyHTML(`<div class="page card-view"><div class="card-view-top"><a class="back" href="#/cards">← ${t("名片")}</a>${r.params.has('saved')?`<span class="saved-label" role="status">${t("已保存")}</span>`:''}<button class="button small" data-share-url="${esc(shared)}" data-share-title="${esc(card.name)}" data-share-text="${esc(cardShareText(card,own))}">${t("分享名片")}</button></div>${cardMarkup(card,r.raw,card.id)}<section class="card-template-reuse"><div><h2>${esc(t(template.name))}</h2><p>${esc(t(template.description))}</p></div><a class="button" href="#/cards/me?templateFrom=${encodeURIComponent(card.id)}">${t('用同款制作')} ↗</a></section><div class="card-management"><a class="text-link" href="#/author/${encodeURIComponent(card.authorId)}">${t('查看作者主页')}</a>${own?`<a class="text-link" href="#/cards/me?editCard=${encodeURIComponent(card.id)}">${t("更新名片")}</a><a class="text-link" href="#/cards/covers/${encodeURIComponent(card.id)}">${t("更新名片封面")}</a>`:''}<button class="button quiet small" data-copy-url="${esc(shared)}">${t("复制名片链接")}</button>${own?`<button type="button" class="button quiet small danger-text" data-delete-card="${esc(card.id)}" data-card-name="${esc(card.name)}">${t('删除名片')}</button>`:''}<p class="tiny muted">${t("朋友无需登录即可查看名片，试玩时再登录。")}</p></div></div>`,number))return;
   mountCard(card,r.raw);if(countView){postAction('card_view',{cardId:card.id});visitRecorded=true;}
 }
 

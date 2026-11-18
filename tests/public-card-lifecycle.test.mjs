@@ -16,8 +16,8 @@ const settle=async()=>{for(let index=0;index<6;index++)await Promise.resolve();}
 const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 class Element {innerHTML='';textContent='';listeners=new Map();attributes=new Map();addEventListener(type,handler){this.listeners.set(type,handler);}setAttribute(name,value){this.attributes.set(name,value);}fire(type,event={}){this.listeners.get(type)?.(event);}}
 function fixture(){
-  const root=new Element(),localeButton=new Element(),dialog=new Element(),events=new Element(),requests=[],timers=new Map();let locale='zh-CN',sequence=0;
-  root.querySelector=selector=>selector==='.public-work-dialog'&&root.innerHTML.includes('public-work-dialog')?dialog:selector==='[data-public-retry]'&&root.innerHTML.includes('data-public-retry')?new Element():null;
+  const shareButton=new Element(),root=new Element(),localeButton=new Element(),dialog=new Element(),events=new Element(),requests=[],timers=new Map();let locale='zh-CN',sequence=0;
+  root.querySelector=selector=>selector==='[data-public-card-share]'?shareButton:selector==='.public-work-dialog'&&root.innerHTML.includes('public-work-dialog')?dialog:selector==='[data-public-retry]'&&root.innerHTML.includes('data-public-retry')?new Element():null;
   const document={documentElement:{lang:''},title:'',querySelector:selector=>selector==='#public-card-locale'?localeButton:null};
   const context=vm.createContext({t,CARD_TEMPLATES,publicCardId,publicCardRemixSignInPath,publicCoverPath,publicPlaySignInPath,escape,AbortController,URLSearchParams,
     document,window:events,location:{pathname:'/c/'+cardId,origin},getLocale:()=>locale,setLocale:value=>locale=value,

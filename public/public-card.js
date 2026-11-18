@@ -1,3 +1,4 @@
+import { openShareDialog, cardShareText } from './sharing.js';
 import {t,getLocale,setLocale,registerMessages} from './i18n.js';
 import {CARD_TEMPLATES,renderPortfolioCard,mountPortfolioCard} from './card-templates.js';
 import {createGalleryBridge} from './gallery/embed.js';
@@ -67,7 +68,8 @@ function mountPublicPage(root) {
   function render() {
     bridge?.dispose();bridge=null;syncLocale();document.title=card.name+' · TryMe';
     const template=CARD_TEMPLATES.find(item=>item.id===card.template)||CARD_TEMPLATES[0];
-    root.innerHTML=`<h1 class="public-card-title">${escape(card.name)}</h1>${renderPublicCard(card)}<section class="public-card-remix"><div><h2>${escape(t(template.name))}</h2><p>${escape(t(template.description))}</p></div><a class="button" href="${escape(publicCardRemixSignInPath(card.id))}">${t('用同款制作')} ↗</a></section><footer class="public-card-footer"><a href="${joinPath}">${t('加入 TryMe')} <span aria-hidden="true">↗</span></a></footer><dialog class="public-work-dialog" aria-labelledby="public-work-title"></dialog>`;
+    root.innerHTML=`<h1 class="public-card-title">${escape(card.name)}</h1>${renderPublicCard(card)}<section class="public-card-remix"><div><h2>${escape(t(template.name))}</h2><p>${escape(t(template.description))}</p></div><a class="button" href="${escape(publicCardRemixSignInPath(card.id))}">${t('用同款制作')} ↗</a></section><footer class="public-card-footer"><button class="button" data-public-card-share>${t('分享名片')}</button><a href="${joinPath}">${t('加入 TryMe')} <span aria-hidden="true">↗</span></a></footer><dialog class="public-work-dialog" aria-labelledby="public-work-title"></dialog>`;
+    root.querySelector('[data-public-card-share]').addEventListener('click',()=>openShareDialog({url:location.origin+'/c/'+card.id,title:card.name,text:cardShareText(card,false)}));
     const modal=dialog();modal.addEventListener('cancel',event=>{event.preventDefault();closeWork();});modal.addEventListener('click',event=>{if(event.target!==modal)return;const rect=modal.getBoundingClientRect();if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)closeWork();});
     const frame=root.querySelector('#public-gallery-frame');
     if(frame){
