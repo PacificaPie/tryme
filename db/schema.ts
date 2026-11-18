@@ -172,3 +172,10 @@ export const coverDrafts = sqliteTable('ft_cover_drafts', {
  status:text('status').notNull(), objectKey:text('object_key'), reason:text('reason'), reservedSeconds:integer('reserved_seconds').notNull(),
  elapsedMs:integer('elapsed_ms'), createdAt:text('created_at').notNull(), expiresAt:text('expires_at').notNull(), leaseUntil:text('lease_until').notNull(),
 },t=>[index('ft_cover_drafts_owner_url').on(t.ownerId,t.url,t.createdAt),index('ft_cover_drafts_budget').on(t.createdAt)]);
+
+export const publishDrafts = sqliteTable('ft_publish_drafts', {
+ id:text('id').primaryKey(),ownerId:text('owner_id').notNull(),source:text('source').notNull(),url:text('url'),contentHash:text('content_hash').notNull(),gameKey:text('game_key'),createdAt:text('created_at').notNull(),expiresAt:text('expires_at').notNull(),
+},t=>[index('ft_publish_drafts_owner').on(t.ownerId,t.createdAt)]);
+export const publishCaptures = sqliteTable('ft_publish_captures', {
+ id:text('id').primaryKey(),draftId:text('draft_id').notNull().references(()=>publishDrafts.id),kind:text('kind').notNull(),status:text('status').notNull(),waitMs:integer('wait_ms').notNull(),reservedSeconds:integer('reserved_seconds').notNull(),leaseUntil:text('lease_until').notNull(),objectKey:text('object_key'),byteSize:integer('byte_size'),durationMs:integer('duration_ms'),reason:text('reason'),elapsedMs:integer('elapsed_ms'),createdAt:text('created_at').notNull(),
+},t=>[index('ft_publish_captures_draft').on(t.draftId,t.kind,t.createdAt),index('ft_publish_captures_budget').on(t.kind,t.createdAt)]);

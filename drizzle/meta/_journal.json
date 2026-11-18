@@ -134,6 +134,13 @@
       "when": 1795090000000,
       "tag": "0018_cover_drafts",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1795090000001,
+      "tag": "0019_private_publish_media",
+      "breakpoints": true
     }
   ]
 }
