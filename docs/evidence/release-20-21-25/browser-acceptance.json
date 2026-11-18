@@ -1,0 +1,82 @@
+{
+  "environment": "Loopback real UI/router/SQLite, synthetic accounts, in-memory R2; no live Clerk or Browser Run",
+  "viewport": "390 x 844",
+  "pendingPublication": {
+    "publicWorkCount": 3,
+    "privateDraftCount": 4,
+    "publishDisabledUntilBothChoices": true
+  },
+  "completed": {
+    "publicWorkCount": 4,
+    "commentCount": 1,
+    "commentVersion": "v1",
+    "cardCount": 7,
+    "oldCardSnapshotsUnchanged": true,
+    "oldVersionAndTextPreserved": true,
+    "updatedCoverPresent": true,
+    "abortedCommentRequests": 1,
+    "timeoutRetryRestoredComment": true
+  },
+  "writes": [
+    {
+      "path": "/api/cards/d4609c2e-3cc5-4019-9eea-9ccbfc98b47d/cover-updates",
+      "account": "publication-other",
+      "expected": "publication-owner",
+      "status": 409
+    },
+    {
+      "path": "/api/cards/d4609c2e-3cc5-4019-9eea-9ccbfc98b47d/cover-updates",
+      "account": "publication-owner",
+      "expected": "publication-owner",
+      "status": 201
+    },
+    {
+      "path": "/api/events",
+      "account": "publication-owner",
+      "expected": "publication-owner",
+      "status": 200
+    },
+    {
+      "path": "/api/publish-drafts",
+      "account": "publication-owner",
+      "expected": "publication-owner",
+      "status": 200
+    },
+    {
+      "path": "/api/publish-drafts/ce0b6f33-952f-4830-88bb-1b61cd62cf69/capture",
+      "account": "publication-owner",
+      "expected": "publication-owner",
+      "status": 503
+    },
+    {
+      "path": "/api/publish-drafts/ce0b6f33-952f-4830-88bb-1b61cd62cf69/capture",
+      "account": "publication-owner",
+      "expected": "publication-owner",
+      "status": 503
+    },
+    {
+      "path": "/api/works",
+      "account": "publication-owner",
+      "expected": "publication-owner",
+      "status": 201
+    },
+    {
+      "path": "/api/events",
+      "account": "publication-owner",
+      "expected": "publication-owner",
+      "status": 200
+    },
+    {
+      "path": "/api/works/2a7306d4-60fc-462f-8804-e63ed0f87087/comments",
+      "account": "publication-owner",
+      "expected": "publication-owner",
+      "status": 201
+    },
+    {
+      "path": "/api/events",
+      "account": "publication-owner",
+      "expected": "publication-owner",
+      "status": 200
+    }
+  ]
+}

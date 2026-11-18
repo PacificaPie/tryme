@@ -100,3 +100,9 @@ test('avatar labels and save errors have English equivalents', async () => {
     assert.match(new ProfileSaveError(new Error('network'),'avatar',{id:'a'}).message,/Profile saved/);
   } finally {setLocale('zh-CN');}
 });
+
+test('account change errors explain recovery and never confirm another profile',async()=>{
+  const confirmed=[];
+  await assert.rejects(saveProfileEdits({user:{id:'account-a',name:'A'},fields:{name:'A draft'},api:async()=>{throw Object.assign(Error('Session changed'),{code:'AUTH_SESSION_CHANGED',status:409});},onConfirmed:user=>confirmed.push(user)}),error=>error instanceof ProfileSaveError&&/登录账号已变化/.test(error.message));
+  assert.deepEqual(confirmed,[]);
+});

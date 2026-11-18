@@ -32,7 +32,7 @@ import { mountDiscussion, commentHref, commentVersionLabel } from './discussion.
 import { createPlayClock } from './play-clock.js';
 import { waitForPendingPlayStart } from './play-start-order.js';
 import { mountGameDisplay } from './game-display.js';
-import { authHeaders, authURL, getAuthConfig } from './auth-client.js';
+import { authHeaders, assertAuthAccount, authURL, getAuthConfig } from './auth-client.js';
 import { mountAnalytics } from './analytics.js';
 import { renderVersioning, disposeVersioning, hasPendingVersionMutation } from './versioning.js';
 import { renderWorkEdit, disposeWorkEdit, hasPendingWorkEdit } from './work-edit.js';
@@ -45,6 +45,7 @@ const $ = (s, root=document) => root.querySelector(s);
 const $$ = (s, root=document) => [...root.querySelectorAll(s)];
 const main = $('#main');
 mountMenus();
+let discussionPanel = null;
 let finishRouteLoading = null, publishedExternalCover = null, publishCoverDraft = null, publishWizard = null, publishedAutoCover = null, publishedAutoPreview = null, publishedVideos = null;
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid = () => crypto.randomUUID();
@@ -65,12 +66,23 @@ const socialState=new Map(),likePending=new Set(),likeRetry=new Map();
 class ApiError extends Error { constructor(message,status,code){super(message);this.status=status;this.code=code;} }
 async function api(path, options={}) {
   const publicRead=path.startsWith('/api/public/')&&(!options.method||options.method==='GET');
-  const headers={...publicRead?{}:await authHeaders(),...(options.headers||{})};
+  // draftOwner pins this document to the account that loaded its drafts.
+  // Switching accounts needs a fresh document, never rebinding old callbacks.
+  const expectedUserId=publicRead?null:draftOwner;
+  const assertCurrent=()=>{
+    if(expectedUserId&&draftOwner!==expectedUserId)throw new ApiError('登录账号已变化，请刷新页面后重试。',409,'AUTH_SESSION_CHANGED');
+    if(!publicRead)assertAuthAccount(expectedUserId);
+  };
+  const headers={...publicRead?{}:await authHeaders(expectedUserId),...(options.headers||{})};
+  assertCurrent();
+  if(expectedUserId)headers['X-Funtrack-Expected-User']=expectedUserId;
   if(options.method&&options.method!=='GET')headers['X-Funtrack-CSRF']='1';
   if(options.body && !(options.body instanceof FormData)) {headers['Content-Type']='application/json';options={...options,body:JSON.stringify(options.body)};}
   let response;
   try {response=await fetch(path,{...options,credentials:publicRead?'omit':'same-origin',headers});} catch {throw new ApiError("连接暂时中断，请重试。",0,'NETWORK');}
   let data;try{data=await response.json();}catch{throw new ApiError("服务暂时不可用，请稍后重试。",response.status,'BAD_RESPONSE');}
+  assertCurrent();
+  if(path==='/api/me'&&response.ok)assertAuthAccount(data.user?.id);
   if(!response.ok){const error=new ApiError(data.error?.message||"暂时无法完成，请重试。",response.status,data.error?.code);for(const field of ['current','existingWork','existingVersion'])if(data.error?.[field])error[field]=data.error[field];throw error;}
   return data;
 }
@@ -154,7 +166,7 @@ async function renderRoute(options={}){
   const publicPath=(!authChecked||!me)&&legacyPublicCardPath(location.hash);
   if(publicPath){location.replace(publicPath);return;}
   if(!options.localeOnly)visitRecorded=false;
-  const r=route(),number=++routeNumber;publishWizard?.dispose();publishWizard=null;publishCoverDraft?.dispose();publishCoverDraft=null;publishedExternalCover?.dispose();publishedExternalCover=null;publishedAutoCover?.dispose();publishedAutoCover=null;publishedAutoPreview?.dispose();publishedAutoPreview=null;publishedVideos?.dispose();publishedVideos=null;stopBuildPolling();publishAvailability?.dispose();publishAvailability=null;disposeVersioning();disposeWorkEdit();disposePublicationControls();analyticsPanel?.dispose();analyticsPanel=null;discoveryPanel?.dispose();discoveryPanel=null;creatorPanel?.dispose();creatorPanel=null;templateExperiencePanel?.dispose();templateExperiencePanel=null;
+  const r=route(),number=++routeNumber;discussionPanel?.dispose();discussionPanel=null;publishWizard?.dispose();publishWizard=null;publishCoverDraft?.dispose();publishCoverDraft=null;publishedExternalCover?.dispose();publishedExternalCover=null;publishedAutoCover?.dispose();publishedAutoCover=null;publishedAutoPreview?.dispose();publishedAutoPreview=null;publishedVideos?.dispose();publishedVideos=null;stopBuildPolling();publishAvailability?.dispose();publishAvailability=null;disposeVersioning();disposeWorkEdit();disposePublicationControls();analyticsPanel?.dispose();analyticsPanel=null;discoveryPanel?.dispose();discoveryPanel=null;creatorPanel?.dispose();creatorPanel=null;templateExperiencePanel?.dispose();templateExperiencePanel=null;
   if(currentRoute&&currentRoute!==r.raw)scrolls.set(currentRoute,window.scrollY);
   endSession('exit');currentGallery?.dispose?.();currentGallery=null;currentRoute=r.raw;
   const activeNav=r.path.startsWith('/cards')||r.path.startsWith('/card/')?'cards':r.path.startsWith('/studio')||r.path==='/publish'?'studio':r.path.startsWith('/author/')||r.path==='/following'?null:'feed';
@@ -263,7 +275,7 @@ async function renderWork(r,number,countView=true,autoPlay=true){
   $$('[data-action="start-game"]').forEach(b=>b.addEventListener('click',()=>startGame(work)));
   $('[data-action="discussion"]').addEventListener('click',()=>{$('#discussion').scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});$('#comment-input')?.focus({preventScroll:true});});
   const discussionOwner=me.id;
-  mountDiscussion($('#discussion'),{work,user:me,api,esc,notify,beforeRootSubmit:async()=>{await waitForPendingPlayStart(sessionQueues,{workId:work.id,ownerId:discussionOwner,flush:flushSession});if(draftOwner!==discussionOwner)throw new ApiError(t('请重新登录后重试。'),401,'AUTH_SESSION_CHANGED');},focusId:r.params.get('comment')||'',onCount:count=>{updateDiscoveryWork(work.id,{commentsCount:count});const label=$('.discussion-jump span');if(label)label.textContent=count?t("讨论 ")+n(count):t("讨论");}});
+  discussionPanel=mountDiscussion($('#discussion'),{work,user:me,api,esc,notify,beforeRootSubmit:async()=>{await waitForPendingPlayStart(sessionQueues,{workId:work.id,ownerId:discussionOwner,flush:flushSession});if(draftOwner!==discussionOwner)throw new ApiError(t('请重新登录后重试。'),401,'AUTH_SESSION_CHANGED');},focusId:r.params.get('comment')||'',onCount:count=>{updateDiscoveryWork(work.id,{commentsCount:count});const label=$('.discussion-jump span');if(label)label.textContent=count?t("讨论 ")+n(count):t("讨论");}});
   api('/api/discover?author='+encodeURIComponent(work.authorId)+'&limit=4').then(({works})=>{if(number!==routeNumber)return;const others=works.filter(w=>w.authorId===work.authorId&&w.id!==id).slice(0,3);if(others.length)$('#related-works').innerHTML=`<h2>${t("作者的其他作品")}</h2>${others.map(w=>`<a class="related-work" href="${esc(workHref(w,from))}">${workImage(w)}<div><strong>${esc(w.name)}</strong><p>${esc(w.desc)}</p></div></a>`).join('')}`;}).catch(()=>{});
   if(autoPlay&&r.params.get('play')==='1'&&work.source==='html')startGame(work);
   if(r.params.get('discussion')==='1')requestAnimationFrame(()=>{if(number===routeNumber)$('#discussion')?.scrollIntoView({block:'start'});});
