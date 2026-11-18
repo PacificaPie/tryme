@@ -166,3 +166,9 @@ export const coverReviewJobs = sqliteTable('ft_cover_review_jobs', {
 export const coverReviewAttempts = sqliteTable('ft_cover_review_attempts', {
   id: text('id').primaryKey(), jobId: text('job_id').notNull().references(()=>coverReviewJobs.id), reservedSeconds: integer('reserved_seconds').notNull(), elapsedMs: integer('elapsed_ms'), outcome: text('outcome'), createdAt: text('created_at').notNull(),
 }, t=>[index('ft_cover_review_budget_time').on(t.createdAt)]);
+
+export const coverDrafts = sqliteTable('ft_cover_drafts', {
+ id:text('id').primaryKey(), ownerId:text('owner_id').notNull(), url:text('url').notNull(), waitMs:integer('wait_ms').notNull(),
+ status:text('status').notNull(), objectKey:text('object_key'), reason:text('reason'), reservedSeconds:integer('reserved_seconds').notNull(),
+ elapsedMs:integer('elapsed_ms'), createdAt:text('created_at').notNull(), expiresAt:text('expires_at').notNull(), leaseUntil:text('lease_until').notNull(),
+},t=>[index('ft_cover_drafts_owner_url').on(t.ownerId,t.url,t.createdAt),index('ft_cover_drafts_budget').on(t.createdAt)]);

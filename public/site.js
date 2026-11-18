@@ -1,3 +1,4 @@
+import { mountCoverDraft } from './cover-draft.js';
 import {WORK_CATEGORIES,workCategoryLabel} from './work-categories.js';
 import { creationMenuMarkup } from './creation-menu.js';
 import { mountCoverReview } from './cover-review.js';
@@ -42,7 +43,7 @@ const $ = (s, root=document) => root.querySelector(s);
 const $$ = (s, root=document) => [...root.querySelectorAll(s)];
 const main = $('#main');
 mountMenus();
-let finishRouteLoading = null, publishedExternalCover = null, publishedAutoCover = null, publishedAutoPreview = null, publishedVideos = null;
+let finishRouteLoading = null, publishedExternalCover = null, publishCoverDraft = null, publishedAutoCover = null, publishedAutoPreview = null, publishedVideos = null;
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid = () => crypto.randomUUID();
 const read = (key, fallback) => { try { return JSON.parse(sessionStorage.getItem(key)) ?? fallback; } catch { return fallback; } };
@@ -151,7 +152,7 @@ async function renderRoute(options={}){
   const publicPath=(!authChecked||!me)&&legacyPublicCardPath(location.hash);
   if(publicPath){location.replace(publicPath);return;}
   if(!options.localeOnly)visitRecorded=false;
-  const r=route(),number=++routeNumber;publishedExternalCover?.dispose();publishedExternalCover=null;publishedAutoCover?.dispose();publishedAutoCover=null;publishedAutoPreview?.dispose();publishedAutoPreview=null;publishedVideos?.dispose();publishedVideos=null;stopBuildPolling();publishAvailability?.dispose();publishAvailability=null;disposeVersioning();disposeWorkEdit();disposePublicationControls();analyticsPanel?.dispose();analyticsPanel=null;discoveryPanel?.dispose();discoveryPanel=null;creatorPanel?.dispose();creatorPanel=null;templateExperiencePanel?.dispose();templateExperiencePanel=null;
+  const r=route(),number=++routeNumber;publishCoverDraft?.dispose();publishCoverDraft=null;publishedExternalCover?.dispose();publishedExternalCover=null;publishedAutoCover?.dispose();publishedAutoCover=null;publishedAutoPreview?.dispose();publishedAutoPreview=null;publishedVideos?.dispose();publishedVideos=null;stopBuildPolling();publishAvailability?.dispose();publishAvailability=null;disposeVersioning();disposeWorkEdit();disposePublicationControls();analyticsPanel?.dispose();analyticsPanel=null;discoveryPanel?.dispose();discoveryPanel=null;creatorPanel?.dispose();creatorPanel=null;templateExperiencePanel?.dispose();templateExperiencePanel=null;
   if(currentRoute&&currentRoute!==r.raw)scrolls.set(currentRoute,window.scrollY);
   endSession('exit');currentGallery?.dispose?.();currentGallery=null;currentRoute=r.raw;
   const activeNav=r.path.startsWith('/cards')||r.path.startsWith('/card/')?'cards':r.path.startsWith('/studio')||r.path==='/publish'?'studio':r.path.startsWith('/author/')||r.path==='/following'?null:'feed';
@@ -353,9 +354,11 @@ function refreshPublishState(){
   const sizeNotice=$('#publish-size-notice');sizeNotice.textContent=htmlImportSizeNotice({source:d.source,file:publishFile,build,ready,pending:githubPending});sizeNotice.hidden=!sizeNotice.textContent;
   $('#game-file-remove').hidden=!publishFile;$('#game-file-remove').disabled=publishPending||githubPending;
   $('#cover-file-remove').hidden=!coverFile;$('#cover-file-remove').disabled=publishPending;
-  $('#cover-upload-hint').textContent=t('封面可不上传，发布后会自动截图，确认满意后再使用。');
+  $('#cover-upload-hint').textContent=t(d.source==='url'?'输入网址后自动截图，可继续填写作品信息。':'封面可不上传，发布后会自动截图，确认满意后再使用。');
+  const selectedCover=$('#cover-preview');if(coverPreview){if(selectedCover.getAttribute('src')!==coverPreview)selectedCover.src=coverPreview;selectedCover.hidden=false;}else{selectedCover.removeAttribute('src');selectedCover.hidden=true;}
   if(d.source!=='url')$('#cover-upload-hint').textContent+=' '+t('发布后自动录制约 8 秒静音预览，不影响发布与试玩。');
-  const submit=$('[type="submit"]',form);submit.disabled=publishPending||githubPending||(d.source==='github'&&!ready);submit.classList.toggle('primary',d.source!=='github'||ready);submit.textContent=publishPending?t("正在发布…"):t("发布作品");
+  const draftRoot=$('#publish-cover-draft');draftRoot.hidden=d.source!=='url';publishCoverDraft?.sync(d.source==='url'?d.url:'',{manual:Boolean(coverFile&&!d.coverSourceURL),selected:Boolean(coverFile&&d.coverSourceURL===d.url.trim())});
+  const submit=$('[type="submit"]',form);submit.disabled=(d.source==='url'&&!coverFile&&publishCoverDraft&&!publishCoverDraft.canPublish)||publishPending||githubPending||(d.source==='github'&&!ready);submit.classList.toggle('primary',d.source!=='github'||ready);submit.textContent=publishPending?t("正在发布…"):t("发布作品");
   $('#publish-error').textContent=t(publishError||(d.source==='github'&&build?.status==='failed'?importErrorText(build):''));
   const related=$('#publish-related');if(related){let repository='';try{const u=new URL(d.githubURL);if(u.hostname==='github.com')repository=u.pathname.replace(/^\/|\/$/g,'').replace(/\.git$/i,'').toLowerCase();}catch{}const matches=d.source==='github'&&repository?publishRelatedWorks.filter(w=>w.source==='html'&&w.build?.repository?.toLowerCase()===repository):[];related.hidden=!matches.length;related.innerHTML=matches.length?`<summary>${t('已有同源作品')}</summary><div>${matches.slice(0,5).map(w=>`<a class="text-link" href="#/studio/works/${encodeURIComponent(w.id)}/update">${esc(t('更新 {name}',{name:w.name}))}</a>`).join('')}</div>`:'';}
   const actions=$('#publish-recovery');if(actions){actions.innerHTML=publishFailure&&publishError===publicationFailureMessage(publishFailure)?publicationFailureActions(publishFailure,{esc}):'';actions.hidden=!actions.innerHTML;}
@@ -389,16 +392,20 @@ function renderPublish(number){
       <div class="field" id="html-field"><label for="game-file">${t("游戏文件")}</label><input id="game-file" type="file" accept=".html,.htm,text/html"><small>${t(HTML_UPLOAD_HINT)}</small><div class="publish-file-selection"><span id="game-file-name" class="file-selected"></span><button id="game-file-remove" type="button" class="button quiet small" aria-label="${t("移除游戏文件")}" hidden>${t("移除")}</button></div></div>
       <div class="field" id="github-field"><label for="github-url">${t("GitHub 链接")}</label><div class="github-input"><input id="github-url" name="githubURL" type="url" placeholder="${t("https://github.com/作者/仓库")}" value="${esc(d.githubURL||'')}"><button id="github-read" class="button" type="button">${t("导入并构建")}</button></div><p id="github-status" class="file-selected" role="status"></p><section id="github-build-panel" class="build-panel" hidden><progress id="build-progress" max="5" aria-label="${t("构建进度")}"></progress><div class="build-actions"><a id="build-preview" class="button small" target="_blank" rel="noopener">${t("预览试玩 ↗")}</a><button id="build-cancel" class="button quiet small" type="button">${t("取消构建")}</button></div><details class="build-details"><summary>${t("构建记录")}</summary><p id="build-source"></p><pre id="build-logs"></pre></details><p id="build-poll-error" class="error" role="status"></p></section></div>
       <div class="field" id="url-field"><label for="publish-url">${t("作品链接")}</label><input id="publish-url" name="url" type="url" placeholder="https://" value="${esc(d.url)}"><small>${t("已部署的网站（含 GitHub Pages），将在新窗口打开。")}</small></div>
+      <section id="publish-cover-draft" class="external-cover" hidden></section>
       <p id="publish-size-notice" class="tiny muted" role="status" hidden></p>
       <div class="field"><label for="cover-file">${t("封面")}</label><div class="cover-picker">${coverPreview?`<img id="cover-preview" src="${esc(coverPreview)}" alt="${t("所选封面")}">`:`<img id="cover-preview" alt="${t("所选封面")}" hidden>`}<input id="cover-file" type="file" accept="image/png,image/jpeg,image/webp"><button id="cover-file-remove" type="button" class="button quiet small" aria-label="${t("移除封面")}" hidden>${t("移除")}</button></div><small id="cover-upload-hint">${t("PNG、JPG 或 WebP，最大 2 MiB。")}</small></div>
       <p id="publish-error" class="error" role="alert"></p><div id="publish-recovery" class="publication-recovery" hidden></div><details id="publish-related" class="sample-links" hidden></details><div class="form-footer"><button class="button primary" type="submit">${t("发布作品")}</button><a class="button quiet" href="#/studio/works">${t("保存草稿并返回")}</a></div>
       <details class="sample-links"><summary>${t("示例文件")}</summary><div><a class="text-link" href="/examples/more.html" target="_blank" rel="noopener">${t("浏览 9 个可玩示例 ↗")}</a></div></details>
     </form></div>`,number))return;
   publishRelatedWorks=[];readMine().then(works=>{if(number===routeNumber){publishRelatedWorks=works;refreshPublishState();}}).catch(()=>{});
-  const form=$('#publish-form');publishAvailability=createBuildAvailability(api,refreshPublishState);refreshPublishState();publishAvailability.refresh();
+  const form=$('#publish-form');
+  publishCoverDraft=mountCoverDraft($('#publish-cover-draft'),{api,saved:publishDraft.coverDraft,onPersist:value=>{publishDraft.coverDraft=value;savePublish();},onChange:()=>refreshPublishState(),fetchImage:async url=>{const response=await fetch(url,{credentials:'same-origin',headers:await authHeaders()});if(!response.ok)throw new Error('Cover unavailable');return response.blob();},onSelect:async(file,url)=>{coverFile=file;publishDraft.coverSourceURL=url;publishDraft.key=uid();refreshCoverPreview();savePublish();await fileStore('put','cover',file);}});
+  publishAvailability=createBuildAvailability(api,refreshPublishState);refreshPublishState();publishAvailability.refresh();
   form.addEventListener('input',event=>{
     if(!['name','desc','url','source','githubURL','category'].includes(event.target.name))return;
     if(['source','githubURL'].includes(event.target.name)){githubJob++;githubPending=false;stopBuildPolling();buildPollError='';}
+    if(event.target.name==='url'&&publishDraft.coverSourceURL){coverFile=null;delete publishDraft.coverSourceURL;refreshCoverPreview();void fileStore('delete','cover');}
     publishDraft[event.target.name]=event.target.value;publishDraft.key=uid();publishError='';savePublish();refreshPublishState();if(event.target.name==='source'){pollGithubBuild();if(event.target.value==='github')publishAvailability?.refresh();}
   });
   $('#game-file').addEventListener('change',async event=>{
@@ -410,7 +417,7 @@ function renderPublish(number){
     if(publishPending||githubPending)return;githubJob++;publishFile=null;publishDraft.githubImport=null;delete publishDraft.html;delete publishDraft.htmlName;publishDraft.key=uid();publishError='';publishFailure=null;$('#game-file').value='';savePublish();refreshPublishState();await fileStore('delete','game');$('#game-file')?.focus();
   });
   $('#cover-file-remove').addEventListener('click',async()=>{
-    if(publishPending)return;coverFile=null;publishDraft.key=uid();publishError='';$('#cover-file').value='';refreshCoverPreview();const img=$('#cover-preview');img.removeAttribute('src');img.hidden=true;savePublish();refreshPublishState();await fileStore('delete','cover');$('#cover-file')?.focus();
+    if(publishPending)return;publishCoverDraft?.skip();coverFile=null;delete publishDraft.coverSourceURL;publishDraft.key=uid();publishError='';$('#cover-file').value='';refreshCoverPreview();const img=$('#cover-preview');img.removeAttribute('src');img.hidden=true;savePublish();refreshPublishState();await fileStore('delete','cover');$('#cover-file')?.focus();
   });
   $('#github-read').addEventListener('click',importGithub);$('#build-cancel').addEventListener('click',cancelGithubBuild);pollGithubBuild();
   $('#publish-import-availability').addEventListener('click',event=>{
@@ -420,7 +427,7 @@ function renderPublish(number){
   $('#cover-file').addEventListener('change',async event=>{
     const file=event.target.files[0];if(!file)return;
     if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>2*1024*1024){publishError="请选择不超过 2 MB 的 PNG、JPG 或 WebP 图片。";event.target.value='';refreshPublishState();return;}
-    coverFile=file;publishDraft.key=uid();publishError='';savePublish();refreshCoverPreview();refreshPublishState();const img=$('#cover-preview');img.src=coverPreview;img.hidden=false;await fileStore('put','cover',file);
+    coverFile=file;delete publishDraft.coverSourceURL;publishDraft.key=uid();publishError='';savePublish();refreshCoverPreview();refreshPublishState();const img=$('#cover-preview');img.src=coverPreview;img.hidden=false;await fileStore('put','cover',file);
   });
   form.addEventListener('submit',event=>{event.preventDefault();submitPublish(form);});
 }
@@ -453,6 +460,7 @@ async function submitPublish(form){
   if(d.source==='html'&&!publishFile){publishError="请先选择 HTML 游戏文件。";refreshPublishState();return;}
   if(d.source==='html'&&htmlFileError(publishFile)){publishError=htmlFileError(publishFile);refreshPublishState();return;}
   if(d.source==='github'&&!githubReady()){publishError="请先完成当前 GitHub 项目的导入。";refreshPublishState();return;}
+  if(d.source==='url'&&!coverFile&&publishCoverDraft&&!publishCoverDraft.canPublish){publishError='请先选择封面，或选择先不设置封面。';refreshPublishState();return;}
   if(d.source==='url'&&!safeExternal(d.url)){publishError="请输入完整的 http:// 或 https:// 链接。";refreshPublishState();return;}
   if(d.source==='url'&&new URL(d.url).hostname==='github.com'){publishError="这是 GitHub 仓库页面，请选择 GitHub 导入，或填写部署后的 GitHub Pages 地址。";refreshPublishState();return;}
   const body=new FormData();body.set('category',d.category);body.set('name',d.name.trim());body.set('desc',d.desc.trim());body.set('source',d.source==='github'?'html':d.source);

@@ -17,7 +17,7 @@ function nodes(){
   const all=new Map();
   const get=id=>{
     if(['#publish-related','#publish-recovery','#version-recovery'].includes(id))return null;
-    if(!all.has(id))all.set(id,{textContent:'',hidden:false,disabled:false,classList:{toggle(){}},querySelectorAll:()=>[]});
+    if(!all.has(id))all.set(id,{textContent:'',hidden:false,disabled:false,classList:{toggle(){}},querySelectorAll:()=>[],getAttribute(){return null;},removeAttribute(){}});
     return all.get(id);
   };
   return {get,all};
@@ -27,7 +27,7 @@ function fixture(kind){
   const shared={t,htmlImportSizeNotice,importErrorText,repositoryImportBlocked:()=>false,buildAvailabilityMarkup:()=>'',labels:{ready:'构建完成'},buildLabels:{ready:'构建完成'},buildSteps:[],phases:[]};
   let context,update;
   if(kind==='publish'){
-    context=vm.createContext({...shared,$:dom.get,$$:()=>[],publishDraft:draft,publishFile:file,coverFile:null,publishPending:false,githubPending:false,publishError:'',publishFailure:null,
+    context=vm.createContext({...shared,$:dom.get,$$:()=>[],publishDraft:draft,publishFile:file,coverFile:null,coverPreview:'',publishCoverDraft:null,publishPending:false,githubPending:false,publishError:'',publishFailure:null,
       publishAvailability:{state:{status:'online'}},matchingBuild:()=>state.build,activeBuild:()=>false,githubReady:()=>draft.source==='github'&&state.ready,githubFileLink:()=>false,buildCancelPending:false,buildPollError:''});
     vm.runInContext(publishState,context);update=()=>context.refreshPublishState();
   }else{
