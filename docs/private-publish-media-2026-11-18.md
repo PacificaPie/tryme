@@ -21,4 +21,7 @@ HTML、本地文件/GitHub 与外链现在先建立 `ft_publish_drafts`，不写
 - 本地真实 UI + 真实 Browser Run：Bingo 外链截图 15,640 ms；选择封面并明确不使用视频后才创建公开作品。此测试使用隔离的本地数据库，未污染正式 Feed。
 - staging 已追加 `0016`–`0019`（前三项来自既有主线，原文未改），部署 `ef03b9f7-15b4-4f17-8c1a-3a718758e72e`。真实 GitHub 云构建 `00aca4d0-3518-4b0d-9daf-0a09b0553726` 完成（229,573 bytes）；私有草稿 `b09d1232-bd84-4a95-867f-44dc46436084` 产生封面及 7,944 ms 视频。准备期间查询确认新增公开作品为 0。390px 流程完成来源、介绍、媒体选择与提交，布局无横向溢出；最终提交正确提示已存在同内容作品，没有重复公开。
 - 另一条真实 GitHub HTML 导入（mpaterakis/html-snakeGame，固定 SHA 377d3928d9e595b76dcd0ef8a871f2ab512b110b）在本地隔离数据库完成全程：9,987 ms 截图、7,948 ms 视频，确认后才首次公开并携带选定媒体。手机宽度走完步骤；这不是 iOS/Safari 真机验收。
-- 生产尚未迁移或部署本变更；CI 与线上读回在上线前后补记。
+- 生产已追加 `0019`，应用代码 `11bd3f8a353e8b9382cce6d70a2ba1d58ab5de70` 的 [CI 44406346995](https://github.com/PacificaPie/funtrack/actions/runs/44406346995) 全部通过。生产部署 `c3154ddb-7607-4947-b8fa-64eefd439f44`；线上 `site.js` 与 `publish-media.js` 的 SHA-256 和部署源码一致。
+- 正式站用原有登录会话准备私有 Orbit 草稿：封面捕获 10,181 ms，视频 7,942 ms；选择后刷新恢复，仍仅原 2 条捕获。匿名请求草稿媒体为 401。未点击正式发布，作品数前后均 4、名片均 3；临时草稿媒体按 24 小时策略清理。
+- 发布前已导出生产 D1 到本机忽略目录；production dry-run 成功。本机没有 Clerk Secret，离线部署脚本的两项密钥检查无法通过；核对既有云端 `CLERK_SECRET_KEY` 名称并通过正式站真实登录/上传验证，沿用云端密钥，未读取、替换或新增身份凭据。
+- 截图与详细只读结果在本机 `.preview/private-media/`；`github-mobile.png` 是 390px 测试站确认页，`production-review.png` 是正式站私有确认页。生产没有新增公开测试作品。
