@@ -17,7 +17,10 @@
     "dev:standalone": "node scripts/standalone.mjs dev",
     "build:standalone": "node scripts/standalone.mjs build",
     "validate:standalone": "node scripts/standalone.mjs validate",
-    "deploy:check": "node scripts/standalone-deploy.mjs"
+    "deploy:check": "node scripts/standalone-deploy.mjs",
+    "experiment:recording": "node experiments/ai-recording/eval.mjs",
+    "experiment:recording:boundaries": "node experiments/ai-recording/browser-checks.mjs",
+    "experiment:recording:review": "node experiments/ai-recording/review-videos.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

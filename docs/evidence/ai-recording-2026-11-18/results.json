@@ -1,0 +1,1029 @@
+{
+  "environment": "local Chrome; synthetic fixtures; no model API",
+  "rows": [
+    {
+      "id": "dom-desktop-fixed",
+      "status": "fallback",
+      "reason": "GAMEPLAY_UNVERIFIED",
+      "fallback": "retain-existing-preview-or-cover",
+      "plan": [
+        {
+          "type": "click",
+          "target": "start",
+          "settleMs": 600
+        }
+      ],
+      "ledger": {
+        "mode": "fixed",
+        "provider": "none",
+        "modelUsdActual": 0,
+        "browser": "local-chromium",
+        "cloudBrowserUsdActual": 0,
+        "calls": [],
+        "replayMs": 8565,
+        "replayNetwork": {
+          "blockedRequests": 0,
+          "dialogs": 0,
+          "errors": 0
+        }
+      },
+      "video": {
+        "durationMs": 7551,
+        "bytes": 68296,
+        "frames": 3,
+        "difference": 0.04728094362745098,
+        "differenceRegion": "viewport"
+      }
+    },
+    {
+      "id": "dom-desktop-mock",
+      "status": "verified-fixture",
+      "reason": "REVIEWED_FIXTURE_GAMEPLAY",
+      "fallback": null,
+      "plan": [
+        {
+          "type": "click",
+          "target": "start",
+          "settleMs": 600
+        },
+        {
+          "type": "click",
+          "target": "left",
+          "settleMs": 600
+        },
+        {
+          "type": "click",
+          "target": "right",
+          "settleMs": 600
+        }
+      ],
+      "ledger": {
+        "mode": "mock",
+        "provider": "none",
+        "modelUsdActual": 0,
+        "browser": "local-chromium",
+        "cloudBrowserUsdActual": 0,
+        "calls": [
+          {
+            "call": 1,
+            "inputTokensReserved": 0,
+            "outputTokensReserved": 0,
+            "reservedUsd": 0,
+            "status": "complete",
+            "actualUsd": 0,
+            "inputBytes": 18264,
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0
+            },
+            "estimatedUsd": 0
+          },
+          {
+            "call": 2,
+            "inputTokensReserved": 0,
+            "outputTokensReserved": 0,
+            "reservedUsd": 0,
+            "status": "complete",
+            "actualUsd": 0,
+            "inputBytes": 22957,
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0
+            },
+            "estimatedUsd": 0
+          },
+          {
+            "call": 3,
+            "inputTokensReserved": 0,
+            "outputTokensReserved": 0,
+            "reservedUsd": 0,
+            "status": "complete",
+            "actualUsd": 0,
+            "inputBytes": 23681,
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0
+            },
+            "estimatedUsd": 0
+          },
+          {
+            "call": 4,
+            "inputTokensReserved": 0,
+            "outputTokensReserved": 0,
+            "reservedUsd": 0,
+            "status": "complete",
+            "actualUsd": 0,
+            "inputBytes": 24958,
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0
+            },
+            "estimatedUsd": 0
+          }
+        ],
+        "explorationMs": 3227,
+        "explorationNetwork": {
+          "blockedRequests": 0,
+          "dialogs": 0,
+          "errors": 0
+        },
+        "replayMs": 8109,
+        "replayNetwork": {
+          "blockedRequests": 0,
+          "dialogs": 0,
+          "errors": 0
+        }
+      },
+      "video": {
+        "durationMs": 7553,
+        "bytes": 110742,
+        "frames": 7,
+        "difference": 0.05885569852941176,
+        "differenceRegion": "viewport"
+      }
+    },
+    {
+      "id": "dom-desktop-reuse",
+      "status": "verified-fixture",
+      "reason": "REVIEWED_FIXTURE_GAMEPLAY",
+      "fallback": null,
+      "plan": [
+        {
+          "type": "click",
+          "target": "start",
+          "settleMs": 600
+        },
+        {
+          "type": "click",
+          "target": "left",
+          "settleMs": 600
+        },
+        {
+          "type": "click",
+          "target": "right",
+          "settleMs": 600
+        }
+      ],
+      "ledger": {
+        "mode": "mock",
+        "provider": "none",
+        "modelUsdActual": 0,
+        "browser": "local-chromium",
+        "cloudBrowserUsdActual": 0,
+        "calls": [],
+        "cacheHit": true,
+        "replayMs": 8112,
+        "replayNetwork": {
+          "blockedRequests": 0,
+          "dialogs": 0,
+          "errors": 0
+        }
+      },
+      "video": {
+        "durationMs": 7553,
+        "bytes": 88577,
+        "frames": 7,
+        "difference": 0.05885569852941176,
+        "differenceRegion": "viewport"
+      }
+    },
+    {
+      "id": "canvas-desktop-fixed",
+      "status": "fallback",
+      "reason": "GAMEPLAY_UNVERIFIED",
+      "fallback": "retain-existing-preview-or-cover",
+      "plan": [
+        {
+          "type": "click",
+          "target": "start",
+          "settleMs": 600
+        }
+      ],
+      "ledger": {
+        "mode": "fixed",
+        "provider": "none",
+        "modelUsdActual": 0,
+        "browser": "local-chromium",
+        "cloudBrowserUsdActual": 0,
+        "calls": [],
+        "replayMs": 8167,
+        "replayNetwork": {
+          "blockedRequests": 0,
+          "dialogs": 0,
+          "errors": 0
+        }
+      },
+      "video": {
+        "durationMs": 7553,
+        "bytes": 60387,
+        "frames": 3,
+        "difference": 0.006354677287581699,
+        "differenceRegion": "board"
+      }
+    },
+    {
+      "id": "canvas-desktop-mock",
+      "status": "verified-fixture",
+      "reason": "REVIEWED_FIXTURE_GAMEPLAY",
+      "fallback": null,
+      "plan": [
+        {
+          "type": "click",
+          "target": "start",
+          "settleMs": 600
+        },
+        {
+          "type": "tap",
+          "target": "board",
+          "x": 0.5,
+          "y": 0.5,
+          "settleMs": 600
+        },
+        {
+          "type": "tap",
+          "target": "board",
+          "x": 0.75,
+          "y": 0.5,
+          "settleMs": 600
+        }
+      ],
+      "ledger": {
+        "mode": "mock",
+        "provider": "none",
+        "modelUsdActual": 0,
+        "browser": "local-chromium",
+        "cloudBrowserUsdActual": 0,
+        "calls": [
+          {
+            "call": 1,
+            "inputTokensReserved": 0,
+            "outputTokensReserved": 0,
+            "reservedUsd": 0,
+            "status": "complete",
+            "actualUsd": 0,
+            "inputBytes": 21182,
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0
+            },
+            "estimatedUsd": 0
+          },
+          {
+            "call": 2,
+            "inputTokensReserved": 0,
+            "outputTokensReserved": 0,
+            "reservedUsd": 0,
+            "status": "complete",
+            "actualUsd": 0,
+            "inputBytes": 22147,
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0
+            },
+            "estimatedUsd": 0
+          },
+          {
+            "call": 3,
+            "inputTokensReserved": 0,
+            "outputTokensReserved": 0,
+            "reservedUsd": 0,
+            "status": "complete",
+            "actualUsd": 0,
+            "inputBytes": 21794,
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0
+            },
+            "estimatedUsd": 0
+          },
+          {
+            "call": 4,
+            "inputTokensReserved": 0,
+            "outputTokensReserved": 0,
+            "reservedUsd": 0,
+            "status": "complete",
+            "actualUsd": 0,
+            "inputBytes": 21414,
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0
+            },
+            "estimatedUsd": 0
+          }
+        ],
+        "explorationMs": 3260,
+        "explorationNetwork": {
+          "blockedRequests": 0,
+          "dialogs": 0,
+          "errors": 0
+        },
+        "replayMs": 8244,
+        "replayNetwork": {
+          "blockedRequests": 0,
+          "dialogs": 0,
+          "errors": 0
+        }
+      },
+      "video": {
+        "durationMs": 7553,
+        "bytes": 61147,
+        "frames": 7,
+        "difference": 0.016154003267973855,
+        "differenceRegion": "board"
+      }
+    },
+    {
+      "id": "canvas-desktop-reuse",
+      "status": "verified-fixture",
+      "reason": "REVIEWED_FIXTURE_GAMEPLAY",
+      "fallback": null,
+      "plan": [
+        {
+          "type": "click",
+          "target": "start",
+          "settleMs": 600
+        },
+        {
+          "type": "tap",
+          "target": "board",
+          "x": 0.5,
+          "y": 0.5,
+          "settleMs": 600
+        },
+        {
+          "type": "tap",
+          "target": "board",
+          "x": 0.75,
+          "y": 0.5,
+          "settleMs": 600
+        }
+      ],
+      "ledger": {
+        "mode": "mock",
+        "provider": "none",
+        "modelUsdActual": 0,
+        "browser": "local-chromium",
+        "cloudBrowserUsdActual": 0,
+        "calls": [],
+        "cacheHit": true,
+        "replayMs": 8057,
+        "replayNetwork": {
+          "blockedRequests": 0,
+          "dialogs": 0,
+          "errors": 0
+        }
+      },
+      "video": {
+        "durationMs": 7553,
+        "bytes": 61147,
+        "frames": 7,
+        "difference": 0.016154003267973855,
+        "differenceRegion": "board"
+      }
+    },
+    {
+      "id": "opening-desktop-fixed",
+      "status": "fallback",
+      "reason": "OPENING_ANIMATION_ONLY",
+      "fallback": "retain-existing-preview-or-cover",
+      "plan": [],
+      "ledger": {
+        "mode": "fixed",
+        "provider": "none",
+        "modelUsdActual": 0,
+        "browser": "local-chromium",
+        "cloudBrowserUsdActual": 0,
+        "calls": [],
+        "replayMs": 8094,
+        "replayNetwork": {
+          "blockedRequests": 0,
+          "dialogs": 0,
+          "errors": 0
+        }
+      },
+      "video": {
+        "durationMs": 7551,
+        "bytes": 129559,
+        "frames": 455,
+        "difference": 0.00872140522875817,
+        "differenceRegion": "viewport"
+      }
+    },
+    {
+      "id": "opening-desktop-mock",
+      "status": "fallback",
+      "reason": "OPENING_ANIMATION_ONLY",
+      "fallback": "retain-existing-preview-or-cover",
+      "plan": [
+        {
+          "type": "wait",
+          "ms": 600
+        },
+        {
+          "type": "wait",
+          "ms": 600
+        },
+        {
+          "type": "wait",
+          "ms": 600
+        }
+      ],
+      "ledger": {
+        "mode": "mock",
+        "provider": "none",
+        "modelUsdActual": 0,
+        "browser": "local-chromium",
+        "cloudBrowserUsdActual": 0,
+        "calls": [
+          {
+            "call": 1,
+            "inputTokensReserved": 0,
+            "outputTokensReserved": 0,
+            "reservedUsd": 0,
+            "status": "complete",
+            "actualUsd": 0,
+            "inputBytes": 20359,
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0
+            },
+            "estimatedUsd": 0
+          },
+          {
+            "call": 2,
+            "inputTokensReserved": 0,
+            "outputTokensReserved": 0,
+            "reservedUsd": 0,
+            "status": "complete",
+            "actualUsd": 0,
+            "inputBytes": 20251,
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0
+            },
+            "estimatedUsd": 0
+          },
+          {
+            "call": 3,
+            "inputTokensReserved": 0,
+            "outputTokensReserved": 0,
+            "reservedUsd": 0,
+            "status": "complete",
+            "actualUsd": 0,
+            "inputBytes": 20012,
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0
+            },
+            "estimatedUsd": 0
+          },
+          {
+            "call": 4,
+            "inputTokensReserved": 0,
+            "outputTokensReserved": 0,
+            "reservedUsd": 0,
+            "status": "complete",
+            "actualUsd": 0,
+            "inputBytes": 19693,
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0
+            },
+            "estimatedUsd": 0
+          }
+        ],
+        "explorationMs": 3090,
+        "explorationNetwork": {
+          "blockedRequests": 0,
+          "dialogs": 0,
+          "errors": 0
+        },
+        "replayMs": 8035,
+        "replayNetwork": {
+          "blockedRequests": 0,
+          "dialogs": 0,
+          "errors": 0
+        }
+      },
+      "video": {
+        "durationMs": 7553,
+        "bytes": 153836,
+        "frames": 452,
+        "difference": 0.008686172385620914,
+        "differenceRegion": "viewport"
+      }
+    },
+    {
+      "id": "dom-mobile-fixed",
+      "status": "fallback",
+      "reason": "GAMEPLAY_UNVERIFIED",
+      "fallback": "retain-existing-preview-or-cover",
+      "plan": [
+        {
+          "type": "click",
+          "target": "start",
+          "settleMs": 600
+        }
+      ],
+      "ledger": {
+        "mode": "fixed",
+        "provider": "none",
+        "modelUsdActual": 0,
+        "browser": "local-chromium",
+        "cloudBrowserUsdActual": 0,
+        "calls": [],
+        "replayMs": 8075,
+        "replayNetwork": {
+          "blockedRequests": 0,
+          "dialogs": 0,
+          "errors": 0
+        }
+      },
+      "video": {
+        "durationMs": 7552,
+        "bytes": 29676,
+        "frames": 3,
+        "difference": 0.060227736928104576,
+        "differenceRegion": "viewport"
+      }
+    },
+    {
+      "id": "dom-mobile-mock",
+      "status": "verified-fixture",
+      "reason": "REVIEWED_FIXTURE_GAMEPLAY",
+      "fallback": null,
+      "plan": [
+        {
+          "type": "click",
+          "target": "start",
+          "settleMs": 600
+        },
+        {
+          "type": "click",
+          "target": "left",
+          "settleMs": 600
+        },
+        {
+          "type": "click",
+          "target": "right",
+          "settleMs": 600
+        }
+      ],
+      "ledger": {
+        "mode": "mock",
+        "provider": "none",
+        "modelUsdActual": 0,
+        "browser": "local-chromium",
+        "cloudBrowserUsdActual": 0,
+        "calls": [
+          {
+            "call": 1,
+            "inputTokensReserved": 0,
+            "outputTokensReserved": 0,
+            "reservedUsd": 0,
+            "status": "complete",
+            "actualUsd": 0,
+            "inputBytes": 16206,
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0
+            },
+            "estimatedUsd": 0
+          },
+          {
+            "call": 2,
+            "inputTokensReserved": 0,
+            "outputTokensReserved": 0,
+            "reservedUsd": 0,
+            "status": "complete",
+            "actualUsd": 0,
+            "inputBytes": 20486,
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0
+            },
+            "estimatedUsd": 0
+          },
+          {
+            "call": 3,
+            "inputTokensReserved": 0,
+            "outputTokensReserved": 0,
+            "reservedUsd": 0,
+            "status": "complete",
+            "actualUsd": 0,
+            "inputBytes": 20974,
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0
+            },
+            "estimatedUsd": 0
+          },
+          {
+            "call": 4,
+            "inputTokensReserved": 0,
+            "outputTokensReserved": 0,
+            "reservedUsd": 0,
+            "status": "complete",
+            "actualUsd": 0,
+            "inputBytes": 21891,
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0
+            },
+            "estimatedUsd": 0
+          }
+        ],
+        "explorationMs": 3167,
+        "explorationNetwork": {
+          "blockedRequests": 0,
+          "dialogs": 0,
+          "errors": 0
+        },
+        "replayMs": 8095,
+        "replayNetwork": {
+          "blockedRequests": 0,
+          "dialogs": 0,
+          "errors": 0
+        }
+      },
+      "video": {
+        "durationMs": 7553,
+        "bytes": 62956,
+        "frames": 7,
+        "difference": 0.07662479575163399,
+        "differenceRegion": "viewport"
+      }
+    },
+    {
+      "id": "dom-mobile-reuse",
+      "status": "verified-fixture",
+      "reason": "REVIEWED_FIXTURE_GAMEPLAY",
+      "fallback": null,
+      "plan": [
+        {
+          "type": "click",
+          "target": "start",
+          "settleMs": 600
+        },
+        {
+          "type": "click",
+          "target": "left",
+          "settleMs": 600
+        },
+        {
+          "type": "click",
+          "target": "right",
+          "settleMs": 600
+        }
+      ],
+      "ledger": {
+        "mode": "mock",
+        "provider": "none",
+        "modelUsdActual": 0,
+        "browser": "local-chromium",
+        "cloudBrowserUsdActual": 0,
+        "calls": [],
+        "cacheHit": true,
+        "replayMs": 8065,
+        "replayNetwork": {
+          "blockedRequests": 0,
+          "dialogs": 0,
+          "errors": 0
+        }
+      },
+      "video": {
+        "durationMs": 7552,
+        "bytes": 62936,
+        "frames": 7,
+        "difference": 0.07662479575163399,
+        "differenceRegion": "viewport"
+      }
+    },
+    {
+      "id": "canvas-mobile-fixed",
+      "status": "fallback",
+      "reason": "GAMEPLAY_UNVERIFIED",
+      "fallback": "retain-existing-preview-or-cover",
+      "plan": [
+        {
+          "type": "click",
+          "target": "start",
+          "settleMs": 600
+        }
+      ],
+      "ledger": {
+        "mode": "fixed",
+        "provider": "none",
+        "modelUsdActual": 0,
+        "browser": "local-chromium",
+        "cloudBrowserUsdActual": 0,
+        "calls": [],
+        "replayMs": 8025,
+        "replayNetwork": {
+          "blockedRequests": 0,
+          "dialogs": 0,
+          "errors": 0
+        }
+      },
+      "video": {
+        "durationMs": 7553,
+        "bytes": 29126,
+        "frames": 3,
+        "difference": 0.006694240196078431,
+        "differenceRegion": "board"
+      }
+    },
+    {
+      "id": "canvas-mobile-mock",
+      "status": "verified-fixture",
+      "reason": "REVIEWED_FIXTURE_GAMEPLAY",
+      "fallback": null,
+      "plan": [
+        {
+          "type": "click",
+          "target": "start",
+          "settleMs": 600
+        },
+        {
+          "type": "tap",
+          "target": "board",
+          "x": 0.5,
+          "y": 0.5,
+          "settleMs": 600
+        },
+        {
+          "type": "tap",
+          "target": "board",
+          "x": 0.75,
+          "y": 0.5,
+          "settleMs": 600
+        }
+      ],
+      "ledger": {
+        "mode": "mock",
+        "provider": "none",
+        "modelUsdActual": 0,
+        "browser": "local-chromium",
+        "cloudBrowserUsdActual": 0,
+        "calls": [
+          {
+            "call": 1,
+            "inputTokensReserved": 0,
+            "outputTokensReserved": 0,
+            "reservedUsd": 0,
+            "status": "complete",
+            "actualUsd": 0,
+            "inputBytes": 18389,
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0
+            },
+            "estimatedUsd": 0
+          },
+          {
+            "call": 2,
+            "inputTokensReserved": 0,
+            "outputTokensReserved": 0,
+            "reservedUsd": 0,
+            "status": "complete",
+            "actualUsd": 0,
+            "inputBytes": 18982,
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0
+            },
+            "estimatedUsd": 0
+          },
+          {
+            "call": 3,
+            "inputTokensReserved": 0,
+            "outputTokensReserved": 0,
+            "reservedUsd": 0,
+            "status": "complete",
+            "actualUsd": 0,
+            "inputBytes": 18709,
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0
+            },
+            "estimatedUsd": 0
+          },
+          {
+            "call": 4,
+            "inputTokensReserved": 0,
+            "outputTokensReserved": 0,
+            "reservedUsd": 0,
+            "status": "complete",
+            "actualUsd": 0,
+            "inputBytes": 18565,
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0
+            },
+            "estimatedUsd": 0
+          }
+        ],
+        "explorationMs": 3143,
+        "explorationNetwork": {
+          "blockedRequests": 0,
+          "dialogs": 0,
+          "errors": 0
+        },
+        "replayMs": 8043,
+        "replayNetwork": {
+          "blockedRequests": 0,
+          "dialogs": 0,
+          "errors": 0
+        }
+      },
+      "video": {
+        "durationMs": 7552,
+        "bytes": 63227,
+        "frames": 7,
+        "difference": 0.016646752450980393,
+        "differenceRegion": "board"
+      }
+    },
+    {
+      "id": "canvas-mobile-reuse",
+      "status": "verified-fixture",
+      "reason": "REVIEWED_FIXTURE_GAMEPLAY",
+      "fallback": null,
+      "plan": [
+        {
+          "type": "click",
+          "target": "start",
+          "settleMs": 600
+        },
+        {
+          "type": "tap",
+          "target": "board",
+          "x": 0.5,
+          "y": 0.5,
+          "settleMs": 600
+        },
+        {
+          "type": "tap",
+          "target": "board",
+          "x": 0.75,
+          "y": 0.5,
+          "settleMs": 600
+        }
+      ],
+      "ledger": {
+        "mode": "mock",
+        "provider": "none",
+        "modelUsdActual": 0,
+        "browser": "local-chromium",
+        "cloudBrowserUsdActual": 0,
+        "calls": [],
+        "cacheHit": true,
+        "replayMs": 8099,
+        "replayNetwork": {
+          "blockedRequests": 0,
+          "dialogs": 0,
+          "errors": 0
+        }
+      },
+      "video": {
+        "durationMs": 7553,
+        "bytes": 47809,
+        "frames": 7,
+        "difference": 0.016646752450980393,
+        "differenceRegion": "board"
+      }
+    },
+    {
+      "id": "opening-mobile-fixed",
+      "status": "fallback",
+      "reason": "OPENING_ANIMATION_ONLY",
+      "fallback": "retain-existing-preview-or-cover",
+      "plan": [],
+      "ledger": {
+        "mode": "fixed",
+        "provider": "none",
+        "modelUsdActual": 0,
+        "browser": "local-chromium",
+        "cloudBrowserUsdActual": 0,
+        "calls": [],
+        "replayMs": 8498,
+        "replayNetwork": {
+          "blockedRequests": 0,
+          "dialogs": 0,
+          "errors": 0
+        }
+      },
+      "video": {
+        "durationMs": 7552,
+        "bytes": 148757,
+        "frames": 443,
+        "difference": 0.01310610702614379,
+        "differenceRegion": "viewport"
+      }
+    },
+    {
+      "id": "opening-mobile-mock",
+      "status": "fallback",
+      "reason": "OPENING_ANIMATION_ONLY",
+      "fallback": "retain-existing-preview-or-cover",
+      "plan": [
+        {
+          "type": "wait",
+          "ms": 600
+        },
+        {
+          "type": "wait",
+          "ms": 600
+        },
+        {
+          "type": "wait",
+          "ms": 600
+        }
+      ],
+      "ledger": {
+        "mode": "mock",
+        "provider": "none",
+        "modelUsdActual": 0,
+        "browser": "local-chromium",
+        "cloudBrowserUsdActual": 0,
+        "calls": [
+          {
+            "call": 1,
+            "inputTokensReserved": 0,
+            "outputTokensReserved": 0,
+            "reservedUsd": 0,
+            "status": "complete",
+            "actualUsd": 0,
+            "inputBytes": 18147,
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0
+            },
+            "estimatedUsd": 0
+          },
+          {
+            "call": 2,
+            "inputTokensReserved": 0,
+            "outputTokensReserved": 0,
+            "reservedUsd": 0,
+            "status": "complete",
+            "actualUsd": 0,
+            "inputBytes": 18055,
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0
+            },
+            "estimatedUsd": 0
+          },
+          {
+            "call": 3,
+            "inputTokensReserved": 0,
+            "outputTokensReserved": 0,
+            "reservedUsd": 0,
+            "status": "complete",
+            "actualUsd": 0,
+            "inputBytes": 17784,
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0
+            },
+            "estimatedUsd": 0
+          },
+          {
+            "call": 4,
+            "inputTokensReserved": 0,
+            "outputTokensReserved": 0,
+            "reservedUsd": 0,
+            "status": "complete",
+            "actualUsd": 0,
+            "inputBytes": 17561,
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0
+            },
+            "estimatedUsd": 0
+          }
+        ],
+        "explorationMs": 3225,
+        "explorationNetwork": {
+          "blockedRequests": 0,
+          "dialogs": 0,
+          "errors": 0
+        },
+        "replayMs": 8269,
+        "replayNetwork": {
+          "blockedRequests": 0,
+          "dialogs": 0,
+          "errors": 0
+        }
+      },
+      "video": {
+        "durationMs": 7553,
+        "bytes": 148108,
+        "frames": 372,
+        "difference": 0.01310610702614379,
+        "differenceRegion": "viewport"
+      }
+    }
+  ]
+}
