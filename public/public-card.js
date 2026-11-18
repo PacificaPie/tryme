@@ -72,8 +72,8 @@ function mountPublicPage(root) {
     const frame=root.querySelector('#public-gallery-frame');
     if(frame){
       const status=root.querySelector('.gallery-load-status');
-      bridge=createGalleryBridge({frame,payload,onStatus:state=>{
-        const busy=state==='loading';frame.setAttribute('aria-busy',String(busy));frame.style.visibility=busy||state==='timeout'?'hidden':'';status.hidden=state==='rendered'||state==='empty';
+      bridge=createGalleryBridge({frame,...(card.template==='city'?{timeout:30000,recoveryDelay:10000}:{}),payload,onStatus:state=>{
+        const busy=state==='loading';frame.setAttribute('aria-busy',String(busy));frame.style.visibility=(busy&&card.template!=='city')||state==='timeout'?'hidden':'';status.hidden=state==='rendered'||state==='empty';
         if(!status.hidden){status.innerHTML=busy?`${spinner()}<span>${t('正在加载 3D 名片…')}</span>`:`<span>${t(state==='fallback'?'当前浏览器暂未显示 3D，作品列表仍可查看。':'3D 名片加载超时，请重试。')}</span><button type="button" class="button small">${t('重新加载 3D')}</button>`;status.querySelector('button')?.addEventListener('click',()=>bridge.retry());}
       }});
     }else mountPortfolioCard(root,'public-card:'+id);

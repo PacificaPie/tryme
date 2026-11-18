@@ -101,6 +101,9 @@ test('filmstrip keeps the real portfolio controller and intercepts both cover an
 test('3D samples send only demonstration data, validate frame messages, and keep a usable retry fallback',async()=>{
   for(const template of ['fold','collection','city']){
     const f=fixture(template),bridge=f.bridges[0],frame=f.root.querySelector('[data-template-frame]');frame.contentWindow={};
+    assert.equal(frame.hidden,false);
+    assert.equal(frame.style.visibility,template==='city'?'':'hidden');
+    if(template==='city'){assert.equal(bridge.options.timeout,30000);assert.equal(bridge.options.recoveryDelay,10000);}
     assert.equal(f.portfolios.length,0);const payload=bridge.options.payload();
     assert.equal(payload.author.id,'template-sample');assert.equal(payload.author.avatarUrl,'/avatars/moon.svg');assert.equal(payload.works.length,3);
     assert.equal(payload.open,false);assert.equal(payload.inside,false);assert(payload.works.every(work=>work.cover.startsWith('/examples/')&&!work.url));

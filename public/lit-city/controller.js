@@ -1,5 +1,6 @@
 import {cleanCityCard,cityView,PAGE_SIZE} from './data.js';
 const $=id=>document.getElementById(id),SP=window.SP,blueprints=structuredClone(SP.CFG.WORKS);
+document.body.dataset.cityPhase='waiting';
 const C=SP.CFG;C.OWNER={name:'',latin:'',line:''};C.CAM.cx=[[0,.5]];C.CAM.cy=[[0,.52]];C.CAM.fill=[[0,.62],[5.4,.72],[8.2,.72],[12.6,.88]];C.CAM.city={...C.CAM.city,cx:.5,fill:.78};
 let data=null,view={page:0,face:'front',focusWorkId:null},player=null,failed=false,disposed=false,expanded=false,key='',requestId=null,lastHeight=0,en=false;
 const documentId=crypto.randomUUID(),listeners=[],send=message=>{if(parent!==window)parent.postMessage(message,location.origin);};
@@ -47,9 +48,10 @@ function rebuild(){
   text();
 }
 function initialize(payload){
-  const next=cleanCityCard(payload,location.origin);if(!next)return false;
+  document.body.dataset.cityPhase='initializing';const next=cleanCityCard(payload,location.origin);if(!next){document.body.dataset.cityPhase='invalid-data';return false;}
+  $('flip').disabled=false;
   en=payload.locale==='en';const nextKey=JSON.stringify({en,data:next}),oldPage=view.page;data=next;view=cityView(payload,data.works);
-  if(key!==nextKey||oldPage!==view.page||(!player&&data.works.length&&!failed)){key=nextKey;rebuild();}else text();state();return true;
+  if(key!==nextKey||oldPage!==view.page||(!player&&data.works.length&&!failed)){key=nextKey;rebuild();}else text();state();document.body.dataset.cityPhase=failed?'fallback':'ready';return true;
 }
 listen(window,'message',event=>{if(event.source!==parent||event.origin!==location.origin||disposed)return;const message=event.data;if(message?.type!=='funtrack:gallery:init')return;if(message.requestId!==requestId||requestId===null){if(!initialize(message.payload))return;requestId=message.requestId;}send({type:'funtrack:gallery:initialized',requestId:message.requestId,state:failed?'fallback':data.works.length?'rendered':'empty'});});
 listen($('flip'),'click',()=>{view.face=view.face==='back'?'front':'back';text();state();if(view.face==='front')player?.resize();});
