@@ -162,3 +162,44 @@ test('exact context reaches old roots and deep replies without changing normal p
   assert.equal((await context(f,'x'.repeat(129))).status,404);
   const anonymous=await handleAPI(new Request('https://site.test/api/comments/'+target.id+'/context'));assert.equal(anonymous.status,401);
 });
+
+
+test('concurrent comments share an atomic minute quota, with safe replay at the limit',async t=>{
+  const f=fixture(t),{work}=await f.publish();
+  for(let i=0;i<29;i++)assert.equal((await post(f,work,{body:'Quota seed '+i,versionId:work.versionId})).status,201);
+  const attempts=Array.from({length:12},(_,i)=>({key:randomUUID(),body:{body:'Concurrent '+i,versionId:work.versionId,expectedAuthorId:OTHER}}));
+  // Hold legacy quota reads at the same snapshot. Real D1 requests can
+  // interleave here; a synchronous SQLite fixture otherwise hides the race.
+  const prepare=f.db.prepare.bind(f.db);let reads=0,release;
+  const gate=new Promise(resolve=>{release=resolve;});
+  f.db.prepare=query=>{const statement=prepare(query);if(query.startsWith('SELECT COUNT(*) AS n FROM ft_comments WHERE author_id=')){
+    const first=statement.first.bind(statement);statement.first=async()=>{const snapshot=await first();if(++reads===attempts.length)release();await gate;return snapshot;};
+  }return statement;};
+  const results=await Promise.all(attempts.map(({key,body})=>post(f,work,body,{key})));
+  f.db.prepare=prepare;
+  assert.equal(results.filter(r=>r.status===201).length,1);
+  assert.equal(results.filter(r=>r.status===429&&r.error.code==='RATE_LIMITED').length,11);
+  assert.equal(f.count('ft_comments'),30);
+  const index=results.findIndex(r=>r.status===201),accepted=attempts[index];
+  const replay=await post(f,work,accepted.body,{key:accepted.key});assert.equal(replay.status,200);assert.equal(replay.comment.id,results[index].comment.id);
+  assert.equal((await post(f,work,{...accepted.body,body:'Changed'},{key:accepted.key})).error.code,'IDEMPOTENCY_CONFLICT');
+  f.database.prepare('UPDATE ft_comments SET created_at=? WHERE id=?').run(new Date(Date.now()-61000).toISOString(),results[index].comment.id);
+  assert.equal((await post(f,work,{body:'Window reopened',versionId:work.versionId})).status,201);
+});
+
+test('a lost response at full quota replays the committed comment without another slot or credit',async t=>{
+  const f=fixture(t),{work}=await f.publish();
+  for(let i=0;i<29;i++)await post(f,work,{body:'Quota '+i});
+  const key=randomUUID(),body={body:'Last slot',versionId:work.versionId};
+  f.faults.afterCommit=true;assert.equal((await post(f,work,body,{key})).status,500);assert.equal(f.count('ft_comments'),30);
+  const credits=f.count('ft_contribution_credits'),replay=await post(f,work,body,{key});
+  assert.equal(replay.status,200);assert.equal(replay.duplicate,true);assert.equal(f.count('ft_comments'),30);assert.equal(f.count('ft_contribution_credits'),credits);
+  assert.equal((await post(f,work,{body:'Over quota'})).status,429);
+});
+test('concurrent identical replies consume only one last slot',async t=>{
+  const f=fixture(t),{work}=await f.publish(),root=(await post(f,work,{body:'Root'})).comment;
+  for(let i=0;i<28;i++)await post(f,work,{body:'Quota '+i});
+  const key=randomUUID(),body={body:'One reply',parentId:root.id,versionId:work.versionId};
+  const results=await Promise.all(Array.from({length:12},()=>post(f,work,body,{key})));
+  assert(results.every(result=>[200,201].includes(result.status)));assert.equal(new Set(results.map(result=>result.comment.id)).size,1);assert.equal(f.count('ft_comments'),30);
+});

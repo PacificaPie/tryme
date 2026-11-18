@@ -9,7 +9,7 @@ const source=ts.createSourceFile('site.js',readFileSync(new URL('../public/site.
 const declaration=name=>source.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text===name).getText(source);
 test('public Feed fetch is independent of Clerk availability and sends neither session credentials nor Bearer tokens',async()=>{
   const calls=[];let authCalls=0;
-  const context=vm.createContext({FormData,ApiError:Error,authHeaders:async()=>{authCalls++;throw Error('Clerk unavailable');},fetch:async(path,options)=>{calls.push({path,options});return Response.json({works:[]});}});
+  const context=vm.createContext({FormData,draftOwner:null,assertAuthAccount(){},ApiError:Error,authHeaders:async()=>{authCalls++;throw Error('Clerk unavailable');},fetch:async(path,options)=>{calls.push({path,options});return Response.json({works:[]});}});
   vm.runInContext(declaration('api'),context);
   assert.deepEqual(JSON.parse(JSON.stringify(await context.api('/api/public/discover?q=rain'))),{works:[]});
   assert.equal(authCalls,0);assert.equal(calls[0].options.credentials,'omit');assert.equal(calls[0].options.headers.Authorization,undefined);
@@ -20,7 +20,7 @@ function routeFixture(path,{authFailure=false}={}){
   const rendered=[],discovered=[],r={path:path.split('?')[0],raw:path,params:new URLSearchParams(path.split('?')[1]||'')};
   const context=vm.createContext({
     me:null,authChecked:false,routeNumber:0,location:{hash:'#'+path,replace(){throw Error('Unexpected redirect');}},legacyPublicCardPath:()=>null,visitRecorded:false,
-    route:()=>r,publishCoverDraft:null,publishWizard:null,publishedExternalCover:null,publishedAutoCover:null,publishedAutoPreview:null,publishedVideos:null,publishAvailability:null,analyticsPanel:null,discoveryPanel:null,creatorPanel:null,templateExperiencePanel:null,
+    route:()=>r,discussionPanel:null,publishCoverDraft:null,publishWizard:null,publishedExternalCover:null,publishedAutoCover:null,publishedAutoPreview:null,publishedVideos:null,publishAvailability:null,analyticsPanel:null,discoveryPanel:null,creatorPanel:null,templateExperiencePanel:null,
     currentRoute:'',currentGallery:null,scrolls:new Map(),finishRouteLoading:null,main:{},
     stopBuildPolling(){},disposeVersioning(){},disposeWorkEdit(){},disposePublicationControls(){},endSession(){},$$:()=>[],syncNavigation(){},identity(){},
     beginRouteLoading:()=>()=>{},pageSkeleton:()=>'',t:x=>x,ApiError:class extends Error{constructor(message,status){super(message);this.status=status;}},

@@ -24,9 +24,9 @@ function environment(t){
   globalThis.sessionStorage={getItem:key=>saved.get(key),setItem:(key,value)=>saved.set(key,value)};
   t.after(()=>{for(const [key,value]of Object.entries(previous))if(value===undefined)delete globalThis[key];else globalThis[key]=value;});return saved;
 }
-function mounted({work,user,api,focusId='',beforeRootSubmit}){
-  const element=new Node();mountDiscussion(element,{work,user,api,esc:escape,focusId,beforeRootSubmit});
-  return {element,form:element.querySelector('form'),input:element.querySelector('textarea'),list:element.querySelector('.comment-list'),context:element.querySelector('.comment-context'),more:element.querySelector('.comments-more'),status:element.querySelector('.comment-status')};
+function mounted({work,user,api,focusId='',beforeRootSubmit,timers}){
+  const element=new Node();const panel=mountDiscussion(element,{work,user,api,esc:escape,focusId,beforeRootSubmit,timers});
+  return {panel,element,form:element.querySelector('form'),input:element.querySelector('textarea'),list:element.querySelector('.comment-list'),context:element.querySelector('.comment-context'),more:element.querySelector('.comments-more'),status:element.querySelector('.comment-status')};
 }
 const user=()=>({id:randomUUID(),name:'Reader'});
 const work=()=>({id:randomUUID(),versionId:'version-v1',version:'v1'});
@@ -148,4 +148,31 @@ test('comment links target the precise comment on the current work; labels do no
     const href=commentHref({id:'reply/one',workId:'work/one',versionId:'old-id'},'/studio/feedback?work=x');
     const route=href.slice(1),params=new URLSearchParams(route.split('?')[1]);assert.equal(route.split('?')[0],'/work/work%2Fone');assert.equal(params.get('comment'),'reply/one');assert.equal(params.get('from'),'/studio/feedback?work=x');assert.equal(params.has('versionId'),false);assert.equal(params.has('play'),false);
   }finally{setLocale(before);}
+});
+
+
+test('list deadline aborts a hung read, retries without losing text, and ignores the late response',async t=>{
+  environment(t);let fire,release,calls=0,signal;const timers={setTimeout(fn){fire=fn;return 1;},clearTimeout(){}};
+  const w=work(),u=user(),old=comment(w,u,{body:'stale'}),fresh=comment(w,u,{body:'fresh'});
+  const api=(path,options)=>{signal=options.signal;calls++;return calls===1?new Promise(resolve=>{release=resolve;}):Promise.resolve({comments:[fresh],commentsCount:1,nextCursor:null});};
+  const view=mounted({work:w,user:u,api,timers});view.input.value='Keep my draft';await view.form.emit('input');
+  fire();await tick();assert.equal(signal.aborted,true);assert.match(view.status.textContent,/超时/);
+  await view.list.emit('click',eventFor('.comments-retry',{}));await tick();assert.match(view.list.innerHTML,/fresh/);
+  release({comments:[old],commentsCount:1,nextCursor:null});await tick();assert.doesNotMatch(view.list.innerHTML,/stale/);assert.equal(view.input.value,'Keep my draft');
+});
+test('remount aborts the previous list read and an old page cannot replace the new page',async t=>{
+  environment(t);const w=work(),u=user();let release,oldSignal;
+  const a=mounted({work:w,user:u,api:(path,{signal})=>{oldSignal=signal;return new Promise(resolve=>{release=resolve;});}});
+  a.element.isConnected=false;
+  const b=mounted({work:w,user:u,api:async()=>({comments:[comment(w,u,{body:'new page'})],commentsCount:1,nextCursor:null})});await tick();
+  assert.equal(oldSignal.aborted,true);release({comments:[comment(w,u,{body:'old page'})],commentsCount:1,nextCursor:null});await tick();
+  assert.match(b.list.innerHTML,/new page/);assert.doesNotMatch(b.list.innerHTML,/old page/);
+});
+
+test('route disposal cancels the list request and releases its deadline',async t=>{
+  environment(t);let signal,release,cleared=false;const w=work(),u=user();
+  const timers={setTimeout(){return 19;},clearTimeout(id){if(id===19)cleared=true;}};
+  const view=mounted({work:w,user:u,timers,api:(path,options)=>{signal=options.signal;return new Promise(resolve=>{release=resolve;});}});
+  const before=view.list.innerHTML;view.panel.dispose();await tick();assert(signal.aborted);assert(cleared);
+  release({comments:[comment(w,u,{body:'Late after exit'})],commentsCount:1,nextCursor:null});await tick();assert.equal(view.list.innerHTML,before);
 });
