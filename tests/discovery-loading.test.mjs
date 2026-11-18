@@ -51,6 +51,22 @@ function fixture(t){
   return{root,calls,queries,social,timers,frames,tick,mount,results,status,retry,refresh};
 }
 
+test('guest Feed uses public reads, keeps search/sort/pagination and gates following without private or impression calls',async t=>{
+  const f=fixture(t),tiles=[];let prompts=0;
+  await f.mount({userId:null,onSignIn:()=>prompts++,workTile:(work,options)=>{tiles.push(options);return `<article data-rendered-work="${work.id}"></article>`;}});
+  assert(f.calls[0].url.startsWith('/api/public/discover?'));assert(!f.calls[0].url.includes('following='));
+  f.calls[0].resolve({works:[{id:'public-work-1',name:'Public game'}],nextCursor:'page-two',total:2});await settle();
+  assert.deepEqual(tiles,[{social:false}]);assert.deepEqual(f.social,[]);assert.equal(f.timers.size,0,'Guest views do not start impression timers');
+  f.root.querySelectorAll('[data-feed-scope]').find(b=>b.dataset.feedScope==='1').fire('click');
+  assert.equal(prompts,1);assert.equal(f.calls.length,1);assert.deepEqual(f.queries,[]);
+  f.root.querySelector('#load-works').fire('click');assert(f.calls[1].url.includes('cursor=page-two'));
+  f.calls[1].resolve({works:[{id:'public-work-2'}],nextCursor:null,total:2});await settle();
+  const search=f.root.querySelector('#work-search');search.value='rain';
+  f.root.querySelectorAll('[data-sort]').find(b=>b.dataset.sort==='newest').fire('click');
+  const query=new URL(f.calls[2].url,'https://site.test');assert.equal(query.pathname,'/api/public/discover');assert.equal(query.searchParams.get('q'),'rain');assert.equal(query.searchParams.get('sort'),'newest');
+  f.calls[2].resolve(empty());await settle();assert(f.calls.every(call=>call.url.startsWith('/api/public/discover?')));
+});
+
 test('first request does not delay disposal; disposing aborts it and ignores its late rejection and timeout',async t=>{
   const f=fixture(t);let panel;
   const mounted=f.mount().then(value=>{panel=value;});
