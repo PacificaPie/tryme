@@ -14,3 +14,5 @@
 @media(prefers-reduced-motion:reduce){.publish-progress b{transition:none}.auto-preview-panel [role="status"]:before,.publish-background-status:before,.external-cover [role="status"]:before{animation:none!important}}
 
 .publish-wizard{scroll-margin-top:92px}.publish-wizard .cover-picker:not(:has(img:not([hidden]))){min-height:0;padding:12px}.publish-wizard .external-cover-image{max-height:320px;width:auto;max-width:100%;margin-inline:auto;aspect-ratio:auto;object-fit:contain}
+
+.publish-media-panel{padding:18px 0;border-top:1px solid var(--border)}.publish-media-panel h3{font-size:16px;margin:0 0 8px}.publish-media-panel p{font-size:14px;color:var(--muted);line-height:1.6}.publish-media-panel video{display:block;width:100%!important;background:var(--soft)}
