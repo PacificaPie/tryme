@@ -146,3 +146,13 @@ export const autoCoverJobs = sqliteTable('ft_auto_cover_jobs', {
 export const autoCoverAttempts = sqliteTable('ft_auto_cover_attempts', {
   id: text('id').primaryKey(), jobId: text('job_id').notNull().references(()=>autoCoverJobs.id), reservedSeconds: integer('reserved_seconds').notNull(), elapsedMs: integer('elapsed_ms'), outcome: text('outcome'), createdAt: text('created_at').notNull(),
 }, t=>[index('ft_auto_cover_budget_time').on(t.createdAt)]);
+
+// Optional, version-pinned derived media; never part of card snapshots.
+export const videoPreviewJobs = sqliteTable('ft_video_preview_jobs', {
+  id: text('id').primaryKey(), workId: text('work_id').notNull().references(()=>works.id), versionId: text('version_id').notNull().references(()=>versions.id), ownerId: text('owner_id').notNull(), contentHash: text('content_hash').notNull(),
+  status: text('status').notNull().default('queued'), attempts: integer('attempts').notNull().default(0), leaseId: text('lease_id'), leaseUntil: text('lease_until'), reason: text('reason'), objectKey: text('object_key'), byteSize: integer('byte_size'), durationMs: integer('duration_ms'),
+  createdAt: text('created_at').notNull(), updatedAt: text('updated_at').notNull(),
+}, t=>[uniqueIndex('ft_video_preview_work_version').on(t.workId,t.versionId),index('ft_video_preview_queue').on(t.status,t.createdAt)]);
+export const videoPreviewAttempts = sqliteTable('ft_video_preview_attempts', {
+  id: text('id').primaryKey(), jobId: text('job_id').notNull().references(()=>videoPreviewJobs.id), reservedSeconds: integer('reserved_seconds').notNull(), elapsedMs: integer('elapsed_ms'), outcome: text('outcome'), createdAt: text('created_at').notNull(),
+}, t=>[index('ft_video_preview_budget_time').on(t.createdAt)]);

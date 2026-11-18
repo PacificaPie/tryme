@@ -14,7 +14,8 @@
     "FUNTRACK_BUILD_MODE": "cloud",
     "CLERK_TEST_MODE": "1",
     "CLERK_PUBLISHABLE_KEY": "pk_test_cHJlbWl1bS1ncmlmZm9uLTk3NzEuY2xlcmsuYWNjb3VudHMuZGV2JA",
-    "FUNTRACK_AUTO_COVER_ENABLED": "1"
+    "FUNTRACK_AUTO_COVER_ENABLED": "1",
+    "FUNTRACK_VIDEO_PREVIEW_ENABLED": "1"
   },
   "secrets": {
     "required": [

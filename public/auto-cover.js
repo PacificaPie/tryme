@@ -32,9 +32,9 @@ export function autoCoverView(state={}) {
   return {message:'尚未确认封面状态，请刷新查看。',action:'refresh',label:'刷新封面状态'};
 }
 
-export function createAutoCoverController({api,work,onChange=()=>{},onReady=()=>{},canGenerate=()=>true,timers=globalThis,pollDelay=4000,maxPolls=45,requestTimeout=15000}) {
+export function createAutoCoverController({api,work,onChange=()=>{},onReady=()=>{},canGenerate=()=>true,timers=globalThis,pollDelay=4000,maxPolls=45,requestTimeout=15000,resource='auto-cover'}) {
   let state={status:'checking',pending:false},disposed=false,pending=null,abort=null,timer,deadlineTimer,polls=0,readyKey='',requestNumber=0;
-  const path='/api/works/'+encodeURIComponent(work.id)+'/auto-cover';
+  const path='/api/works/'+encodeURIComponent(work.id)+'/'+resource;
   const update=next=>{state={...state,...next};if(!disposed)onChange(state);};
   const schedule=()=>{
     timers.clearTimeout(timer);
@@ -58,9 +58,10 @@ export function createAutoCoverController({api,work,onChange=()=>{},onReady=()=>
           const result=await api(path,{signal:controller.signal,...(action?{method:'POST',body:{action,versionId:work.versionId}}:{})});
           if(!current())return;
           if(!statuses.has(result?.status)||result.workId!==work.id)throw new Error('Invalid cover state');
+          if(resource==='auto-preview'&&result.versionId!==work.versionId)throw new Error('Preview version changed');
           update({...result,reason:result.reason||null,pending:false,paused:false});
           if(result.status==='ready'){
-            const key=String(result.metadataId||result.coverUrl||'')+':'+result.revision;
+            const key=String(result.metadataId||result.coverUrl||result.preview?.url||'')+':'+result.revision;
             if(key!==readyKey){await onReady(result,{signal:controller.signal});if(current())readyKey=key;}
           }
         })()]);

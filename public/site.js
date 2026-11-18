@@ -1,3 +1,4 @@
+import { previewMarkup, previewButton, mountVideoPreviews, mountAutoPreview } from './video-preview.js';
 import { t, getLocale, setLocale, registerMessages } from './i18n.js';
 import { createGalleryBridge } from './gallery/embed.js';
 import { publicCardPath, legacyPublicCardPath } from './public-card-links.js';
@@ -39,7 +40,7 @@ const $ = (s, root=document) => root.querySelector(s);
 const $$ = (s, root=document) => [...root.querySelectorAll(s)];
 const main = $('#main');
 mountMenus();
-let finishRouteLoading = null, publishedAutoCover = null;
+let finishRouteLoading = null, publishedAutoCover = null, publishedAutoPreview = null, publishedVideos = null;
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid = () => crypto.randomUUID();
 const read = (key, fallback) => { try { return JSON.parse(sessionStorage.getItem(key)) ?? fallback; } catch { return fallback; } };
@@ -95,7 +96,7 @@ function workTile(work,{from=route().raw,creator=true,cardId='',social=false}={}
   const href=workHref(work,from,cardId),src=safeCover(work.coverUrl);
   const author=avatarMarkup({name:work.authorName,avatarUrl:work.authorAvatarUrl},{className:'feed-author-avatar'})+esc(work.authorName||t('创作者'));
   const creatorMarkup=work.authorId?`<a class="creator-link" href="#/author/${encodeURIComponent(work.authorId)}">${author}</a>`:`<span class="creator-link">${author}</span>`;
-  return `<article class="work-tile"><a class="work-entry" href="${esc(href)}" aria-label="${t("查看")} ${esc(work.name)}"><div class="cover${src?'':' empty-cover'}">${src?`<img src="${esc(src)}" alt="" loading="lazy">`:`<span>${esc(work.name)}</span>`}<span class="cover-action" aria-hidden="true">${t(me?"查看作品":"登录后试玩")} ↗</span></div><div class="tile-info"><div class="tile-copy"><h3 class="tile-title">${esc(work.name)}</h3><p class="tile-desc">${esc(work.desc)}</p></div></div></a><div class="tile-bottom">${creator?creatorMarkup:''}${social?socialControls(work,{share:false,comments:true}):''}</div></article>`;
+  return `<article class="work-tile"><a class="work-entry" href="${esc(href)}" aria-label="${t("查看")} ${esc(work.name)}"><div class="cover${src?'':' empty-cover'}">${src?`<img src="${esc(src)}" alt="" loading="lazy">`:`<span>${esc(work.name)}</span>`}${previewMarkup(work.preview)}<span class="cover-action" aria-hidden="true">${t(me?"查看作品":"登录后试玩")} ↗</span></div><div class="tile-info"><div class="tile-copy"><h3 class="tile-title">${esc(work.name)}</h3><p class="tile-desc">${esc(work.desc)}</p></div></div></a>${previewButton(work.preview)}<div class="tile-bottom">${creator?creatorMarkup:''}${social?socialControls(work,{share:false,comments:true}):''}</div></article>`;
 }
 function workImage(work,className=''){const src=safeCover(work.coverUrl);return src?`<img class="${className}" src="${esc(src)}" alt="${esc(work.name)}">`:`<div class="image-placeholder ${className}">${esc(work.name)}</div>`;}
 function playIcon(){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7Z"/></svg>';}
@@ -148,7 +149,7 @@ async function renderRoute(options={}){
   const publicPath=(!authChecked||!me)&&legacyPublicCardPath(location.hash);
   if(publicPath){location.replace(publicPath);return;}
   if(!options.localeOnly)visitRecorded=false;
-  const r=route(),number=++routeNumber;publishedAutoCover?.dispose();publishedAutoCover=null;stopBuildPolling();publishAvailability?.dispose();publishAvailability=null;disposeVersioning();disposeWorkEdit();disposePublicationControls();analyticsPanel?.dispose();analyticsPanel=null;discoveryPanel?.dispose();discoveryPanel=null;creatorPanel?.dispose();creatorPanel=null;templateExperiencePanel?.dispose();templateExperiencePanel=null;
+  const r=route(),number=++routeNumber;publishedAutoCover?.dispose();publishedAutoCover=null;publishedAutoPreview?.dispose();publishedAutoPreview=null;publishedVideos?.dispose();publishedVideos=null;stopBuildPolling();publishAvailability?.dispose();publishAvailability=null;disposeVersioning();disposeWorkEdit();disposePublicationControls();analyticsPanel?.dispose();analyticsPanel=null;discoveryPanel?.dispose();discoveryPanel=null;creatorPanel?.dispose();creatorPanel=null;templateExperiencePanel?.dispose();templateExperiencePanel=null;
   if(currentRoute&&currentRoute!==r.raw)scrolls.set(currentRoute,window.scrollY);
   endSession('exit');currentGallery?.dispose?.();currentGallery=null;currentRoute=r.raw;
   const activeNav=r.path.startsWith('/cards')||r.path.startsWith('/card/')?'cards':r.path.startsWith('/studio')||r.path==='/publish'?'studio':r.path.startsWith('/author/')||r.path==='/following'?null:'feed';
@@ -351,6 +352,7 @@ function refreshPublishState(){
   $('#game-file-remove').hidden=!publishFile;$('#game-file-remove').disabled=publishPending||githubPending;
   $('#cover-file-remove').hidden=!coverFile;$('#cover-file-remove').disabled=publishPending;
   $('#cover-upload-hint').textContent=t(d.source==='url'?'PNG、JPG 或 WebP，最大 2 MiB。':'封面可不上传，发布后自动截取游戏开屏。PNG、JPG 或 WebP，最大 2 MiB。');
+  if(d.source!=='url')$('#cover-upload-hint').textContent+=' '+t('发布后自动录制约 8 秒静音预览，不影响发布与试玩。');
   const submit=$('[type="submit"]',form);submit.disabled=publishPending||githubPending||(d.source==='github'&&!ready);submit.classList.toggle('primary',d.source!=='github'||ready);submit.textContent=publishPending?t("正在发布…"):t("发布作品");
   $('#publish-error').textContent=t(publishError||(d.source==='github'&&build?.status==='failed'?importErrorText(build):''));
   const related=$('#publish-related');if(related){let repository='';try{const u=new URL(d.githubURL);if(u.hostname==='github.com')repository=u.pathname.replace(/^\/|\/$/g,'').replace(/\.git$/i,'').toLowerCase();}catch{}const matches=d.source==='github'&&repository?publishRelatedWorks.filter(w=>w.source==='html'&&w.build?.repository?.toLowerCase()===repository):[];related.hidden=!matches.length;related.innerHTML=matches.length?`<summary>${t('已有同源作品')}</summary><div>${matches.slice(0,5).map(w=>`<a class="text-link" href="#/studio/works/${encodeURIComponent(w.id)}/update">${esc(t('更新 {name}',{name:w.name}))}</a>`).join('')}</div>`:'';}
@@ -459,10 +461,12 @@ async function submitPublish(form){
 }
 async function renderPublished(r,number){
   const {work}=await api('/api/works/'+encodeURIComponent(r.path.split('/')[2]));
-  if(!applyHTML(`<div class="page narrow">${head(t("作品已发布"),work.name)}<div id="published-work-tile" class="work-grid" style="max-width:560px;grid-template-columns:1fr">${workTile(work)}</div><div id="published-auto-cover"></div><div class="form-footer"><a class="button primary" href="${esc(workHref(work,'/studio/works'))}">${t("试玩作品")}</a><details class="version-secondary"><summary>${t('更多')}</summary><a class="button quiet" href="#${discoveryPath(work.id)}">${t('展示设置')}</a><a class="button quiet" href="#/cards/me">${t("放进名片")}</a><a class="button quiet" href="#/studio/works">${t("我的作品")}</a></details></div></div>`,number))return;
+  if(!applyHTML(`<div class="page narrow">${head(t("作品已发布"),work.name)}<div id="published-work-tile" class="work-grid" style="max-width:560px;grid-template-columns:1fr">${workTile(work)}</div><div id="published-auto-cover"></div><div id="published-auto-preview"></div><div class="form-footer"><a class="button primary" href="${esc(workHref(work,'/studio/works'))}">${t("试玩作品")}</a><details class="version-secondary"><summary>${t('更多')}</summary><a class="button quiet" href="#${discoveryPath(work.id)}">${t('展示设置')}</a><a class="button quiet" href="#/cards/me">${t("放进名片")}</a><a class="button quiet" href="#/studio/works">${t("我的作品")}</a></details></div></div>`,number))return;
+  publishedVideos=mountVideoPreviews($('#published-work-tile'));
+  publishedAutoPreview=mountAutoPreview($('#published-auto-preview'),{work,owner:me.id,api,onReady:async()=>{const {work:latest}=await api('/api/works/'+encodeURIComponent(work.id));if(number!==routeNumber)return;$('#published-work-tile').innerHTML=workTile(latest);publishedVideos?.refresh();clearDiscovery();}});
   publishedAutoCover=mountAutoCover($('#published-auto-cover'),{work,owner:me.id,api,onReady:async()=>{
     const {work:latest}=await api('/api/works/'+encodeURIComponent(work.id));
-    if(number!==routeNumber)return;$('#published-work-tile').innerHTML=workTile(latest);clearDiscovery();
+    if(number!==routeNumber)return;$('#published-work-tile').innerHTML=workTile(latest);publishedVideos?.refresh();clearDiscovery();
   }});
 }
 const steps = current => `<nav class="steps" aria-label="${t("制作步骤")}">${[t("选作品"),t("选模板"),t("生成名片")].map((name,index)=>index<current?`<a href="${index===0?'#/cards/me':'#/cards/me/template'}"><b>${index+1}</b>${name}</a>`:`<span class="${index===current?'active':''}" ${index===current?'aria-current="step"':''}><b>${index+1}</b>${name}</span>`).join('')}</nav>`;
