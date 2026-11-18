@@ -1,0 +1,54 @@
+{
+  "environment": "Cloudflare staging + Clerk development instance, two actual sessions with reserved synthetic test addresses",
+  "workId": "af859b74-9953-43c1-99ab-2a8c325ae269",
+  "oldCardId": "00230f40-355b-4bec-89b9-e7cc1f78f19f",
+  "newCardId": "55c4f125-517c-44a8-956a-f0c5d87cbed0",
+  "oldSnapshotByteIdentical": true,
+  "publication": "Browser Run cover and video selected before publishing",
+  "png": {
+    "width": 1200,
+    "height": 1440,
+    "decoded": "https://funtrack-staging.zhayizha-pacificapie.workers.dev/c/00230f40-355b-4bec-89b9-e7cc1f78f19f",
+    "method": "jsQR decoded actual browser-downloaded PNG"
+  },
+  "auth": {
+    "AtoBtoA": true,
+    "publicCardReturnToPinnedV1": true,
+    "gameButtonWorked": true,
+    "productionIdentityUnchanged": true
+  },
+  "notifications": {
+    "A": {
+      "kinds": [
+        "work_like",
+        "comment",
+        "follow"
+      ],
+      "allRead": true,
+      "persistsAfterReload": true,
+      "commentLinkFocusedExactId": true
+    },
+    "B": {
+      "initialInboxEmpty": true,
+      "subsequentUnreadKinds": [
+        "comment_like",
+        "reply"
+      ]
+    },
+    "total": 5,
+    "correctRecipients": true
+  },
+  "responsive": {
+    "requestedViewport": [
+      390,
+      844
+    ],
+    "observedCSSWidth": 278,
+    "documentScrollWidth": 268,
+    "horizontalOverflow": false
+  },
+  "limitations": [
+    "Not physical iOS/Safari/WeChat camera or native file-share acceptance",
+    "B reply/comment-like receipt verified by remote database; first three kinds and A read persistence verified through UI"
+  ]
+}

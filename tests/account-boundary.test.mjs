@@ -40,7 +40,9 @@ test('matching and legacy requests retain auth, CSRF, idempotency and ownership;
 
 // Execute the real site's API boundary, with fake transport and Clerk only.
 const source=readFileSync(new URL('../public/site.js',import.meta.url),'utf8');
-const apiSource=source.slice(source.indexOf('class ApiError extends Error'),source.indexOf('function signinURL'));
+// Keep this transport harness scoped to the API boundary; the notification
+// widget mounted immediately after it needs a real DOM and has separate tests.
+const apiSource=source.slice(source.indexOf('class ApiError extends Error'),source.indexOf('const notificationCenter='));
 function clientHarness(){
   let owner='clerk:a',send=async()=>({ok:true,status:200,json:async()=>({saved:true})});
   const clerk={user:{id:'a'},session:{id:'session-a',getToken:async()=> 'header.payload.signature'},signOut:async()=>{}};

@@ -17,7 +17,8 @@
     "dev:standalone": "node scripts/standalone.mjs dev",
     "build:standalone": "node scripts/standalone.mjs build",
     "validate:standalone": "node scripts/standalone.mjs validate",
-    "deploy:check": "node scripts/standalone-deploy.mjs"
+    "deploy:check": "node scripts/standalone-deploy.mjs",
+    "vendor:qrcode": "node scripts/vendor-qrcode.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
@@ -60,6 +61,8 @@
     "eslint": "9.39.4",
     "eslint-config-next": "16.4.6",
     "json-rpc-2.0": "1.7.1",
+    "jsqr": "1.4.0",
+    "qrcode-generator": "2.0.4",
     "raw-body": "3.0.2",
     "react-server-dom-webpack": "19.2.9",
     "tailwindcss": "4.2.1",

@@ -114,3 +114,8 @@
 @media(prefers-reduced-motion:reduce){.card-builder-page .select-work,.card-builder-page .template,.portfolio-story-art img,.portfolio-work-link span,.reel-index button{transition:none}.card-builder-page .select-work:hover,.card-builder-page .template:hover,.portfolio-story:hover .portfolio-story-art img,.portfolio-story:hover .portfolio-work-link span{transform:none}}
 
 .template-art.city{background:#17191e;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-items:center;padding:22px;perspective:400px}.template-art.city img,.template-art.city .template-cover-title{width:100%;height:64px;object-fit:cover;transform:rotateX(25deg) rotateZ(-6deg);border:1px solid #bda46b;box-shadow:0 5px 0 #63563d}
+
+.card-addition{border:1px solid var(--border);border-radius:18px;padding:24px;background:var(--surface)}
+.card-addition h2{font-size:20px;margin:0 0 12px}.card-addition p,.card-save-note{font-size:16px;line-height:1.7;color:var(--text-secondary)}
+.card-start-options{display:flex;flex-direction:column;align-items:stretch;gap:12px;margin:24px 0}.card-start-options .button{white-space:normal;text-align:center;min-height:48px}
+.card-save-note{text-align:center;margin:12px auto 20px;max-width:660px}.card-start-notice{padding:12px;background:var(--soft);border-radius:8px}

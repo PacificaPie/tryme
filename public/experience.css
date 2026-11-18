@@ -163,3 +163,16 @@ button,.button,[data-action-menu]>summary{transition:background var(--motion-fas
 .discovery-page .feed-refresh[aria-busy=true] svg{animation:refresh-turn 1s linear infinite}
 @media(max-width:720px){.discovery-page .feed-sort{gap:6px}.feed-sort-menu>summary{min-height:44px}.discovery-page .feed-refresh{width:44px;height:44px}.feed-sort-options>button{min-height:44px}}
 @media(prefers-reduced-motion:reduce){.discovery-page .feed-refresh[aria-busy=true] svg{animation:none}.sort-chevron{transition:none}}
+
+/* Saved-card sharing is common to the workspace and public card page. */
+.share-dialog{max-height:90dvh;overflow:auto}
+.share-card-tools{border-top:1px solid var(--line);margin-top:20px;padding-top:18px}
+.share-qr-row{display:flex;gap:18px;align-items:center}
+.share-qr-row canvas{width:130px;height:130px;flex-shrink:0;background:#fff}
+.share-qr-row strong{font-size:16px}
+.share-qr-row p{font-size:14px;line-height:1.6;color:var(--muted);margin:8px 0 12px}
+.share-poster-preview{margin-top:18px;text-align:center}
+.share-poster-preview img{display:block;max-width:100%;max-height:360px;margin:0 auto 16px;border-radius:8px}
+.share-image-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
+.share-poster-preview p{font-size:14px;line-height:1.6}
+@media(max-width:480px){.share-qr-row{flex-direction:column;align-items:center;text-align:center}.share-qr-row canvas{width:130px;height:130px}}

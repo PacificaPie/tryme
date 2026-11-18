@@ -21,6 +21,7 @@ function routeFixture(path,{authFailure=false}={}){
   const context=vm.createContext({
     me:null,authChecked:false,routeNumber:0,location:{hash:'#'+path,replace(){throw Error('Unexpected redirect');}},legacyPublicCardPath:()=>null,visitRecorded:false,
     route:()=>r,discussionPanel:null,publishCoverDraft:null,publishWizard:null,publishedExternalCover:null,publishedAutoCover:null,publishedAutoPreview:null,publishedVideos:null,publishAvailability:null,analyticsPanel:null,discoveryPanel:null,creatorPanel:null,templateExperiencePanel:null,
+    notificationPage:null,notificationCenter:{onRoute(){}},
     currentRoute:'',currentGallery:null,scrolls:new Map(),finishRouteLoading:null,main:{},
     stopBuildPolling(){},disposeVersioning(){},disposeWorkEdit(){},disposePublicationControls(){},endSession(){},$$:()=>[],syncNavigation(){},identity(){},
     beginRouteLoading:()=>()=>{},pageSkeleton:()=>'',t:x=>x,ApiError:class extends Error{constructor(message,status){super(message);this.status=status;}},
@@ -33,7 +34,7 @@ function routeFixture(path,{authFailure=false}={}){
 }
 test('signed-out Feed renders while publishing, cards, work play and followed Feed keep their login gate and return context',async()=>{
   const feed=routeFixture('/feed?q=rain&sort=newest');await feed.context.renderRoute();assert.equal(feed.discovered.length,1);assert.deepEqual(feed.rendered,[]);
-  for(const path of ['/publish','/cards','/cards/me','/work/game-1234?from=%2Ffeed%3Fq%3Drain','/feed?following=1','/studio/works']){
+  for(const path of ['/publish','/cards','/cards/me','/work/game-1234?from=%2Ffeed%3Fq%3Drain','/feed?following=1','/studio/works','/notifications','/studio/feedback']){
     const f=routeFixture(path);await f.context.renderRoute();assert.deepEqual(f.rendered,['error:401'],path);assert.deepEqual(f.discovered,[]);
     const target='/site.html#'+path;assert.equal(safeAuthReturnTo(target,'https://site.test'),target);
   }
