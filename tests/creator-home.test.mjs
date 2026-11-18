@@ -23,13 +23,15 @@ test('same-template creation keeps allowlisted design and signature without dupl
   assert.equal(cardRemixPath('a/b?c'),'/cards/me?templateFrom=a%2Fb%3Fc');
 });
 
-test('every card template uses the same cover entry without embedding template-specific navigation', () => {
+test('every saved template selects its own miniature while retaining a single accessible card link', () => {
   for (const template of CARD_TEMPLATES) {
     const html = creatorHomeMarkup({creator,card:{...card,template:template.id},me:{id:'visitor'}});
     assert(html.includes('creator-card-stage'));assert(html.includes('#/card/'+card.id));assert(html.includes('data-creator-works'));
+    assert(html.includes(`data-card-template="${template.id}"`));
     assert(!html.includes('<iframe'));assert(!html.includes('#/work/'));assert(!html.includes('data-delete-card'));
   }
   const original=structuredClone(card);creatorCardPreview(card);assert.deepEqual(card,original);
+  assert(creatorCardPreview({...card,template:'unknown'}).includes('data-card-template="wall"'));
 });
 
 test('the visitor card caption offers direct template reuse while owner management and empty profiles stay distinct', () => {
