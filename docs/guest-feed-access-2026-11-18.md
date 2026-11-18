@@ -39,6 +39,8 @@
 
 ## Google 登录配置进展
 
-正式 Clerk Google 连接当前 Disabled；Client ID 与 Client Secret 均为空。已确认 origin 为 `https://trymecard.com`，Clerk 显示的 Authorized Redirect URI 为 `https://clerk.trymecard.com/v1/oauth_callback`。
+2026-11-18 用户完成 OAuth 凭据设置后，正式 Clerk Google 连接已显示 Enabled。浏览器实测：退出邮箱会话 → 公开 Feed 可浏览 → 创作中心要求登录 → Google 账号选择/基础资料授权 → 正确返回 `/site#/studio/works` 并显示已登录身份。未读取或记录 Client Secret；邮箱验证码继续保留。
 
-按 [Clerk 官方生产配置说明](https://clerk.com/docs/guides/configure/auth-strategies/social-connections/google)，只需 openid/email/profile，不添加其他 Google 数据权限。已创建独立 Google Cloud 项目 `tryme-card` 与 TryMe Card OAuth 品牌；用户已明确确认接受 Google API 用户数据政策。Web application 客户端 `TryMe Card Production` 的 origin 与回调已填入待创建表单。因新认证凭据输入需要用户操作，已交接用户生成 Client ID/Secret 并直接填入 Clerk；随后仍需核对 Google 生产发布状态、启用连接与真人登录回跳。凭据不写入聊天、Notion 或 Git。邮箱登录继续可用。
+Google Cloud 项目 `tryme-card` 的受众仍为 External / Testing，发布按钮提示需要补全品牌配置。已保存正式站首页；隐私政策、服务条款尚未上线。基础 `openid/email/profile` 登录在 Testing 状态下属于 Google 的例外，不要求加入测试名单，但不能据一次成功登录把 Google 发布状态记为 In production。另一个新账号、跨浏览器与会话到期仍未验收。
+
+已准备公开介绍、隐私政策与服务条款页面及首页/登录页入口，等待项目负责人审核条款与发布。具体证据、文案依据与上线后步骤见 [Google 登录验收与公开信息](google-oauth-acceptance-2026-11-18.md)。
