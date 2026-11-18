@@ -1,3 +1,5 @@
+import { createPublishDraftService, publicationChoices } from './publish-draft-service.mjs';
+import { captureVideoPreview } from './video-preview-capture.mjs';
 import { env } from 'cloudflare:workers';
 import { PUBLICATION_MAX_BYTES } from './limits.mjs';
 import { createCoverDraftService } from './cover-draft-service.mjs';
@@ -30,7 +32,7 @@ type Row = Record<string, any>;
 type User = { id: string; name: string; email: string };
 const iso = () => new Date().toISOString();
 const uuid = () => crypto.randomUUID();
-const bindings = () => env as unknown as { DB?: D1Database; BUCKET?: R2Bucket; BROWSER?: Fetcher; FUNTRACK_AUTO_COVER_ENABLED?: string; FUNTRACK_VIDEO_PREVIEW_ENABLED?: string; FUNTRACK_COVER_REVIEW_ENABLED?: string };
+const bindings = () => env as unknown as { DB?: D1Database; BUCKET?: R2Bucket; BROWSER?: Fetcher; FUNTRACK_AUTO_COVER_ENABLED?: string; FUNTRACK_VIDEO_PREVIEW_ENABLED?: string; FUNTRACK_COVER_REVIEW_ENABLED?: string; FUNTRACK_PREPUBLISH_MEDIA_REQUIRED?: string };
 function db(): D1Database { const d=bindings().DB; if(!d)throw new ApiError(503,'STORAGE_UNAVAILABLE','数据库暂不可用'); return d; }
 function bucket(): R2Bucket { const b=bindings().BUCKET; if(!b)throw new ApiError(503,'STORAGE_UNAVAILABLE','文件存储暂不可用'); return b; }
 const sql=(query:string,...values:any[])=>db().prepare(query).bind(...values);
@@ -155,6 +157,10 @@ async function readPublicationForm(request:Request,max=PUBLICATION_MAX_BYTES){
   try{return await new Response(await limitedBody(request,max),{headers:{'Content-Type':ct}}).formData();}catch(e){if(e instanceof ApiError)throw e;throw new ApiError(400,'INVALID_FORM','上传表单无效');}
 }
 const readArtifact=(form:FormData,source:string,owner:string)=>publicationArtifact(form,source,owner,getBuildArtifact);
+const publishDrafts=createPublishDraftService({db,bucket,readForm:readPublicationForm,readArtifact,bodyJSON,hash,
+ configured:(kind:string='')=>typeof bindings().BROWSER?.fetch==='function'&&(kind==='cover'?bindings().FUNTRACK_COVER_REVIEW_ENABLED:bindings().FUNTRACK_VIDEO_PREVIEW_ENABLED)==='1',
+ captureCover:(content:string,options:{source:string;waitMs:number})=>options.source==='html'?captureHostedHTML(bindings().BROWSER,content,{settleMs:options.waitMs}):captureExternalCover(bindings().BROWSER,content,options),
+ captureVideo:(content:string)=>captureVideoPreview(bindings().BROWSER,content)});
 const duplicates=createDuplicateService({db});
 const recommendations=createRecommendationService({db,bodyJSON});
 const handleDiscoveryAPI=createDiscoveryService({db,ownWork,getWork,workJSON,bodyJSON});
@@ -171,24 +177,31 @@ async function publish(request:Request,user:User) {
   const source=form.get('source');if(source!=='html'&&source!=='url')throw new ApiError(422,'INVALID_SOURCE','选择 HTML 上传或外部链接');
   const category=form.has('category')?workCategory(form.get('category')):'other';
   const url=source==='url'?safeURL(form.get('url')):null;
-  const {gameBytes,coverBytes,coverMime,provenanceJSON,buildId}=await readArtifact(form,source,user.id);
+  let {gameBytes,coverBytes,coverMime,provenanceJSON,buildId}=await readArtifact(form,source,user.id);
+  const mediaChoices=publicationChoices(form);
   const fingerprint=gameBytes?await hash(gameBytes):url!;
-  const requestHash=await hash(JSON.stringify({name,description,source,url,...(form.has('category')?{category}:{}),...(buildId?{buildId}:{}),game:gameBytes?fingerprint:null,cover:coverBytes?await hash(coverBytes):null,coverMime}));
+  const requestHash=await hash(JSON.stringify({name,description,source,url,...(form.has('category')?{category}:{}),...(buildId?{buildId}:{}),game:gameBytes?fingerprint:null,cover:coverBytes?await hash(coverBytes):null,coverMime,...(mediaChoices.draftId?{mediaChoices}:{})}));
   const initialQuery=`SELECT w.*,v.id initial_version_id,v.version,v.game_key,v.cover_key,v.cover_mime,v.provenance_json,i.name initial_name,i.description initial_description,${DISCOVERY_COLUMNS} FROM ft_works w JOIN ft_work_versions v ON v.work_id=w.id AND v.ordinal=1 LEFT JOIN ft_work_metadata i ON i.id=w.initial_metadata_id AND i.work_id=w.id${DISCOVERY_JOIN}`;
-  async function initialResponse(found:Row,status=200){if(found.request_hash!==requestHash)throw new ApiError(409,'IDEMPOTENCY_CONFLICT','同一次提交的内容已变化，请创建新的提交标识');await onPublished(found.id,found.initial_version_id,user.id);return json({work:workJSON({...found,name:found.initial_name??found.name,description:found.initial_description??found.description,current_metadata_id:found.initial_metadata_id,current_version_id:found.initial_version_id,revision:1,updated_at:found.created_at}),current:{versionId:found.current_version_id,revision:found.revision}},status);}
+  async function initialResponse(found:Row,status=200){if(found.request_hash!==requestHash)throw new ApiError(409,'IDEMPOTENCY_CONFLICT','同一次提交的内容已变化，请创建新的提交标识');if(!mediaChoices.draftId)await onPublished(found.id,found.initial_version_id,user.id);return json({work:workJSON({...found,name:found.initial_name??found.name,description:found.initial_description??found.description,current_metadata_id:found.initial_metadata_id,current_version_id:found.initial_version_id,revision:1,updated_at:found.created_at}),current:{versionId:found.current_version_id,revision:found.revision}},status);}
   async function replay(){const found=await first(initialQuery+' WHERE w.author_id=? AND w.idempotency_key=?',user.id,key);return found?initialResponse(found):null;}
   const prior=await replay();if(prior)return prior;
   await duplicates.assertNew(user.id,source,fingerprint);
+  if(!mediaChoices.draftId&&bindings().FUNTRACK_PREPUBLISH_MEDIA_REQUIRED==='1')fail(422,'MEDIA_REVIEW_REQUIRED','请刷新上传页面，在发布前确认封面和预览');
+  const prepared=mediaChoices.draftId?await publishDrafts.prepare(form,user,{source,gameBytes,url,coverBytes,coverMime}):null;
+  if(prepared){coverBytes=prepared.coverBytes;coverMime=prepared.coverMime;}
+  const previewId=prepared?.video?uuid():null,previewKey=previewId?`previews/${previewId}/prepared.mp4`:null;
   const id=uuid(),versionId=uuid(),initialMetadataId=metadataId(),createdAt=iso();const gameKey=gameBytes?`games/${versionId}.html`:null,coverKey=coverBytes?`covers/${versionId}`:null;const written:string[]=[];
   try {
     if(gameKey&&gameBytes){await bucket().put(gameKey,gameBytes,{httpMetadata:{contentType:'text/html'}});written.push(gameKey);}
     if(coverKey&&coverBytes){await bucket().put(coverKey,coverBytes,{httpMetadata:{contentType:coverMime!}});written.push(coverKey);}
+    if(previewKey&&prepared?.video){await bucket().put(previewKey,prepared.video.bytes,{httpMetadata:{contentType:'video/mp4'}});written.push(previewKey);}
     await db().batch([
       sql('INSERT INTO ft_works (id,author_id,author_name,name,description,source,current_version_id,url,created_at,idempotency_key,request_hash,revision,updated_at,current_metadata_id,initial_metadata_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,1,?,?,?)',id,user.id,(await userProfile(user)).name,name,description,source,versionId,url,createdAt,key,requestHash,createdAt,initialMetadataId,initialMetadataId),
       sql('INSERT INTO ft_work_versions (id,work_id,version,game_key,cover_key,cover_mime,created_at,provenance_json,ordinal,content_hash,created_by) VALUES (?,?,?,?,?,?,?,?,1,?,?)',versionId,id,'v1',gameKey,coverKey,coverMime,createdAt,provenanceJSON,gameBytes?fingerprint:null,user.id),
       sql('INSERT INTO ft_work_metadata(id,work_id,name,description,cover_key,cover_mime,created_at,created_by) VALUES(?,?,?,?,?,?,?,?)',initialMetadataId,id,name,description,coverKey,coverMime,createdAt,user.id),
       duplicates.claim(user.id,source,fingerprint,id,versionId,createdAt),
       initialDiscovery(sql,id,createdAt,category),
+      ...(previewId?[sql("INSERT INTO ft_video_preview_jobs(id,work_id,version_id,owner_id,content_hash,status,attempts,object_key,byte_size,duration_ms,created_at,updated_at) VALUES(?,?,?,?,?,'ready',1,?,?,?,?,?)",previewId,id,versionId,user.id,fingerprint,previewKey,prepared!.video.bytes.length,prepared!.video.duration_ms,createdAt,createdAt)]:[]),
     ]);
   } catch(e) {
     // A database commit can succeed even if its response is lost. Confirm the
@@ -434,6 +447,7 @@ export async function handleAPI(request:Request) {
     if(['POST','PATCH'].includes(request.method))verifyWrite(request);
     const cardCoverResponse=await cardCovers.handle(request,user);if(cardCoverResponse)return cardCoverResponse;
     const creatorResponse=await creators.handle(request,user);if(creatorResponse)return creatorResponse;
+    const publishDraftResponse=await publishDrafts.handle(request,user);if(publishDraftResponse)return publishDraftResponse;
     const draftCoverResponse=await coverDrafts.handle(request,user);if(draftCoverResponse)return draftCoverResponse;
     const externalCoverResponse=await coverReviews.handle(request,user);if(externalCoverResponse)return externalCoverResponse;
     const autoCoverResponse=await autoCovers.handle(request,user);if(autoCoverResponse)return autoCoverResponse;
