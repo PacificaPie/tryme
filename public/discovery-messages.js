@@ -1,6 +1,9 @@
 import { registerMessages } from './i18n.js';
 
 registerMessages({
+  '个人网站':'Personal sites','游戏':'Games','其他':'Other','只看关注':'Following only',
+  '选择作品类型':'Choose a work type','按作品内容选择，与上传方式无关。之后可在展示设置中修改。':'Choose by content, regardless of upload method. You can change it later in display settings.',
+  '请选择有效的作品类型。':'Choose a valid work type.',
   '作品来源':'Work source','发现':'Discover','关注':'Following','全部作品':'All works',
   '关注的人还没有公开作品':'No public works from followed creators yet',
   '关注创作者后，可以在这里看到他们的作品。':'Follow creators to see their works here.',

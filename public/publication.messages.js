@@ -1,12 +1,13 @@
 import {registerMessages} from './i18n.js';
 registerMessages({
+  '保存类型':'Save type','作品类型已保存':'Work type saved',
   '收录确认已停用，作品发布后直接进入 Feed。请刷新页面。':'Submission review is no longer required. Published works appear in Feed. Please refresh the page.',
   '展示状态已变化，请刷新后重试。':'The visibility setting has changed. Refresh and try again.',
   '展示操作无效。':'This visibility action is invalid.',
   '已有同源作品':'Existing works from this repository',
   '已进入 Feed':'Listed in Feed',
   '已从 Feed 隐藏':'Hidden from Feed',
-  '展示设置':'Visibility settings',
+  '展示设置':'Display settings',
   '从 Feed 隐藏':'Hide from Feed',
   '恢复到 Feed':'Restore to Feed',
   '已恢复到 Feed':'Restored to Feed',

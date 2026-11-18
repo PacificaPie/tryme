@@ -56,7 +56,7 @@ test('Feed automatically fills a completed cover and retains pagination, likes, 
   const f=fixture(t),rendered=[];
   const options={userId:null,workTile:work=>{rendered.push({...work});return `<article data-rendered-work="${work.id}"></article>`;}};
   const panel=await f.mount(options);
-  const work={id:'pending-cover',source:'html',coverUrl:'',name:'Current name',likesCount:4};
+  const work={id:'pending-cover',source:'html',category:'game',coverUrl:'',name:'Current name',likesCount:4};
   f.calls[0].resolve({works:[work],total:20,nextCursor:'page-two'});await settle();
   f.tick(15000);assert.equal(f.calls.length,2);assert(f.calls[1].url.startsWith('/api/public/discover?'));
   f.calls[1].resolve({works:[{...work,coverUrl:'/api/public/works/pending-cover/cover',name:'Stale name',likesCount:0}],total:1,nextCursor:null});await settle();
@@ -117,10 +117,10 @@ test('retry aborts the old request; its late error cannot replace the new succes
 
 test('changing a filter aborts the prior query; its late success cannot overwrite the new query error',async t=>{
   const f=fixture(t),panel=await f.mount();t.after(()=>panel.dispose());
-  const old=f.calls[0],filter=f.root.querySelectorAll('[data-filter]').find(button=>button.dataset.filter==='url');
+  const old=f.calls[0],filter=f.root.querySelectorAll('[data-filter]').find(button=>button.dataset.filter==='website');
   filter.fire('click');
   assert.equal(old.signal.aborted,true);assert.equal(f.calls.length,2);
-  assert.equal(new URL(f.calls[1].url,'https://funtrack.test').searchParams.get('source'),'url');assert.equal(f.queries.at(-1).source,'url');assert.equal(filter.getAttribute('aria-pressed'),'true');
+  assert.equal(new URL(f.calls[1].url,'https://funtrack.test').searchParams.get('category'),'website');assert.equal(f.queries.at(-1).category,'website');assert.equal(filter.getAttribute('aria-pressed'),'true');
   f.calls[1].reject(new Error('Only the new filter failed'));await settle();
   const html=f.results().innerHTML,status=f.status().textContent;
   assert.equal(status,'Only the new filter failed');assert.match(html,/暂时没能加载作品/);assert(f.retry());
@@ -132,11 +132,11 @@ test('changing a filter aborts the prior query; its late success cannot overwrit
 test('sort selection updates its label and URL once, retains filters, and ignores a late previous response',async t=>{
   const f=fixture(t),panel=await f.mount();t.after(()=>panel.dispose());
   const search=f.root.querySelector('#work-search');search.value=' rain ';
-  f.root.querySelectorAll('[data-filter]').find(b=>b.dataset.filter==='html').fire('click');
+  f.root.querySelectorAll('[data-filter]').find(b=>b.dataset.filter==='game').fire('click');
   const previous=f.calls.at(-1),sort=f.root.querySelectorAll('[data-sort]').find(b=>b.dataset.sort==='likes');
   sort.fire('click');
   const current=f.calls.at(-1),params=new URL(current.url,'https://funtrack.test').searchParams;
-  assert.equal(previous.signal.aborted,true);assert.equal(params.get('sort'),'likes');assert.equal(params.get('q'),'rain');assert.equal(params.get('source'),'html');
+  assert.equal(previous.signal.aborted,true);assert.equal(params.get('sort'),'likes');assert.equal(params.get('q'),'rain');assert.equal(params.get('category'),'game');
   assert.equal(f.queries.at(-1).sort,'likes');assert.equal(f.root.querySelector('#work-sort-label').textContent,'最多点赞');
   assert.equal(sort.getAttribute('aria-pressed'),'true');assert.equal(f.root.querySelectorAll('[data-sort]').filter(b=>b.getAttribute('aria-pressed')==='true').length,1);
   assert.equal(f.root.querySelector('.feed-sort-menu').open,false);assert.equal(f.root.querySelector('#work-sort').focused,true);
@@ -146,22 +146,23 @@ test('sort selection updates its label and URL once, retains filters, and ignore
 });
 
 test('switching Feed scope retains search/type/sort, cancels debounced search, and ignores the old scope response',async t=>{
-  const f=fixture(t);await f.mount({initial:{q:'old',source:'html',sort:'comments'}});
+  const f=fixture(t);await f.mount({initial:{q:'old',source:'all',category:'game',sort:'comments'}});
   const old=f.calls[0],search=f.root.querySelector('#work-search');search.value=' rain ';search.fire('input');
   const scopes=f.root.querySelectorAll('[data-feed-scope]'),followed=scopes.find(button=>button.dataset.feedScope==='1');
   followed.fire('click');
   const params=new URL(f.calls[1].url,'https://funtrack.test').searchParams;
-  assert.deepEqual(Object.fromEntries(params),{q:'rain',source:'html',sort:'comments',following:'1',limit:'12'});
-  assert.equal(old.signal.aborted,true);assert.deepEqual(f.queries.at(-1),{q:'rain',source:'html',sort:'comments',following:'1'});
+  assert.deepEqual(Object.fromEntries(params),{q:'rain',source:'all',category:'game',sort:'comments',following:'1',limit:'12'});
+  assert.equal(old.signal.aborted,true);assert.deepEqual(f.queries.at(-1),{q:'rain',source:'all',category:'game',sort:'comments',following:'1'});
   assert.equal(followed.getAttribute('aria-pressed'),'true');assert.equal(scopes.filter(button=>button.getAttribute('aria-pressed')==='true').length,1);
-  followed.fire('click');f.tick(250);assert.equal(f.calls.length,2,'A pending search or reselected scope must not issue another request');
+  f.tick(250);assert.equal(f.calls.length,2,'The pending search must not issue another request');
   f.calls[1].resolve(empty());await settle();const html=f.results().innerHTML;
   old.resolve({works:[{id:'unfollowed-author-work'}],total:1,nextCursor:null});await settle();
   assert.equal(f.results().innerHTML,html);assert.equal(f.social.length,0,'Stale discovery results must not enter following state');
+  followed.fire('click');assert.equal(followed.getAttribute('aria-pressed'),'false');assert.equal(new URL(f.calls.at(-1).url,'https://site.test').searchParams.get('following'),'0');
 });
 
 test('following empty state leads to creators; clearing filters retains following and the chosen order',async t=>{
-  const f=fixture(t);await f.mount({initial:{following:'1',q:'rain',source:'url',sort:'likes'}});
+  const f=fixture(t);await f.mount({initial:{following:'1',q:'rain',source:'all',category:'website',sort:'likes'}});
   f.calls[0].resolve(empty());await settle();
   assert.match(f.results().innerHTML,/没有找到作品/);assert.doesNotMatch(f.results().innerHTML,/href="#\/publish"/);
   f.results().fire('click',f.results().querySelector('[data-clear]'));
@@ -172,9 +173,9 @@ test('following empty state leads to creators; clearing filters retains followin
   assert.match(f.results().innerHTML,/关注的人还没有公开作品/);assert.match(f.results().innerHTML,/href="#\/feed"/);assert.match(f.results().innerHTML,/发现作品/);
   assert.doesNotMatch(f.results().innerHTML,/href="#\/publish"/);
   f.root.querySelectorAll('[data-sort]').find(button=>button.dataset.sort==='newest').fire('click');
-  f.root.querySelectorAll('[data-filter]').find(button=>button.dataset.filter==='html').fire('click');
+  f.root.querySelectorAll('[data-filter]').find(button=>button.dataset.filter==='game').fire('click');
   const changed=new URL(f.calls.at(-1).url,'https://funtrack.test').searchParams;
-  assert.equal(changed.get('following'),'1');assert.equal(changed.get('sort'),'newest');assert.equal(changed.get('source'),'html');
+  assert.equal(changed.get('following'),'1');assert.equal(changed.get('sort'),'newest');assert.equal(changed.get('category'),'game');
 });
 
 test('Feed visit cache separates public/following scope and user identity, then restores the matching view',async t=>{

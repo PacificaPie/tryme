@@ -38,13 +38,11 @@ function siteFixture(){
   return {context,requests,renders,mounts,workspaces,identity,directory};
 }
 
-test('primary navigation keeps discovery and moves creation and management to their dedicated menus',()=>{
+test('header uses the brand to return home and keeps creation in its dedicated menu',()=>{
   const shell=readFileSync(new URL('../public/site.html',import.meta.url),'utf8');
-  const nav=/<nav aria-label="主导航">([\s\S]*?)<\/nav>/.exec(shell)?.[1];assert(nav);
-  assert.match(nav,/href="#\/feed"/);
-  assert.doesNotMatch(nav,/data-nav="(?:cards|studio)"/);
+  assert.doesNotMatch(shell,/<nav aria-label="主导航">/);
+  assert.match(shell,/<a class="brand" href="#\/"/);
   assert.match(shell,/id="creation-menu"/);
-  assert.doesNotMatch(nav,/>创作者<\/a>/);
 });
 
 test('the card tab loads only the current owner card and passes sharing details into its workspace',async()=>{

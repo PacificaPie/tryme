@@ -183,7 +183,8 @@ test('avatar dimension validation rejects oversized decoded images before storag
 });
 
 test('profile migration is additive and preserves existing cards, author fields and artwork bytes',async t=>{
-  const f=fixture(t,{through:12}),{work}=await f.publish(),{card}=await save(f,work);
+  const f=fixture(t,{through:12}),work=f.seed(),card={id:randomUUID()};
+  f.database.prepare('INSERT INTO ft_cards(id,author_id,snapshot_json,created_at) VALUES(?,?,?,?)').run(card.id,OWNER,JSON.stringify({id:card.id,template:'fold',name:'Legacy',works:[work]}),'2026-01-01T00:00:00.000Z');
   const before=f.database.prepare('SELECT snapshot_json FROM ft_cards WHERE id=?').get(card.id).snapshot_json;
   const stored=[...f.objects.entries()].map(([key,bytes])=>[key,Buffer.from(bytes).toString('hex')]);
   f.migrate();assert.equal(f.database.prepare('SELECT snapshot_json FROM ft_cards WHERE id=?').get(card.id).snapshot_json,before);
