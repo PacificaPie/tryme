@@ -3,6 +3,8 @@ import { t, registerMessages } from './i18n.js';
 registerMessages({
   '登录 Funtrack': 'Sign in to Funtrack',
   '登录 / 注册': 'Sign in / Sign up',
+  '登录后即可试玩、发布作品和制作名片。': 'Sign in to play, publish works, and create your card.',
+  '继续浏览 Feed': 'Keep exploring the Feed',
 });
 
 const illustration = (background, shapes) => `<svg viewBox="0 0 320 200" width="320" height="200" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><rect width="320" height="200" fill="${background}"/>${shapes}</svg>`;
@@ -44,6 +46,6 @@ const illustrations = [
 export function signInState(action) {
   return `<div class="page sign-in-page"><section class="sign-in-state" aria-labelledby="sign-in-title">
     <div class="sign-in-art" aria-hidden="true">${illustrations.map((art, index) => `<div class="sign-in-cover sign-in-cover-${index + 1}">${art}</div>`).join('')}</div>
-    <div class="sign-in-copy"><h1 id="sign-in-title">${t('登录 Funtrack')}</h1><div class="sign-in-action">${action}</div></div>
+    <div class="sign-in-copy"><h1 id="sign-in-title">${t('登录 Funtrack')}</h1><p>${t('登录后即可试玩、发布作品和制作名片。')}</p><div class="sign-in-action">${action}</div><p><a href="#/feed">${t('继续浏览 Feed')}</a></p></div>
   </section></div>`;
 }

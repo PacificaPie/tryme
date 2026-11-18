@@ -1,16 +1,18 @@
 import { mountFeedLayout } from './feed-layout.js';
 import { mountFeedImpressions } from './feed-impressions.js';
 import { emptyState, loadingMark } from './empty-state.js';
-import { t, getLocale } from './i18n.js';
+import { t, getLocale, registerMessages } from './i18n.js';
 import './discovery-messages.js';
 import './experience.messages.js';
+registerMessages({'先随便逛逛，登录后即可试玩、发布作品和制作名片。':'Explore freely. Sign in to play, publish works, and create your card.'});
 
 // Page-sized server queries; keep the current visit when returning from a work.
 const visits = new Map();
 export function clearDiscovery(){ visits.clear(); }
 export function updateDiscoveryWork(id,patch){for(const visit of visits.values())visit.works=visit.works.map(work=>work.id===id?{...work,...patch}:work);}
 export async function mountDiscovery(root, options) {
-  const { api, esc, workTile, syncSocial, userId, authorId = '', authorCard = null, worksOnly = false, initial = {}, onQuery, restoreScroll } = options;
+  const { api, esc, workTile, syncSocial, userId, authorId = '', authorCard = null, worksOnly = false, initial = {}, onQuery, restoreScroll, onSignIn } = options;
+  const guest=!userId;
   let query={q:initial.q||'',source:['html','url'].includes(initial.source)?initial.source:'all',sort:['recommended','newest','likes','comments'].includes(initial.sort)?initial.sort:authorId?'newest':'recommended',following:!authorId&&initial.following==='1'?'1':'0'};
   let works=[],cursor=null,total=0,pending=false,loaded=false,error='',request=0,timer,slowTimer,slow=false,controller=null,composing=false,disposed=false;
   let grid=null,layout=null,impressions=null,tileState=new Map(),restored=false;
@@ -26,11 +28,12 @@ export async function mountDiscovery(root, options) {
   root.innerHTML=authorId?`<a class="back" href="#/cards">${t('← 名片')}</a><div class="author-heading"><span class="large-avatar" aria-hidden="true">${esc([...authorName][0])}</span><div><h1 id="author-name">${esc(authorName)}</h1>${authorCard?.bio?`<p>${esc(authorCard.bio)}</p>`:''}</div>${authorCard?`<a class="button" href="#/card/${encodeURIComponent(authorCard.id)}">${t('查看名片')}</a>`:''}</div>`:`<div class="feed-heading"><h1>${t('发现作品')}</h1><label class="feed-search">${searchIcon}<input id="work-search" type="search" maxlength="100" placeholder="${esc(t('搜索作品或创作者'))}" aria-label="${esc(t('搜索作品或创作者'))}" value="${esc(query.q)}"></label></div><div class="feed-controls"><div class="filters" aria-label="${esc(t('作品类型'))}">${[['all','全部'],['html','网页游戏'],['url','外链作品']].map(([id,label])=>`<button class="filter ${query.source===id?'active':''}" data-filter="${id}" aria-pressed="${query.source===id}">${t(label)}</button>`).join('')}</div><div class="feed-sort"><details class="feed-sort-menu" data-action-menu><summary id="work-sort" aria-label="${esc(t('作品排序：{sort}',{sort:sortLabel()}))}"><span id="work-sort-label">${esc(sortLabel())}</span>${chevron}</summary><div class="action-menu-panel feed-sort-options" role="group" aria-label="${esc(t('作品排序'))}">${sortOptions.map(([id,label])=>`<button type="button" data-sort="${id}" aria-pressed="${query.sort===id}"><span>${t(label)}</span>${check}</button>`).join('')}</div></details><button type="button" class="feed-refresh" aria-label="${esc(t('刷新作品'))}" title="${esc(t('刷新作品'))}">${refreshIcon}</button></div></div>`;
   if(worksOnly)root.innerHTML='';
   else if(!authorId)root.querySelector('.feed-heading').insertAdjacentHTML('afterend',`<div class="feed-scope" aria-label="${esc(t('作品来源'))}"><button type="button" data-feed-scope="0" aria-pressed="${query.following==='0'}">${t('发现')}</button><button type="button" data-feed-scope="1" aria-pressed="${query.following==='1'}">${t('关注')}</button></div>`);
+  if(guest)root.insertAdjacentHTML('beforeend',`<p class="muted guest-feed-note">${t('先随便逛逛，登录后即可试玩、发布作品和制作名片。')}</p>`);
   root.insertAdjacentHTML('beforeend',`<div id="discovery-results"></div><p class="feed-status" role="status" aria-live="polite"></p><div class="feed-pagination"><button class="button" id="load-works" hidden>${t('加载更多')}</button></div>`);
   const results=root.querySelector('#discovery-results'),status=root.querySelector('.feed-status'),more=root.querySelector('#load-works');
   function resetLayout(){impressions?.dispose();impressions=null;layout?.dispose();layout=null;grid=null;tileState.clear();}
   function createTile(work,index){
-    const template=document.createElement('template');template.innerHTML=workTile(work,{social:true}).trim();
+    const template=document.createElement('template');template.innerHTML=workTile(work,{social:!guest}).trim();
     const tile=template.content.firstElementChild;tile.dataset.workId=work.id;tile.setAttribute('role','listitem');tile.setAttribute('aria-posinset',String(index+1));tile.setAttribute('aria-setsize',String(total));
     if(!restored&&!tileState.has(work.id)){tile.classList.add('feed-arriving');tile.style.setProperty('--enter-index',Math.min(index%12,5));}
     return tile;
@@ -76,7 +79,7 @@ export async function mountDiscovery(root, options) {
       if(grid.children[index]!==tile){grid.insertBefore(tile,grid.children[index]||null);changed=true;}
     });
     if(!layout)layout=mountFeedLayout(grid,{host:root});else if(changed)layout.refresh();
-    if(!authorId&&query.following!=='1'){if(!impressions)impressions=mountFeedImpressions(grid,{api,userId,sort:query.sort,host:root});else impressions.refresh();}
+    if(!guest&&!authorId&&query.following!=='1'){if(!impressions)impressions=mountFeedImpressions(grid,{api,userId,sort:query.sort,host:root});else impressions.refresh();}
     more.hidden=!cursor;more.disabled=pending;more.textContent=t(pending?'正在加载…':error?'重试加载':'加载更多');
   }
   async function load(append=false){
@@ -85,9 +88,10 @@ export async function mountDiscovery(root, options) {
     const version=++request,requestedAt=performance.now(),key=cacheKey();pending=true;slow=false;error='';draw();
     slowTimer=setTimeout(()=>{if(alive()&&version===request&&pending){slow=true;draw();}},6500);
     const params=new URLSearchParams({...query,limit:'12'});if(authorId)params.set('author',authorId);if(append)params.set('cursor',cursor);
+    if(guest)params.delete('following');
     try{
-      const data=await api('/api/discover?'+params,{signal:controller.signal});if(!alive()||version!==request)return;
-      data.works.forEach(work=>syncSocial(work,requestedAt));
+      const data=await api((guest?'/api/public/discover?':'/api/discover?')+params,{signal:controller.signal});if(!alive()||version!==request)return;
+      if(!guest)data.works.forEach(work=>syncSocial(work,requestedAt));
       if(append){const ids=new Set(works.map(work=>work.id));works.push(...data.works.filter(work=>!ids.has(work.id)));}else works=data.works;
       cursor=data.nextCursor;total=data.total;loaded=true;
       if(authorId&&!authorCard&&!worksOnly&&works[0]){root.querySelector('#author-name').textContent=works[0].authorName;root.querySelector('.large-avatar').textContent=[...(works[0].authorName||t('创作者'))][0];}
@@ -114,6 +118,7 @@ export async function mountDiscovery(root, options) {
   }));
   root.querySelectorAll('[data-filter]').forEach(button=>button.addEventListener('click',()=>change({source:button.dataset.filter})));
   root.querySelectorAll('[data-feed-scope]').forEach(button=>button.addEventListener('click',()=>{
+    if(guest&&button.dataset.feedScope==='1'){onSignIn?.();return;}
     if(button.dataset.feedScope===query.following)return;
     root.querySelectorAll('[data-feed-scope]').forEach(item=>item.setAttribute('aria-pressed',String(item===button)));
     change({following:button.dataset.feedScope});

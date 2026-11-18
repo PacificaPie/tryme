@@ -34,7 +34,7 @@ import { previewReferences, isPinnedPreview, prepareCardPreview, frozenAction } 
 import { mountDiscovery, clearDiscovery, updateDiscoveryWork } from './discovery.js';
 import { HTML_UPLOAD_HINT, htmlFileError, htmlImportSizeNotice, isGithubHTMLURL, importErrorText, repositoryImportBlocked, buildAvailabilityMarkup, createBuildAvailability } from './import-status.js';
 let templateExperiencePanel=null;
-registerMessages({'名片会自动使用你的最新个人资料。':'Your card automatically uses your latest profile.','模板已选好，继续制作你的名片。':'The template is selected. Continue making your card.','这个名片模板不存在。':'This card template does not exist.'});
+registerMessages({'名片会自动使用你的最新个人资料。':'Your card automatically uses your latest profile.','模板已选好，继续制作你的名片。':'The template is selected. Continue making your card.','这个名片模板不存在。':'This card template does not exist.','登录后试玩':'Sign in to play'});
 const $ = (s, root=document) => root.querySelector(s);
 const $$ = (s, root=document) => [...root.querySelectorAll(s)];
 const main = $('#main');
@@ -58,11 +58,12 @@ let sessionQueues=new Set(),actionQueue=new Map();
 const socialState=new Map(),likePending=new Set(),likeRetry=new Map();
 class ApiError extends Error { constructor(message,status,code){super(message);this.status=status;this.code=code;} }
 async function api(path, options={}) {
-  const headers={...await authHeaders(),...(options.headers||{})};
+  const publicRead=path.startsWith('/api/public/')&&(!options.method||options.method==='GET');
+  const headers={...publicRead?{}:await authHeaders(),...(options.headers||{})};
   if(options.method&&options.method!=='GET')headers['X-Funtrack-CSRF']='1';
   if(options.body && !(options.body instanceof FormData)) {headers['Content-Type']='application/json';options={...options,body:JSON.stringify(options.body)};}
   let response;
-  try {response=await fetch(path,{credentials:'same-origin',...options,headers});} catch {throw new ApiError("连接暂时中断，请重试。",0,'NETWORK');}
+  try {response=await fetch(path,{...options,credentials:publicRead?'omit':'same-origin',headers});} catch {throw new ApiError("连接暂时中断，请重试。",0,'NETWORK');}
   let data;try{data=await response.json();}catch{throw new ApiError("服务暂时不可用，请稍后重试。",response.status,'BAD_RESPONSE');}
   if(!response.ok){const error=new ApiError(data.error?.message||"暂时无法完成，请重试。",response.status,data.error?.code);for(const field of ['current','existingWork','existingVersion'])if(data.error?.[field])error[field]=data.error[field];throw error;}
   return data;
@@ -92,7 +93,9 @@ function workHref(work, from=route().raw, cardId=''){return '#/work/'+encodeURIC
 function cover(work, href, label=true){const src=safeCover(work.coverUrl);return `<a class="cover${src?'':' empty-cover'}" href="${esc(href)}" aria-label="${t("查看")} ${esc(work.name)}">${src?`<img src="${esc(src)}" alt="${esc(work.name)}" loading="lazy">`:`<span aria-hidden="true">${esc(work.name)}</span>`}${label?`<span class="tag">${work.source==='url'?t("外链作品"):t("网页游戏")}</span>`:''}</a>`;}
 function workTile(work,{from=route().raw,creator=true,cardId='',social=false}={}){
   const href=workHref(work,from,cardId),src=safeCover(work.coverUrl);
-  return `<article class="work-tile"><a class="work-entry" href="${esc(href)}" aria-label="${t("查看")} ${esc(work.name)}"><div class="cover${src?'':' empty-cover'}">${src?`<img src="${esc(src)}" alt="" loading="lazy">`:`<span>${esc(work.name)}</span>`}<span class="cover-action" aria-hidden="true">${t("查看作品")} ↗</span></div><div class="tile-info"><div class="tile-copy"><h3 class="tile-title">${esc(work.name)}</h3><p class="tile-desc">${esc(work.desc)}</p></div></div></a><div class="tile-bottom">${creator?`<a class="creator-link" href="#/author/${encodeURIComponent(work.authorId)}">${avatarMarkup({name:work.authorName,avatarUrl:work.authorAvatarUrl},{className:"feed-author-avatar"})}${esc(work.authorName||t("创作者"))}</a>`:''}${social?socialControls(work,{share:false,comments:true}):''}</div></article>`;
+  const author=avatarMarkup({name:work.authorName,avatarUrl:work.authorAvatarUrl},{className:'feed-author-avatar'})+esc(work.authorName||t('创作者'));
+  const creatorMarkup=work.authorId?`<a class="creator-link" href="#/author/${encodeURIComponent(work.authorId)}">${author}</a>`:`<span class="creator-link">${author}</span>`;
+  return `<article class="work-tile"><a class="work-entry" href="${esc(href)}" aria-label="${t("查看")} ${esc(work.name)}"><div class="cover${src?'':' empty-cover'}">${src?`<img src="${esc(src)}" alt="" loading="lazy">`:`<span>${esc(work.name)}</span>`}<span class="cover-action" aria-hidden="true">${t(me?"查看作品":"登录后试玩")} ↗</span></div><div class="tile-info"><div class="tile-copy"><h3 class="tile-title">${esc(work.name)}</h3><p class="tile-desc">${esc(work.desc)}</p></div></div></a><div class="tile-bottom">${creator?creatorMarkup:''}${social?socialControls(work,{share:false,comments:true}):''}</div></article>`;
 }
 function workImage(work,className=''){const src=safeCover(work.coverUrl);return src?`<img class="${className}" src="${esc(src)}" alt="${esc(work.name)}">`:`<div class="image-placeholder ${className}">${esc(work.name)}</div>`;}
 function playIcon(){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7Z"/></svg>';}
@@ -152,8 +155,10 @@ async function renderRoute(options={}){
   $$('.site-header nav a').forEach(a=>a.classList.toggle('active',a.dataset.nav===activeNav));
   syncNavigation();finishRouteLoading?.();finishRouteLoading=beginRouteLoading(main,{html:pageSkeleton(t("正在加载…"),r.path),slowText:t('还在加载，请稍候或重试。'),retryText:t('重试')});
   try{
-    if(!authChecked)await loadMe();
-    if(!me){applyHTML(pageError(new ApiError('',401)),number);return;}
+    if(!authChecked){try{await loadMe();}catch(error){if(r.path!=='/feed'||r.params.get('following')==='1')throw error;me=null;}}
+    if(number!==routeNumber)return;
+    identity();
+    if(!me&&(r.path!=='/feed'||r.params.get('following')==='1')){applyHTML(pageError(new ApiError('',401)),number);return;}
     if(r.path==='/feed')await renderDiscover(r,number);
     else if(r.path.startsWith('/author/'))await renderCreator(r,number);
     else if(r.path==='/following'||(r.path==='/cards'&&r.params.get('following')==='1'))await renderFollowing(r,number);
@@ -176,10 +181,10 @@ async function renderRoute(options={}){
 async function renderDiscover(r,number){
   const authorId='',authorCard=null;
   if(!applyHTML('<div class="page discovery-page"></div>',number))return;
-  const panel=await mountDiscovery($('.discovery-page'),{api,esc,workTile,syncSocial,userId:me.id,authorId,authorCard,initial:{q:r.params.get('q'),source:r.params.get('source'),sort:r.params.get('sort'),following:r.params.get('following')},onQuery:query=>{
+  const panel=await mountDiscovery($('.discovery-page'),{api,esc,workTile,syncSocial,userId:me?.id||null,authorId,authorCard,onSignIn:()=>go('/following'),initial:{q:r.params.get('q'),source:r.params.get('source'),sort:r.params.get('sort'),following:r.params.get('following')},onQuery:query=>{
     if(number!==routeNumber)return;
     const params=new URLSearchParams();if(query.q)params.set('q',query.q);if(query.source!=='all')params.set('source',query.source);if(query.sort!==(authorId?'newest':'recommended'))params.set('sort',query.sort);if(query.following==='1')params.set('following','1');
-    const next=r.path+(params.size?'?'+params:'');history.replaceState(null,'','#'+next);currentRoute=next;
+    const next=r.path+(params.size?'?'+params:'');history.replaceState(null,'','#'+next);currentRoute=next;identity();
   },restoreScroll:()=>window.scrollTo(0,scrolls.get(route().raw)||0)});
   if(number===routeNumber)discoveryPanel=panel;else panel?.dispose();
 }
