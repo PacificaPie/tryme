@@ -1,0 +1,84 @@
+{
+  "decoded": [
+    {
+      "id": "dom-desktop-fixed",
+      "durationMs": 7551,
+      "decodedFrames": 4
+    },
+    {
+      "id": "dom-desktop-mock",
+      "durationMs": 7553,
+      "decodedFrames": 4
+    },
+    {
+      "id": "dom-desktop-reuse",
+      "durationMs": 7553,
+      "decodedFrames": 4
+    },
+    {
+      "id": "canvas-desktop-fixed",
+      "durationMs": 7553,
+      "decodedFrames": 4
+    },
+    {
+      "id": "canvas-desktop-mock",
+      "durationMs": 7553,
+      "decodedFrames": 4
+    },
+    {
+      "id": "canvas-desktop-reuse",
+      "durationMs": 7553,
+      "decodedFrames": 4
+    },
+    {
+      "id": "opening-desktop-fixed",
+      "durationMs": 7551,
+      "decodedFrames": 4
+    },
+    {
+      "id": "opening-desktop-mock",
+      "durationMs": 7553,
+      "decodedFrames": 4
+    },
+    {
+      "id": "dom-mobile-fixed",
+      "durationMs": 7552,
+      "decodedFrames": 4
+    },
+    {
+      "id": "dom-mobile-mock",
+      "durationMs": 7553,
+      "decodedFrames": 4
+    },
+    {
+      "id": "dom-mobile-reuse",
+      "durationMs": 7552,
+      "decodedFrames": 4
+    },
+    {
+      "id": "canvas-mobile-fixed",
+      "durationMs": 7553,
+      "decodedFrames": 4
+    },
+    {
+      "id": "canvas-mobile-mock",
+      "durationMs": 7552,
+      "decodedFrames": 4
+    },
+    {
+      "id": "canvas-mobile-reuse",
+      "durationMs": 7553,
+      "decodedFrames": 4
+    },
+    {
+      "id": "opening-mobile-fixed",
+      "durationMs": 7552,
+      "decodedFrames": 4
+    },
+    {
+      "id": "opening-mobile-mock",
+      "durationMs": 7553,
+      "decodedFrames": 4
+    }
+  ]
+}

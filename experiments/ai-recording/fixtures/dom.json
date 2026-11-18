@@ -1,0 +1,25 @@
+{
+  "kind": "dom",
+  "contentHash": "e743411f6596d62ba8d932408d3fb62a160112ae3fbf987f0e27573a2f67e6bd",
+  "reviewedBy": "local fixture author; only these bundled bytes",
+  "targets": [
+    {
+      "id": "start",
+      "selector": "#start",
+      "kind": "button",
+      "keys": []
+    },
+    {
+      "id": "left",
+      "selector": "#left",
+      "kind": "button",
+      "keys": []
+    },
+    {
+      "id": "right",
+      "selector": "#right",
+      "kind": "button",
+      "keys": []
+    }
+  ]
+}

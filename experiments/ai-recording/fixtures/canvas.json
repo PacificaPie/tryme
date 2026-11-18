@@ -1,0 +1,21 @@
+{
+  "kind": "canvas",
+  "contentHash": "cadb16810707499fbdfca9323e48acad9acea5bff117a5debaff2efa641610c6",
+  "reviewedBy": "local fixture author; only these bundled bytes",
+  "targets": [
+    {
+      "id": "start",
+      "selector": "#start",
+      "kind": "button",
+      "keys": []
+    },
+    {
+      "id": "board",
+      "selector": "#board",
+      "kind": "canvas",
+      "keys": [
+        "ArrowRight"
+      ]
+    }
+  ]
+}
