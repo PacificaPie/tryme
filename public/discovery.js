@@ -1,6 +1,7 @@
 import { mountFeedLayout } from './feed-layout.js';
 import { mountFeedImpressions } from './feed-impressions.js';
 import { mountVideoPreviews } from './video-preview.js';
+import { createFeedMediaRefresh, mergeGeneratedMedia } from './feed-media-refresh.js';
 import { emptyState, loadingMark } from './empty-state.js';
 import { t, getLocale, registerMessages } from './i18n.js';
 import './discovery-messages.js';
@@ -17,8 +18,21 @@ export async function mountDiscovery(root, options) {
   let query={q:initial.q||'',source:['html','url'].includes(initial.source)?initial.source:'all',sort:['recommended','newest','likes','comments'].includes(initial.sort)?initial.sort:authorId?'newest':'recommended',following:!authorId&&initial.following==='1'?'1':'0'};
   let works=[],cursor=null,total=0,pending=false,loaded=false,error='',request=0,timer,slowTimer,slow=false,controller=null,composing=false,disposed=false;
   let grid=null,layout=null,impressions=null,previews=null,tileState=new Map(),restored=false;
+  let mediaPages=[];
   const alive=()=>!disposed&&root.isConnected;
   const cacheKey=()=>JSON.stringify([userId,authorId,query]);
+  const mediaRefresh=createFeedMediaRefresh({api,getWorks:()=>works,onMedia:fresh=>{
+    if(!alive()||pending)return;
+    const byId=new Map(fresh.map(work=>[work.id,work]));let changed=false;
+    works=works.map(work=>{
+      const tile=tileState.get(work.id)?.element;
+      if(tile?.contains?.(document.activeElement)||tile?.classList.contains?.('preview-playing'))return work;
+      const next=mergeGeneratedMedia(work,byId.get(work.id));if(next!==work)changed=true;return next;
+    });
+    if(changed){const cached=visits.get(cacheKey());if(cached)cached.works=[...works];draw();}
+  }});
+  const resumeMedia=()=>{if(alive())mediaRefresh.wake();};
+  document.addEventListener?.('visibilitychange',resumeMedia);
   const authorName=authorCard?.name||t('创作者');
   const sortOptions=[['recommended','推荐'],['newest','最新发布'],['likes','最多点赞'],['comments','最多讨论']];
   const sortLabel=()=>t(sortOptions.find(([id])=>id===query.sort)[1]);
@@ -86,6 +100,7 @@ export async function mountDiscovery(root, options) {
   }
   async function load(append=false){
     if(append&&(pending||!cursor))return;
+    if(!append){mediaRefresh.reset();mediaPages=[];}
     controller?.abort();controller=new AbortController();clearTimeout(slowTimer);
     const version=++request,requestedAt=performance.now(),key=cacheKey();pending=true;slow=false;error='';draw();
     slowTimer=setTimeout(()=>{if(alive()&&version===request&&pending){slow=true;draw();}},6500);
@@ -97,7 +112,9 @@ export async function mountDiscovery(root, options) {
       if(append){const ids=new Set(works.map(work=>work.id));works.push(...data.works.filter(work=>!ids.has(work.id)));}else works=data.works;
       cursor=data.nextCursor;total=data.total;loaded=true;
       if(authorId&&!authorCard&&!worksOnly&&works[0]){root.querySelector('#author-name').textContent=works[0].authorName;root.querySelector('.large-avatar').textContent=[...(works[0].authorName||t('创作者'))][0];}
-      visits.delete(key);visits.set(key,{works:[...works],cursor,total,at:Date.now()});while(visits.size>8)visits.delete(visits.keys().next().value);
+      const mediaURL=(guest?'/api/public/discover?':'/api/discover?')+params;
+      mediaPages.push({url:mediaURL,ids:data.works.map(work=>work.id)});mediaRefresh.watch(mediaURL,data.works);
+      visits.delete(key);visits.set(key,{works:[...works],cursor,total,mediaPages:[...mediaPages],at:Date.now()});while(visits.size>8)visits.delete(visits.keys().next().value);
     }catch(e){if(alive()&&version===request)error=t(e.message);}
     finally{if(alive()&&version===request){clearTimeout(slowTimer);pending=false;slow=false;draw();}}
   }
@@ -129,8 +146,8 @@ export async function mountDiscovery(root, options) {
   results.addEventListener('click',event=>{if(event.target.closest('[data-retry]'))load();if(event.target.closest('[data-clear]')){if(search)search.value='';change({q:'',source:'all'});}});
   more.addEventListener('click',()=>load(true));
   const cached=visits.get(cacheKey());
-  if(cached){restored=true;works=[...cached.works];cursor=cached.cursor;total=cached.total;loaded=true;if(authorId&&!authorCard&&!worksOnly&&works[0]){root.querySelector('#author-name').textContent=works[0].authorName;root.querySelector('.large-avatar').textContent=[...(works[0].authorName||t('创作者'))][0];}draw();requestAnimationFrame(()=>{if(alive())restoreScroll();});}
+  if(cached){restored=true;works=[...cached.works];cursor=cached.cursor;total=cached.total;mediaPages=[...(cached.mediaPages||[])];loaded=true;if(authorId&&!authorCard&&!worksOnly&&works[0]){root.querySelector('#author-name').textContent=works[0].authorName;root.querySelector('.large-avatar').textContent=[...(works[0].authorName||t('创作者'))][0];}draw();for(const page of mediaPages)mediaRefresh.watch(page.url,works.filter(work=>page.ids.includes(work.id)));requestAnimationFrame(()=>{if(alive())restoreScroll();});}
   // Return disposal immediately, including while the first request is pending.
   else void load();
-  return {dispose(){disposed=true;request++;controller?.abort();clearTimeout(timer);clearTimeout(slowTimer);resetLayout();}};
+  return {dispose(){if(disposed)return;disposed=true;request++;controller?.abort();mediaRefresh.dispose();document.removeEventListener?.('visibilitychange',resumeMedia);clearTimeout(timer);clearTimeout(slowTimer);resetLayout();}};
 }
