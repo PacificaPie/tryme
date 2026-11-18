@@ -24,7 +24,7 @@ export function previewMarkup(preview) {
   return url ? `<video class="work-preview" data-preview-src="${url}" muted playsinline preload="none" aria-hidden="true" tabindex="-1"></video>` : '';
 }
 export function previewButton(preview) {
-  return safePreviewURL(preview?.url) ? `<button class="preview-toggle" type="button" data-preview-toggle aria-pressed="false" aria-label="${t('播放预览')}">▷ ${t('播放预览')}</button>` : '';
+  return safePreviewURL(preview?.url) ? `<button class="preview-toggle" type="button" data-preview-toggle aria-pressed="false" aria-label="${t('播放预览')}"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false"><path class="preview-icon-play" d="M8 5.5 18 12 8 18.5Z"/><path class="preview-icon-pause" d="M7 5h3v14H7zM14 5h3v14h-3z"/></svg></button>` : '';
 }
 export function automaticPreviewAllowed({ reducedMotion = false, saveData = false, hover = false } = {}) { return hover && !reducedMotion && !saveData; }
 
@@ -43,7 +43,7 @@ export function mountVideoPreviews(root, { timers = globalThis } = {}) {
     if (!active) return;
     const { tile, video } = active; active = null;
     video.pause(); video.removeAttribute('src'); video.load(); tile.classList.remove('preview-playing');
-    const button = buttonFor(tile); if (button) { button.setAttribute('aria-pressed', 'false'); button.setAttribute('aria-label', t('播放预览')); button.textContent = '▷ ' + t('播放预览'); }
+    const button = buttonFor(tile); if (button) { button.setAttribute('aria-pressed', 'false'); button.setAttribute('aria-label', t('播放预览')); }
   }
   async function play(tile) {
     if (disposed || document.hidden || !root.contains(tile)) return;
@@ -57,7 +57,7 @@ export function mountVideoPreviews(root, { timers = globalThis } = {}) {
       await video.play();
       if (disposed || request !== serial || !root.contains(tile)) { if (active?.video !== video) video.pause(); return; }
       tile.classList.add('preview-playing'); const button = buttonFor(tile);
-      if (button) { button.setAttribute('aria-pressed', 'true'); button.setAttribute('aria-label', t('暂停预览')); button.textContent = 'Ⅱ ' + t('暂停预览'); }
+      if (button) { button.setAttribute('aria-pressed', 'true'); button.setAttribute('aria-label', t('暂停预览')); }
       timers.clearTimeout(stopTimer); stopTimer = timers.setTimeout(stop, 9000);
     } catch { if (request === serial) stop(); }
   }
@@ -65,7 +65,7 @@ export function mountVideoPreviews(root, { timers = globalThis } = {}) {
   on(root, 'pointerout', event => { const tile = tileFor(event.target); if (tile && !tile.contains(event.relatedTarget)) { timers.clearTimeout(hoverTimer); if (active?.tile === tile) stop(); } });
   on(root, 'click', event => { const button = event.target.closest('[data-preview-toggle]'); if (!button) return; event.preventDefault(); const tile = tileFor(button); if (active?.tile === tile) stop(); else void play(tile); });
   on(root, 'ended', event => { if (active?.video === event.target) stop(); }, true);
-  on(root, 'error', event => { const video = event.target; if (!video.matches?.('video[data-preview-src]') || !video.getAttribute('src')) return; const tile = tileFor(video); if (active?.video === video) stop(); tile.dataset.previewFailed = '1'; const button = buttonFor(tile); if (button) { button.disabled = true; button.textContent = t('视频暂不可用'); button.setAttribute('aria-label', t('视频暂不可用')); } }, true);
+  on(root, 'error', event => { const video = event.target; if (!video.matches?.('video[data-preview-src]') || !video.getAttribute('src')) return; const tile = tileFor(video); if (active?.video === video) stop(); tile.dataset.previewFailed = '1'; const button = buttonFor(tile); if (button) { button.disabled = true; button.setAttribute('aria-label', t('视频暂不可用')); } }, true);
   on(document, 'visibilitychange', () => { if (document.hidden) stop(); });
   on(window, 'pagehide', stop); on(motion, 'change', stop);
   const observer = typeof IntersectionObserver === 'function' ? new IntersectionObserver(entries => { for (const entry of entries) if (!entry.isIntersecting && active?.tile === entry.target) stop(); }) : null;
