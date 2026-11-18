@@ -11,15 +11,15 @@ function draft(template,count=2){return {id:'preview',name:'A creator',bio:'Game
 
 test('every offered template is server-supported and unknown HTML templates remain rejected',()=>{
   for(const choice of CARD_TEMPLATES)assert.equal(cardTemplate(choice.id),choice.id);
-  assert.equal(new Set(CARD_TEMPLATES.map(choice=>choice.id)).size,5);
+  assert.equal(new Set(CARD_TEMPLATES.map(choice=>choice.id)).size,6);
   for(const value of ['<script>','custom-html',null,undefined])assert.throws(()=>cardTemplate(value),{code:'INVALID_TEMPLATE'});
 });
 
-test('both new templates save pinned snapshots and preserve every earlier card after a work update',async t=>{
+test('all templates save pinned snapshots and preserve every earlier card after a work update',async t=>{
   const f=fixture(t),{work}=await f.publish({cover:true});
   const input={name:'Original creator',bio:'Original bio',workIds:[work.id],workRefs:[{workId:work.id,versionId:work.versionId,metadataId:work.metadataId}]};
   const cards=[];
-  for(const template of ['fold','wall','collection','editorial','filmstrip']){
+  for(const template of ['fold','wall','collection','city','editorial','filmstrip']){
     const key=randomUUID(),saved=await f.api('/api/cards',{method:'POST',key,body:{...input,template}});
     assert.equal(saved.status,201,JSON.stringify(saved));assert.equal(saved.card.template,template);assert.equal(saved.card.works[0].versionId,work.versionId);cards.push(saved.card);
   }
@@ -29,8 +29,8 @@ test('both new templates save pinned snapshots and preserve every earlier card a
     const pinned=await f.api('/api/sessions',{method:'POST',body:{workId:card.works[0].id,versionId:card.works[0].versionId}});
     assert.equal(pinned.status,201,JSON.stringify(pinned));assert.equal(pinned.gameUrl,'/game/'+work.versionId);
   }
-  assert.equal(f.count('ft_cards'),5);
-  const invalid=await f.api('/api/cards',{method:'POST',body:{...input,template:'html-custom'}});assert.equal(invalid.status,422);assert.equal(f.count('ft_cards'),5);
+  assert.equal(f.count('ft_cards'),6);
+  const invalid=await f.api('/api/cards',{method:'POST',body:{...input,template:'html-custom'}});assert.equal(invalid.status,422);assert.equal(f.count('ft_cards'),6);
 });
 
 test('portfolio layouts include every selected work in order at all supported layout boundaries',()=>{

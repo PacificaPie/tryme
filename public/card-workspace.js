@@ -28,11 +28,12 @@ registerMessages({
 const escape=value=>String(value??'').replace(/[&<>"']/g,character=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
 const arrow='<span aria-hidden="true">↗</span>';
 
-// Decorative sketches communicate the five layouts without embedding an
+// Decorative sketches communicate the layouts without embedding an
 // interactive card or displaying someone else's identity or works.
 const sketches={
   wall:'<span class="card-workspace-sketch-paper"><i class="card-workspace-sketch-title"></i><span class="card-workspace-sketch-wall">'+Array.from({length:6},()=>'<i></i>').join('')+'</span></span>',
   fold:'<span class="card-workspace-sketch-room"><span class="card-workspace-sketch-room-side"><i></i></span><span class="card-workspace-sketch-room-back"><i></i><i></i></span><span class="card-workspace-sketch-room-floor"></span></span>',
+  city:'<span class="card-workspace-sketch-city"><i></i><i></i><i></i><i></i><i></i><i></i></span>',
   collection:'<span class="card-workspace-sketch-stack"><i></i><i></i><i></i><span class="card-workspace-sketch-glow"></span></span>',
   editorial:'<span class="card-workspace-sketch-paper"><i class="card-workspace-sketch-title"></i><span class="card-workspace-sketch-story"><i></i><span><b></b><b></b><b></b></span></span><span class="card-workspace-sketch-notes"><i></i><i></i></span></span>',
   filmstrip:'<span class="card-workspace-sketch-reel"><i></i><i></i><i></i></span><span class="card-workspace-sketch-dots"><i></i><i></i><i></i></span>',
