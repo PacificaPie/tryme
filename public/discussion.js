@@ -33,7 +33,7 @@ function appendReplies(root,replies){
   root.localReplies=(root.localReplies||[]).filter(reply=>!seen.has(reply.id));
 }
 
-export function mountDiscussion(element,{work,user,api,esc,onCount=()=>{},notify=()=>{},beforeRootSubmit=()=>{},focusId=''}){
+export function mountDiscussion(element,{work,user,api,esc,onCount=()=>{},notify=()=>{},beforeRootSubmit=()=>{},focusId='',timers=globalThis}){
   // Capture the page's version once. A later publication cannot relabel a
   // pending submission, a saved-card view, or an idempotent retry.
   const expectedAuthorId=user.id,versionId=discussionVersionId(work),key=discussionDraftKey(user,work),draft=draftFor(key),state=discussionFor(key);
@@ -41,6 +41,7 @@ export function mountDiscussion(element,{work,user,api,esc,onCount=()=>{},notify
   let contextMarkup='';
   element.innerHTML=`<div class="discussion-head"><h2>${t('讨论')} <span id="discussion-count"></span></h2></div><form class="comment-composer">${avatarMarkup(user,{className:'comment-avatar'})}<div class="composer-main"><div class="reply-target" hidden><span></span><button type="button" aria-label="${t('取消回复')}">×</button></div><label class="skip-label" for="comment-input">${t('写评论')}</label><textarea id="comment-input" rows="1" maxlength="1000" placeholder="${t('说点什么…')}" required>${esc(draft.text)}</textarea><div class="composer-footer"><span class="composer-visibility">${t('公开评论')} · ${esc(commentVersionLabel(work))}</span><button type="submit" class="button primary small">${t('发布')}</button></div></div></form><p class="comment-status" role="status" aria-live="polite"></p><div class="comment-context" aria-label="${t('定位评论')}" hidden></div><div class="comment-list"></div><button type="button" class="comments-more" hidden>${t('查看更多评论')}</button>`;
   const form=element.querySelector('form'),input=element.querySelector('textarea'),submit=form.querySelector('[type=submit]'),list=element.querySelector('.comment-list'),context=element.querySelector('.comment-context'),more=element.querySelector('.comments-more'),status=element.querySelector('.comment-status'),target=element.querySelector('.reply-target'),cancel=target.querySelector('button');
+  state.cancelLoad?.();state.loading=false;
   const view={alive:()=>state.view===view&&element.isConnected,refresh:()=>{render();composer();revealFocus();},notify};state.view=view;
   const alive=view.alive;
   const refresh=()=>{if(state.view?.alive())state.view.refresh();};
@@ -118,10 +119,14 @@ export function mountDiscussion(element,{work,user,api,esc,onCount=()=>{},notify
   }
   async function load(append=false){
     if(state.loading||(append&&!state.cursor))return;
-    const requestedAt=performance.now(),cursor=state.cursor;
+    const requestedAt=performance.now(),cursor=state.cursor,controller=new AbortController(),request={};let timer,rejectWait;
+    state.listRequest=request;
+    const cancel=()=>{controller.abort();rejectWait?.(new Error('Discussion view replaced'));};state.cancelLoad=cancel;
     if(state.status===state.error)state.status='';state.loading=true;state.error='';refresh();
     try{
-      const result=await api('/api/works/'+encodeURIComponent(work.id)+'/comments'+(append?'?cursor='+encodeURIComponent(cursor):''));
+      const timeout=new Promise((_,reject)=>{rejectWait=reject;timer=timers.setTimeout(()=>{controller.abort();reject(new Error(t('评论加载超时，请重试。')));},12000);});
+      const result=await Promise.race([api('/api/works/'+encodeURIComponent(work.id)+'/comments'+(append?'?cursor='+encodeURIComponent(cursor):''),{signal:controller.signal}),timeout]);
+      if(!alive()||state.listRequest!==request)return;
       const incoming=result.comments.map(root=>mergeRoot(root,requestedAt)),ids=new Set(incoming.map(root=>root.id));
       if(append){const existing=new Set(state.roots.map(root=>root.id));state.roots.push(...incoming.filter(root=>!existing.has(root.id)));}
       else{
@@ -132,8 +137,8 @@ export function mountDiscussion(element,{work,user,api,esc,onCount=()=>{},notify
       }
       ids.forEach(id=>state.localRoots.delete(id));
       state.total=Math.max(state.total,result.commentsCount);state.cursor=result.nextCursor;state.loaded=true;state.error='';
-    }catch(error){state.error=error.message;state.status=error.message;}
-    finally{state.loading=false;refresh();}
+    }catch(error){if(alive()&&state.listRequest===request){state.error=error.message;state.status=error.message;}}
+    finally{timers.clearTimeout(timer);if(state.listRequest===request){state.loading=false;state.cancelLoad=null;refresh();}}
   }
   form.addEventListener('input',()=>{if(!alive()||state.pending)return;draft.text=input.value;draft.key=crypto.randomUUID();persist(key,draft);state.status='';composer();status.textContent='';});
   input.addEventListener('focus',composer);input.addEventListener('blur',composer);
@@ -195,4 +200,5 @@ export function mountDiscussion(element,{work,user,api,esc,onCount=()=>{},notify
   }
   list.addEventListener('click',handleCommentClick);context.addEventListener('click',handleCommentClick);
   more.addEventListener('click',()=>load(true));refresh();load();loadContext();
+  return {dispose(){if(state.view!==view)return;state.view=null;state.cancelLoad?.();state.loading=false;}};
 }

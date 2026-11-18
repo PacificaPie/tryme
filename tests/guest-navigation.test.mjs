@@ -20,7 +20,7 @@ function routeFixture(path,{authFailure=false}={}){
   const rendered=[],discovered=[],r={path:path.split('?')[0],raw:path,params:new URLSearchParams(path.split('?')[1]||'')};
   const context=vm.createContext({
     me:null,authChecked:false,routeNumber:0,location:{hash:'#'+path,replace(){throw Error('Unexpected redirect');}},legacyPublicCardPath:()=>null,visitRecorded:false,
-    route:()=>r,publishedAutoCover:null,publishAvailability:null,analyticsPanel:null,discoveryPanel:null,creatorPanel:null,templateExperiencePanel:null,
+    route:()=>r,publishedAutoCover:null,publishAvailability:null,analyticsPanel:null,discussionPanel:null,discoveryPanel:null,creatorPanel:null,templateExperiencePanel:null,
     currentRoute:'',currentGallery:null,scrolls:new Map(),finishRouteLoading:null,main:{},
     stopBuildPolling(){},disposeVersioning(){},disposeWorkEdit(){},disposePublicationControls(){},endSession(){},$$:()=>[],syncNavigation(){},identity(){},
     beginRouteLoading:()=>()=>{},pageSkeleton:()=>'',t:x=>x,ApiError:class extends Error{constructor(message,status){super(message);this.status=status;}},
@@ -32,7 +32,7 @@ function routeFixture(path,{authFailure=false}={}){
   vm.runInContext(declaration('renderRoute'),context);return {context,rendered,discovered};
 }
 test('signed-out Feed renders while publishing, cards, work play and followed Feed keep their login gate and return context',async()=>{
-  const feed=routeFixture('/feed?q=rain&sort=newest');await feed.context.renderRoute();assert.equal(feed.discovered.length,1);assert.deepEqual(feed.rendered,[]);
+  const feed=routeFixture('/feed?q=rain&sort=newest');let disposed=0;feed.context.discussionPanel={dispose(){disposed++;}};await feed.context.renderRoute();assert.equal(disposed,1);assert.equal(feed.context.discussionPanel,null);assert.equal(feed.discovered.length,1);assert.deepEqual(feed.rendered,[]);
   for(const path of ['/publish','/cards','/cards/me','/work/game-1234?from=%2Ffeed%3Fq%3Drain','/feed?following=1','/studio/works']){
     const f=routeFixture(path);await f.context.renderRoute();assert.deepEqual(f.rendered,['error:401'],path);assert.deepEqual(f.discovered,[]);
     const target='/site.html#'+path;assert.equal(safeAuthReturnTo(target,'https://site.test'),target);

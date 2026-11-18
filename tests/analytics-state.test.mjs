@@ -160,3 +160,17 @@ test('archiving labels a work without hiding its historical analytics or changin
   assert.doesNotMatch(requested,/state=active|archived=/);
   assert.equal(root.classList.contains('is-empty'),false);panel.dispose();
 });
+
+test('external drilldown replaces play KPIs and normalizes a bookmarked play metric',async()=>{
+  const {root,node}=panelDOM(),queries=[];
+  const external={...work,source:'url'},result=response();result.funnel={supported:false};result.summary.outboundClicks=7;result.byWork[0]={...result.byWork[0],source:'url',outboundClicks:7};
+  const panel=await mountAnalytics(root,{works:[external],esc,initial:{work:work.id,metric:'avgActiveMs',sort:'players'},onQuery:q=>queries.push(q),api:async()=>result});
+  const content=node('.an-content').innerHTML;
+  assert.match(content,/data-an-metric="outboundClicks"/);
+  assert.doesNotMatch(content,/data-an-metric="players"|option value="avgActiveMs"/);
+  assert.doesNotMatch(node('.an-secondary-content').innerHTML,/开始试玩次数/);
+  assert.match(node('.an-work-table').innerHTML,/data-an-sort="outboundClicks"/);
+  assert.doesNotMatch(node('.an-work-table').innerHTML,/data-an-sort="players"/);
+  assert.equal(queries.at(-1).metric,'outboundClicks');assert.equal(queries.at(-1).sort,undefined);
+  panel.dispose();
+});

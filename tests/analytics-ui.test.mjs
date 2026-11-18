@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {formatAnalyticsNumber,formatAnalyticsDuration,analyticsChange,validateAnalyticsDates,normalizeAnalyticsQuery,analyticsQuery,sortAnalyticsWorks} from '../public/analytics.js';
+import {formatAnalyticsNumber,formatAnalyticsDuration,analyticsChange,validateAnalyticsDates,normalizeAnalyticsQuery,analyticsQuery,sortAnalyticsWorks,analyticsMetricSet} from '../public/analytics.js';
 
 test('unknown duration stays unknown and known zero is not replaced by a missing value',()=>{
   assert.equal(formatAnalyticsDuration(null),'—');
@@ -41,4 +41,18 @@ test('missing duration sorts after known zero in both directions without changin
   assert.deepEqual(sortAnalyticsWorks(rows,'avgActiveMs').map(row=>row.workId),['long','zero','missing']);
   assert.deepEqual(sortAnalyticsWorks(rows,'avgActiveMs','asc').map(row=>row.workId),['zero','long','missing']);
   assert.equal(rows[0].workId,'missing');
+});
+
+test('external-only scope exposes outbound activity and never offers unsupported play metrics',()=>{
+  const external=analyticsMetricSet(true), mixed=analyticsMetricSet(false);
+  assert.deepEqual(external.primary,['pv','uv','outboundClicks','comments']);
+  for(const key of ['players','avgActiveMs','totalActiveMs','opens','starts','completions']) {
+    assert.ok(!external.trend.includes(key));
+    assert.ok(!external.sortable.includes(key));
+  }
+  assert.ok(mixed.primary.includes('players'));
+  assert.ok(mixed.sortable.includes('outboundClicks'));
+  assert.equal(normalizeAnalyticsQuery({sort:'outboundClicks'}).sort,'outboundClicks');
+  const rows=[{workId:'site',outboundClicks:4},{workId:'game',outboundClicks:0}];
+  assert.equal(sortAnalyticsWorks(rows,'outboundClicks')[0].workId,'site');
 });

@@ -181,3 +181,16 @@ registerMessages({
   "正在提交，请稍后切换语言": "Wait for the submission before changing language",
   "查看 {name} 的讨论": "View discussion for {name}"
 });
+
+registerMessages({
+  '把新作品放进名片':'Add your new work to a card',
+  '选择加入现有草稿，或在已保存名片的基础上重新制作。':'Continue a draft or start from your saved card.',
+  '加入名片':'Add to card','暂不加入':'Not now',
+  '这件作品当前不可加入名片。':'This work is not available for your card.',
+  '选择从哪里继续。只有预览并保存后才会生成新名片，已有分享链接与作品版本保持不变。':'Choose a starting point. A new card is created only after you preview and save. Existing shared cards and their work versions stay unchanged.',
+  '加入现有草稿':'Add to existing draft','从已保存名片继续制作':'Start from saved card','只用这件作品开始':'Start with this work only',
+  '选择其他起点会替换当前未保存草稿。':'The other starting points replace your unsaved draft.',
+  '新名片将使用所选作品当前版本，你可以先调整作品和顺序。':'The new card will use current work versions. You can adjust the selection and order first.',
+  '草稿已有 30 件作品，请先移除一件，再加入新作品。':'Your draft already has 30 works. Remove one before adding another.',
+  '已加入草稿，预览并保存后生效。':'Added to draft. Preview and save to publish.'
+});

@@ -34,3 +34,5 @@ Object.assign(creatorMessages,{
  '提交太频繁，请稍后重试':'Too many requests. Try again shortly.'
 });
 registerMessages(creatorMessages);
+
+registerMessages({ '评论加载超时，请重试。': 'Comments took too long to load. Please try again.' });
