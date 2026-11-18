@@ -29,10 +29,16 @@
 - Chrome 本地 fixture 实测：3 个公开作品可见、1 个隐藏作品不出现；搜索有效；点击作品、创作中心和名片均进入登录提示，回跳包含目标页面。fixture 仅在本地，不使用生产数据或真实身份。
 - 正式站邮箱登录已通过：用户完成验证码后，浏览器显示已登录账号并进入 Feed。此记录不代表 Google 登录或全部生产上传/云构建/名片流程已验收。
 
-此变更目前待 PR 合并与发布；线上业务版本仍见 [首次发布记录](production-launch-2026-11-17.md)。
+## 生产发布结果
+
+用户已明确授权直接合并发布 [PR #5](https://github.com/PacificaPie/funtrack/pull/5)。发布提交为 `a7209bc6467fe831842876ce73121e24876e62b8`，主站 Worker 版本为 `1ed09db3-ee8e-46a1-903f-8c76bf69e220`（2026-11-18 01:30 America/New_York）；[该提交 main CI](https://github.com/PacificaPie/funtrack/actions/runs/44251685175) 通过。私有构建器和 D1 schema 均未变更，前一可用业务 Worker 版本 `b303650b-dc1e-4a77-b879-00c7cf9db0f2` 可作为兼容 schema 的代码回退目标。
+
+发布后真实匿名 HTTP 检查：公开 Feed GET/HEAD 返回 200，禁止的私有查询参数返回 422；未登录作品列表、账号、游戏文件、作品发布、名片发布、试玩会话及伪造身份头均返回 401。`site.js` 和 `discovery.js` 的线上 SHA-256 与发布代码一致。正式站此时作品数为 0；本地有内容场景的 fixture 不代表生产已发布作品。检查记录保存在 Git 忽略目录 `.preview/guest-feed/production-smoke.json`。
+
+首次发布和完整真人流程的剩余验收仍见 [首次发布记录](production-launch-2026-11-17.md)。
 
 ## Google 登录配置进展
 
 正式 Clerk Google 连接当前 Disabled；Client ID 与 Client Secret 均为空。已确认 origin 为 `https://trymecard.com`，Clerk 显示的 Authorized Redirect URI 为 `https://clerk.trymecard.com/v1/oauth_callback`。
 
-按 [Clerk 官方生产配置说明](https://clerk.com/docs/guides/configure/auth-strategies/social-connections/google)，需选择 Google Cloud 项目、设置 OAuth 品牌/受众、创建 Web application 客户端，将凭据安全填入正式 Clerk，再启用连接并完成实际 Google 登录验收。只请求 openid/email/profile，不添加其他 Google 数据权限。Google Cloud 已切换到现有项目管理员的 Gmail 账号；列表中暂无 TryMe 项目，独立项目与 OAuth 配置正在准备。凭据不写入聊天、Notion 或 Git。邮箱登录继续可用。
+按 [Clerk 官方生产配置说明](https://clerk.com/docs/guides/configure/auth-strategies/social-connections/google)，只需 openid/email/profile，不添加其他 Google 数据权限。已创建独立 Google Cloud 项目 `tryme-card` 与 TryMe Card OAuth 品牌；用户已明确确认接受 Google API 用户数据政策。Web application 客户端 `TryMe Card Production` 的 origin 与回调已填入待创建表单。因新认证凭据输入需要用户操作，已交接用户生成 Client ID/Secret 并直接填入 Clerk；随后仍需核对 Google 生产发布状态、启用连接与真人登录回跳。凭据不写入聊天、Notion 或 Git。邮箱登录继续可用。
