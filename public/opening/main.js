@@ -61,9 +61,9 @@ function boot(imgs,portrait){
   var hall=SP.createHall(core),works=SP.createWorks(core,hall,{imgs:imgs,lives:lives}),R=hall.rooms,NW=works.pieces.length;
   cam.rotation.order='YXZ';
 
-  /* 名字只有一个出处：展廊里的展签。名片正反两面跟着它；名片上写的作品数就是展廊里挂着的件数 */
+  /* 开屏使用 TryMe 品牌；创作者的实际资料仍由站内名片渲染器负责。 */
   LC.PROFILE.name=LC.CFG.OWNER.name=R[0].name;LC.PROFILE.no=R[0].no;LC.CFG.OWNER.latin='';
-  LC.CFG.OWNER.line='作品，让你被看见';LC.PROFILE.stats[0][0]=String(NW);
+  LC.CFG.OWNER.line='作品，让你被看见';
   try{world=LC.createWorld(cvB);dots=FX.createDots(cvC);}catch(e){console.error(e);return fail();}
   world.setBack(portrait,LC.QR||null);
   var TT=world.TT;
@@ -121,7 +121,7 @@ function boot(imgs,portrait){
     }
     if(tau>=0&&tau<FX.DOT_T.form){S.dot='form';S.dotT=tau;}
     S.inter=false;
-    S.demo=PI*U.eio(U.seg(tt,TM.flip[0],TM.flip[1]));
+    S.demo=manualFlip ? manualFlip.angle : seq.flipAt(seq.elapsed);
     return S;
   }
 
@@ -320,6 +320,14 @@ function boot(imgs,portrait){
   /* 开头先原地放几帧，时间不走：浏览器第一次把这几块画布和页面上的字送上屏幕，要多花几十毫秒，等它缓过来（连着三帧都正常）再开始。
      这几帧里三块画布都露一次面 —— 还没轮到的那块在底下，或者几乎全透明，看不出来 —— 以后切换画布的那一帧就不用现准备 */
   var settled=!playing,settleN=0,calm=0;var seq=window.OpeningSequence;
+  var manualFlip=null,raf=0;
+  function requestFrame(){if(!raf)raf=requestAnimationFrame(frame);}
+  seq.flip=function(){
+    var from=manualFlip?manualFlip.angle:PI;
+    manualFlip={from:from,to:Math.cos(from)<0?0:PI,angle:from,elapsed:0};
+    last=performance.now();requestFrame();
+  };
+  window.addEventListener('resize',requestFrame);
   function settle(raw){
     settleN++;calm=raw<0.022?calm+1:0;
     if(VAR==='A')world.blank();else gallery(0,null);
@@ -327,17 +335,30 @@ function boot(imgs,portrait){
     if((settleN>=6&&calm>=3)||settleN>=24){settled=true;visA=null;opB=-1;dots.prime(false);last=performance.now();}
   }
   function frame(now){
+    raf=0;
     var raw=(now-last)/1000,dt=Math.min(0.05,Math.max(0.001,raw));last=now;if(!seq.paused)clock+=dt;
     if(settled){
-      if(!seq.ready){seq.ready=true;seq.report('ready');}
       if(!seq.paused&&document.visibilityState==='visible')seq.elapsed=Math.min(seq.duration,seq.elapsed+Math.min(0.1,Math.max(0,raw)));
       tt=seq.sourceAt(seq.elapsed);playing=!seq.paused;
     }
+    if(manualFlip&&document.visibilityState==='visible'){
+      manualFlip.elapsed=Math.min(1.1,manualFlip.elapsed+Math.min(.05,Math.max(0,raw)));
+      var f=manualFlip.elapsed/1.1;
+      manualFlip.angle=U.lerp(manualFlip.from,manualFlip.to,f*f*(3-2*f));
+    }
     update(dt);
+    // Tell the parent only AFTER a clean first frame has replaced calibration.
+    if(settled&&!seq.ready){seq.ready=true;seq.report('ready');}
     if(!settled)settle(raw);else govern(raw);
     seq.report('progress');
-    if(settled&&!seq.paused&&seq.elapsed>=seq.duration){seq.report('complete');return;}
-    requestAnimationFrame(frame);
+    if(settled&&!seq.paused&&seq.elapsed>=seq.duration){
+      if(!seq.completed){seq.completed=true;seq.report('complete');}
+      if(!manualFlip||manualFlip.elapsed>=1.1){
+        if(manualFlip)seq.flipped(Math.cos(manualFlip.angle)<0);
+        return; // Keep the card visible without an idle GPU render loop.
+      }
+    }
+    requestFrame();
   }
   var btnPause=$('pause');
   function setPause(){btnPause.textContent=playing?'暂停':'继续';}
