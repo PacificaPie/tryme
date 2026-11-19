@@ -8,7 +8,7 @@ test('identity comes only from supplied platform headers, with a safe public dis
   rejects(()=>authenticate(new Headers()),401);
   const headers=new Headers({'oai-authenticated-user-id':'owner-id','oai-authenticated-user-email':'owner@example.test','oai-authenticated-user-full-name':'%E5%88%9B%E4%BD%9C%E8%80%85','oai-authenticated-user-full-name-encoding':'percent-encoded-utf-8'});
   assert.equal(authenticate(headers).name,'创作者');
-  headers.delete('oai-authenticated-user-full-name');assert.equal(authenticate(headers).name,'owner');
+  headers.delete('oai-authenticated-user-full-name');assert.equal(authenticate(headers).name,'创作者');
 });
 test('writes require exact site origin and custom CSRF header',()=>{
   const req=(origin,csrf='1')=>new Request('https://funtrack.example/api/events',{method:'POST',headers:{Origin:origin,'X-Funtrack-CSRF':csrf}});

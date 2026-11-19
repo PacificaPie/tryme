@@ -242,3 +242,15 @@ test('actual Clerk verification accepts a signed session but rejects expired, fu
   await errorCode(await handler(request('/api/me', { headers: { Authorization: 'Bearer ' + parts.join('.') } }), env), 401, 'AUTH_REQUIRED');
   assert.equal(applications, 2);assert.equal(profiles, 2);
 });
+
+
+test('signup age is server-derived and email-only users get no public email-derived name', async () => {
+  const createdAt=Date.now();
+  const {handler,calls}=fixture({user:{...profile,firstName:null,lastName:null,username:null,createdAt}});
+  await handler(request('/api/me',{headers:{'oai-authenticated-user-created-at':'1'}}),env);
+  const headers=calls.app[0].request.headers;
+  assert.equal(headers.get('oai-authenticated-user-created-at'),String(createdAt));
+  assert.equal(decodeURIComponent(headers.get('oai-authenticated-user-full-name')),'创作者');
+  const noDate=fixture();await noDate.handler(request('/api/me',{headers:{'oai-authenticated-user-created-at':String(createdAt)}}),env);
+  assert.equal(noDate.calls.app[0].request.headers.get('oai-authenticated-user-created-at'),null);
+});

@@ -1,0 +1,2 @@
+:root[data-theme="light"]{--night:#fcfcfd;--bone:#252c34;--ink:#252c34;color-scheme:light}
+:root[data-theme="dark"]{--night:#15191e;--bone:#ebeff3;color-scheme:dark}

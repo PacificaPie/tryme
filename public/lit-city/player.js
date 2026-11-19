@@ -18,7 +18,7 @@ function isCard(){return tt>=TM.home;}
       h=heroes[i];g0=TM.growStart+TM.growAt[h.rank];f0=TM.foldStart+h.rank*TM.foldGap;
       hov[i]=approach(hov[i],i===hoverIdx?1:0,dt/0.2);
       /* 整座城：进城时九栋按次序起，收回时倒着一栋栋收 */
-      var want=card&&(i===hoverIdx||pinned[i]||(city?clock-cityAt>h.rank*0.08:clock-cityOffAt<(N-1-h.rank)*0.07));
+      var want=card&&(i===hoverIdx||pinned[i]||(city?(reduce.matches||clock-cityAt>h.rank*0.08):(!reduce.matches&&clock-cityOffAt<(N-1-h.rank)*0.07)));
       pop[i]=approach(pop[i],want?1:0,dt/(want?0.85:0.8));popMax=Math.max(popMax,pop[i]);
       if(st.attached){st.rise[i]=U.back(U.seg(tt,g0,g0+TM.growDur),1.25);st.hinge[i]=1;}
       else{
@@ -46,7 +46,7 @@ function isCard(){return tt>=TM.home;}
   }
 
 
-function draw(dt){var s=core.size(),cs=cam.at(tt,s.w/s.h,{x:0,y:0},{city:U.eio(cityK),hov:U.eio(popMax)});core.shared.uTime.value=clock;compute(dt);st.nameA=0;scene.update(st);core.render({tilt:0,focus:cs.focus});}
+function draw(dt){core.shared.uTime.value=clock;compute(dt);var s=core.size(),cs=cam.at(tt,s.w/s.h,{x:0,y:0},{city:U.eio(cityK),hov:U.eio(popMax)});scene.setPortrait(s.w<600);scene.update(st);core.render({tilt:0,focus:cs.focus});}
 function request(){if(!disposed&&!paused&&!document.hidden&&!raf)raf=requestAnimationFrame(frame);}
 function wake(){until=performance.now()+1800;request();}
 function frame(now){raf=0;if(disposed||paused||document.hidden)return;var dt=last?Math.min(.05,(now-last)/1000):1/60;last=now;clock+=dt;if(playing){tt=Math.min(END,tt+dt);playing=tt<END;}if(reduce.matches){dt=2;tt=END;playing=false;}draw(dt);if(playing||(!reduce.matches&&(city||now<until)))request();else last=0;}

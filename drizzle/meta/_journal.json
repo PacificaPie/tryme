@@ -148,6 +148,13 @@
       "when": 1795111200000,
       "tag": "0021_interaction_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1795111200001,
+      "tag": "0022_first_visit_onboarding",
+      "breakpoints": true
     }
   ]
 }

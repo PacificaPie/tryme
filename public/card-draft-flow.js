@@ -34,6 +34,13 @@ export async function renderCardDraftStart(r, { api, readMine, owner, current, g
   if (workId && !work) throw Object.assign(Error(t('这件作品当前不可加入名片。')), { status: 404 });
   if (cardId && !card) throw Object.assign(Error(t('这张名片不可编辑。')), { status: 404 });
   const hasDraft = hasCardDraft(getDraft(), getPreview(), card);
+  // A first card has no competing draft or snapshot to replace. Carry the real
+  // published work straight into the approved city template; keep the existing
+  // explicit starting-point choice whenever there is anything to preserve.
+  if (workId && !hasDraft && !card) {
+    const plan = planCardAddition({ workId, works, ownerId: owner, source:'new' });
+    commit({ ...plan.draft, template:'city' }); go('/cards/me/template'); return;
+  }
   const removed = card ? planCardAddition({ workId, works, ownerId: owner, card, source: 'card' }).removedCount : 0;
   const back = workId ? '#/published/' + encodeURIComponent(workId) : '#/card/' + encodeURIComponent(cardId);
   if (!render(`<div class="page narrow card-start-page"><a class="back" href="${esc(back)}">${t(workId ? '暂不加入' : '返回名片')}</a><header class="page-head"><div><h1>${t(workId ? '加入名片' : '更新名片')}</h1><p>${esc(work?.name || card.name)}</p></div></header><section class="card-addition"><h2>${t('选择从哪里继续')}</h2><p>${t('保存会生成新链接，旧名片链接与作品快照保持不变。')}</p><div class="card-start-options">${hasDraft ? `<button class="button primary" data-add-source="draft">${t(workId ? '加入现有草稿' : '继续原草稿')}</button>` : ''}${card ? `<button class="button ${hasDraft ? '' : 'primary'}" data-add-source="card">${t(cardId ? '从这张名片继续制作' : '从当前名片继续制作')}</button>` : ''}${workId ? `<button class="button ${hasDraft || card ? '' : 'primary'}" data-add-source="new">${t('只用这件作品开始')}</button>` : ''}</div>${hasDraft ? `<p>${t('选择其他起点会替换当前未保存草稿。')}</p>` : ''}${removed ? `<p class="card-start-notice">${t('有 {count} 件作品已不可选，新草稿中将移除；旧名片不受影响。', { count: removed })}</p>` : ''}<p>${t('新名片使用所选作品在生成预览时的版本、介绍和封面。')}</p><p id="card-addition-error" class="error" role="alert"></p></section></div>`)) return;

@@ -9,12 +9,12 @@ SP.createCam=function(core){
 
   /* 斜上方：名片横向占画面的 fill，中心落在画面的 (cx, cy) */
   function orbit(tt,asp,par,mood,oP,oT){
-    var P=asp<0.9,TH=Math.tan(CM.fov*Math.PI/360);
-    var theta=U.track(CM.theta,tt)+par.x*CM.parallax[0],phi=U.track(CM.phi,tt)-par.y*CM.parallax[1];
+    var P=core.size().w<600||asp<0.9,TH=Math.tan(CM.fov*Math.PI/360);
+    var theta=U.track(CM.theta,tt)+par.x*CM.parallax[0],phi=U.track(P?CM.phiP:CM.phi,tt)-par.y*CM.parallax[1];
     var fill=U.track(P?CM.fillP:CM.fill,tt),cx=U.track(P?CM.cxP:CM.cx,tt),cy=U.track(P?CM.cyP:CM.cy,tt);
     /* fill 是按画面宽度算的。比 16:10 更扁的窗口里按高度收小，城占画面高度的比例和 16:10 时一样，楼顶不会顶出上沿 */
     if(!P)fill*=Math.min(1,1.6/asp);
-    if(mood){var CC=CM.city,c=mood.city;phi=U.lerp(phi,CC.phi,c)-CC.hov*mood.hov*(1-c);if(!P){fill=U.lerp(fill,CC.fill*Math.min(1,1.6/asp),c);cx=U.lerp(cx,CC.cx,c);}}
+    if(mood){var CC=CM.city,c=mood.city;phi=U.lerp(phi,CC.phi,c)-CC.hov*mood.hov*(1-c);fill=U.lerp(fill,(P?CC.fillP:CC.fill)*Math.min(1,1.6/asp),c);cx=U.lerp(cx,CC.cx,c);}
     var wproj=C.CARD.w*Math.abs(Math.cos(theta))+C.CARD.d*Math.abs(Math.sin(theta));
     var d=wproj/(fill*2*TH*asp),vw=2*TH*asp*d,vh=2*TH*d;
     oP.set(Math.sin(theta)*Math.cos(phi),Math.sin(phi),Math.cos(theta)*Math.cos(phi)).multiplyScalar(d);oT.set(0,0,0);

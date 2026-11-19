@@ -125,12 +125,17 @@ SP.createScene=function(core){
   var signCv=document.createElement('canvas');signCv.width=1024;signCv.height=512;
   var signTex=new T.CanvasTexture(signCv);signTex.minFilter=T.LinearMipmapLinearFilter;signTex.anisotropy=aniso;
   var signGeo=new T.BufferGeometry();
+  function fitText(g,text,width,spacing){
+    var chars=Array.from(text||'');if(spaced(g,chars.join(''),null,0,spacing)<=width)return chars.join('');
+    while(chars.length&&spaced(g,chars.join('')+'…',null,0,spacing)>width)chars.pop();
+    return chars.join('')+'…';
+  }
   function drawSigns(){
     var g=signCv.getContext('2d'),p=[],uv=[],bl=[],SHh=0.135,PXH=64;
     g.clearRect(0,0,1024,512);g.fillStyle='#fff';g.textBaseline='middle';g.font='400 40px '+FONT_ZH;
     K.signs.forEach(function(s,i){
-      var cx=(i%2)*512,cy=((i/2)|0)*80+8,w=spaced(g,s.text,null,0,7),x0=cx+(512-w)/2;
-      spaced(g,s.text,x0,cy+PXH/2+2,7);
+      var label=fitText(g,s.text,480,7),cx=(i%2)*512,cy=((i/2)|0)*80+8,w=spaced(g,label,null,0,7),x0=cx+(512-w)/2;
+      spaced(g,label,x0,cy+PXH/2+2,7);
       var ww=(w+12)/PXH*SHh,hh=SHh,u0=(x0-6)/1024,u1=(x0+w+6)/1024,v0=1-(cy+PXH)/512,v1=1-cy/512,H=heroes[s.hero].H;
       var q=[[s.x-ww/2,s.y-hh/2,u0,v0],[s.x+ww/2,s.y-hh/2,u1,v0],[s.x+ww/2,s.y+hh/2,u1,v1],[s.x-ww/2,s.y+hh/2,u0,v1]];
       [0,1,2,0,2,3].forEach(function(k){p.push(q[k][0],q[k][1],s.z);uv.push(q[k][2],q[k][3]);bl.push(s.hero,0,H);});
@@ -150,9 +155,10 @@ SP.createScene=function(core){
     var g=nameCv.getContext('2d'),W=nameCv.width,P=NAME.ppu,base=(3.16-NAME.z0)*P,O=C.OWNER;
     g.clearRect(0,0,W,nameCv.height);g.fillStyle='#fff';g.textBaseline='alphabetic';
     var big=portrait?0.60:0.44;
-    g.font='300 '+Math.round(big*P)+'px '+FONT_ZH;var w=spaced(g,O.name,0,base,big*P*0.16);
-    if(!portrait){g.font='400 '+Math.round(0.17*P)+'px '+FONT_EN;spaced(g,O.latin,w+0.26*P,base-0.01*P,0.055*P);}   /* 竖屏上名片很小，西文那一截认不出来，不画 */
-    if(!portrait){g.font='300 '+Math.round(0.20*P)+'px '+FONT_ZH;g.globalAlpha=0.72;var lw=spaced(g,O.line,null,0,0.022*P);spaced(g,O.line,W-lw,base-0.01*P,0.022*P);g.globalAlpha=1;}
+    g.font='300 '+Math.round(big*P)+'px '+FONT_ZH;
+    var limit=!portrait&&O.line?W*.54:W;
+    spaced(g,fitText(g,O.name,limit,big*P*.16),0,base,big*P*.16);
+    if(!portrait&&O.line){g.font='300 '+Math.round(0.20*P)+'px '+FONT_ZH;g.globalAlpha=0.72;var line=fitText(g,O.line,W*.40,.022*P),lw=spaced(g,line,null,0,.022*P);spaced(g,line,W-lw,base-.01*P,.022*P);g.globalAlpha=1;}
     nameTex.needsUpdate=true;nameMode=portrait?'p':'l';
   }
   var nameMesh=new T.Mesh(new T.PlaneGeometry(NAME.x1-NAME.x0,NAME.z1-NAME.z0),new T.ShaderMaterial({vertexShader:S.textV,fragmentShader:S.textF,transparent:true,depthWrite:false,
