@@ -1,6 +1,6 @@
 # HTML 游戏鼠标锁定修复
 
-状态：本地修复并验证，尚未合并或部署。基于 `main` 的 `ae09ad9`。
+状态：已通过 [PR #35](https://github.com/PacificaPie/tryme/pull/35) 合并并部署到正式站，线上 Chrome 鼠标交互已验证。修复基于 `main` 的 `ae09ad9`，合并提交为 `4cce34cf083bffec3e0b914cfbca469a4da846d3`。
 
 ## 问题与影响范围
 
@@ -34,4 +34,19 @@ Chrome 实测结果：
 
 所有场景均显示父页面访问与 localStorage 访问被阻止。后台自动点击曾出现独立的 `WrongDocumentError`；切换到前台原生鼠标点击后成功，不应将后台自动化结果当成权限修复失败。
 
-`npm run check`、`npm test` 和 `npm run build:standalone` 通过，685 项测试无失败。真实作品已确认调用 Pointer Lock，修复后实际作品的线上复测仍须部署后进行；其他浏览器和触屏设备未验证。
+`npm run check`、`npm test` 和 `npm run build:standalone` 通过，685 项测试无失败。[PR CI](https://github.com/PacificaPie/tryme/actions/runs/44601837935) 通过。其他浏览器和触屏设备未验证。
+
+## 正式发布与线上验收
+
+2026-11-19 经用户明确授权合并、部署及线上验证：
+
+- 发布前确认生产 `site.js`、`versioning.js`、`opening.js` 与主线一致，远端无待执行迁移。
+- 使用显式 `wrangler.standalone.production.jsonc` 重新构建，dry-run 确认正式 Worker、D1、R2 和 `https://trymecard.com`，随后部署相同产物。既有远端 secrets 沿用，没有读取或替换密钥。未执行数据库迁移。
+- 新生产版本：`80097e75-3e0c-4b60-ae44-6a51f2953a62`（100%）；此前版本：`68eaa7a2-deb1-4e91-9225-d11136fc3035`。
+- 上线后 `site.js` 和 `versioning.js` 与修复源码逐字节一致，`opening.js` 保持原摘要。认证配置仍为 Clerk production；匿名请求游戏仍返回 401。
+- 登录后新开「锻造大师」v1，iframe 的 sandbox 为 `allow-scripts allow-pointer-lock`。
+- 前台原生点击「新的契约」及「点击画面继续」后，Chrome 显示 `trymecard.com – To show your cursor, press esc`，游戏的继续提示消失。
+- 按 Esc，游戏重新出现「点击画面继续」暂停层；再次点击可以恢复。通过浏览器鼠标拖动输入，画面从正对铁砧转到地面/侧墙，确认相对鼠标输入能控制视角。
+- 第二次 Esc 再次正常暂停，最终点击「退出试玩」回到作品封面，未修改游戏原文件、版本或发布数据。
+
+本地截图保存在 `.preview/pointer-lock-production/mouse-look.jpg` 和 `escape-paused.jpg`。线上结论依据原生 Chrome 锁定提示、真实游戏视角变化和暂停/恢复行为；不是只根据 iframe 属性或后台点击结果推断。
