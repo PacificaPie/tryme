@@ -88,15 +88,16 @@ button{font:inherit}
 }
 @media (prefers-reduced-motion:reduce){.home,.count{transition:none}}
 
-/* Opening sequence: the original city/card stays on its front face. */
+/* Parent controls reserve a comfortable touch area below the final card. */
 .home .acts,.home .tag,.bot{display:none!important}
 .home{pointer-events:none!important}
 .stage canvas{pointer-events:none!important}
 .home h1{margin-bottom:0}
+.ui{padding-bottom:112px}
 </style>
 
 <div class="stage" id="stage">
-  <canvas id="gl" role="img" aria-label="开屏动画：一条不剪的推轨镜头穿过同一位创作者的三间展厅，灯一段一段亮起，墙上的作品从抖点醒成彩色；整个画面碎成像素点散开，再收拢成一张黑色的名片；名片上街道的刻线亮起来，九栋小楼顶出来，每栋楼的橱窗里是一件作品，再收回名片；名片可以翻面，背面是创作者的点阵头像、简介、数字和二维码"></canvas>
+  <canvas id="gl" role="img" aria-label="开屏动画：一条不剪的推轨镜头穿过同一位创作者的三间展厅，灯一段一段亮起，墙上的作品从抖点醒成彩色；整个画面碎成像素点散开，再收拢成一张黑色的名片；名片上街道的刻线亮起来，九栋小楼顶出来，每栋楼的橱窗里是一件作品，再收回名片；名片翻面，背面介绍 TryMe，点击探索作品进入主页"></canvas>
   <canvas id="gl2" aria-hidden="true" style="visibility:hidden;opacity:0"></canvas>
   <canvas id="fx" aria-hidden="true" style="visibility:hidden"></canvas>
   <div class="label" id="label" aria-hidden="true"><div><b></b><span></span></div></div>
