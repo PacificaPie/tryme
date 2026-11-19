@@ -1,5 +1,7 @@
 # Three.js prebuilt HTML import compatibility
 
+Released on 2026-11-19 through PR #30. Both the production site and builder image were updated; current cloud acceptance and rollout details are in [the release record](release-29-30-34-2026-11-19.md). The original local investigation below is retained as historical evidence.
+
 The production imports of `123bingowinnn/forgetax` at commit `5b619d9ebaf24a7d7993b3a11469c5dd705acb78` stopped with `EXTERNAL_ASSET` during preparation. The 1,084,288-byte root `index.html` already bundles the game. Three.js retains generic `FileLoader` / `ImageBitmapLoader` methods containing variable-argument `fetch` calls. The old regular expressions treated those definitions as evidence of missing resources.
 
 The shared inspector now uses streaming Acorn tokens to inspect explicit URL literals. It skips comments and diagnostic strings, decodes JavaScript escapes, and leaves computed/variable arguments unresolved rather than rejecting them. Static imports, explicit URLs in recognized resource calls, literal resource-property assignments, HTML/CSS references and import-map locations still undergo the inline-only check. JSON and shader script blocks are treated as data. Both pinned GitHub HTML and prebuilt repository imports use the same implementation. The game source is preserved; the repository path adds only its existing source notice.

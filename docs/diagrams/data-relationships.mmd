@@ -1,0 +1,25 @@
+flowchart LR
+  Profile[ft_profiles：当前姓名 / 简介 / 身份 / 网址 / 头像]
+  Work[ft_works：稳定作品 ID 与当前指针]
+  Version[ft_work_versions：不可变作品版本]
+  Meta[ft_work_metadata：不可变说明 / 封面修订]
+  Card[ft_cards：设计与选片 snapshot_json]
+  View[名片读取结果]
+  New[新卡 ID / 新快照]
+  Event[play_sessions / events：真实收到的事件]
+  Social[评论 / 回复 / 点赞 / 关注]
+  Notice[ft_notifications：来源事件与收件人]
+  Draft[ft_publish_drafts + captures：私有媒体状态]
+  Onboard[ft_onboarding：账号偏好]
+  Work --> Version
+  Work --> Meta
+  Card -->|固定 versionId| Version
+  Card -->|固定 metadataId / 可选 coverMetadataId| Meta
+  Card --> View
+  Profile -->|按 card.author_id 实时投影| View
+  Card -->|继续制作 / 更新封面；显式另存| New
+  Version --> Event
+  Work --> Social
+  Social -->|D1 触发器| Notice
+  Draft -.确认发布后.-> Work
+  Onboard -.仅偏好，不授予权限.-> Profile

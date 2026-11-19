@@ -1,0 +1,29 @@
+{
+  "draftId": "6dc2f898-d5c1-4c7a-9bbb-47d319053129",
+  "captures": [
+    {
+      "id": "cfd82dae-7d3e-4892-82ab-3d66225a62f5",
+      "kind": "cover",
+      "status": "ready",
+      "created_at": "2026-11-19T20:23:47.688Z",
+      "elapsed_ms": 8369,
+      "reason": null,
+      "byte_size": 28671,
+      "duration_ms": null
+    },
+    {
+      "id": "5386b55e-c014-4db3-ad64-0d73929523ce",
+      "kind": "video",
+      "status": "ready",
+      "created_at": "2026-11-19T20:23:56.410Z",
+      "elapsed_ms": 11650,
+      "reason": null,
+      "byte_size": 203433,
+      "duration_ms": 7957
+    }
+  ],
+  "matchingDrafts": 1,
+  "sameIdsAndChoicesAfterReselect": true,
+  "anonymousMediaStatus": 401,
+  "testWorkPublished": false
+}

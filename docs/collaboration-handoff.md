@@ -1,5 +1,7 @@
 # Funtrack 协作开发交接
 
+> 2026-11-19 当前状态入口：[项目现状](project-status-2026-11-19.md) · [系统架构、发布时序与数据关系](system-architecture-2026-11-19.md) · [#29/#30/#34 发布验收](release-29-30-34-2026-11-19.md)。production 已包含私有媒体确认与同文件恢复、Three.js 导入修复、可跳过的新用户引导、名片 QR/PNG、互动消息及鼠标锁定；正式仓库现名为 PacificaPie/tryme。下方带旧日期、测试数量和 Worker ID 的部署段落是历史证据，当前发布基线以上述现状页为准。
+
 更新日期：2026-11-18。本文面向接手代码的合作者；部署是否已经完成，以对应环境的实际验收记录为准。
 
 最新上传契约见 [三来源私有媒体验收](private-publish-media-2026-11-18.md)：HTML / GitHub / 外链先建立私有草稿，截图与支持的视频在发布前供作者确认；最后发布才进入 Feed。以下较早的“发布后首次自动生成”说明仅是历史行为，不能作为新上传流程的依据。
@@ -20,7 +22,7 @@
 - 新公开名片入口：`/c/<cardId>`。本轮实现为免登录读名片、封面和展厅；试玩进入登录，再回到该名片保存的作品版本。公开页不创建试玩会话或匿名事件。
 - 本轮界面：[界面系统记录](interface-system-2026-11-17.md)。分享边界：[公开名片方案](public-card-sharing-plan.md)。部署步骤：[独立部署](independent-deployment.md)。
 
-旧 `README` 的 Sites 验收段、`wireframe.html` 和早期 prototype 是历史资料。当前上传 HTML 限制为 **16 MiB**，名片有 5 个模板；不要从历史的 1 MiB / 两模板说明推导当前行为。
+旧 `README` 的 Sites 验收段、`wireframe.html` 和早期 prototype 是历史资料。当前上传 HTML 限制为 **16 MiB**，名片有 6 个模板（含灯城）；不要从历史的 1 MiB / 两模板说明推导当前行为。
 
 ## 第一次在自己的电脑运行
 
@@ -74,11 +76,11 @@ npm run dev:standalone
 | Clerk | 注册/登录/会话；业务作者 ID 为 `clerk:<userId>` | 完整登录仍需真实 development 实例及配置 |
 | Cloudflare Containers 构建器 | 通过私有服务绑定执行公开仓库构建任务 | 普通前端开发与 CI 不启动 Docker，不验证真实云容器构建 |
 | Cloudflare Browser Run | 通过 `BROWSER` 绑定在隔离浏览器中截取托管 HTML 的开屏 | 默认本地配置未连接云浏览器；不能仅靠本地页面证明截图可用 |
-| Worker Cron + D1 截图任务 | 每分钟触发 `scheduled`，领取 D1 中待处理的截图任务；成功后写 R2 和新 metadata | 发布不等待截图；自动测试不替代真实 Cron/Browser Run 验收 |
+| Worker Cron + D1 媒体任务 | 每分钟处理既有封面/视频任务，并清理过期私有草稿 | 首次发布已改为作者先确认或明确跳过媒体；私有捕获由请求触发，不等待下一分钟 Cron。自动测试不替代真实 Browser Run 验收 |
 
-staging 使用 `wrangler.standalone.staging.jsonc`；正式域名/Clerk production 是另一套配置与验收工作。不要把 staging 数据库或 R2 直接填进本地模板，也不要为了测试修改共享 staging 作品。测试新建自己的作品并标明测试用途。
+staging 使用 `wrangler.standalone.staging.jsonc`；已上线的正式站使用 `wrangler.standalone.production.jsonc`，其 Worker、D1、R2 和 Clerk 与 staging 独立。不要把 staging 数据库或 R2 直接填进本地模板，也不要为了测试修改共享 staging 作品。测试新建自己的作品并标明测试用途。
 
-自动封面迁移 `0011_automatic_work_covers.sql` 已应用，功能由 `FUNTRACK_AUTO_COVER_ENABLED` 和 `BROWSER` 绑定控制。任务以 D1 状态和租约协调，截图不计玩家会话，不自动点击游戏；外链不截图。每个版本最多两次尝试，并有 UTC 日/月预算；达到预算会排队等待，前端停止自动轮询并保留手动刷新和上传。已有封面、后续人工封面及名片历史快照不能被后台任务覆盖。两条真实截图任务均一次成功，封面已落库并显示；新 Cron 传播会暂时排队，不能据此承诺发布后立即有图。
+媒体按 D1 状态、预算和租约协调，不计入玩家会话。production 已启用候选封面确认及发布前私有媒体：HTML/构建产物可截图和录制视频，外链可受控截图但无自动视频。首次发布依赖明确选择或跳过，不自动替换人工封面。既有自动封面、候选封面、视频与私有捕获共享预算来源但各有尝试约束；以 `media-budget.mjs` 及对应服务为准，不套用早期“所有任务每版本两次”的概括。旧名片只能由作者显式另存新版更新封面。
 
 ## 每个 PR 的工作方式
 

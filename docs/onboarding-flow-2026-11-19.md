@@ -1,5 +1,7 @@
 # First login: browse freely, upload deliberately
 
+Released through PR #34 on 2026-11-19, after real staging Clerk sign-in and upload-entry acceptance. Production's existing authenticated session also verified the optional page and browse exit. See [the release record](release-29-30-34-2026-11-19.md); the original implementation checks below retain their original scope.
+
 ## Behavior
 
 New accounts now land directly on Feed. Eligible new accounts see a dismissible invitation above the works with “上传第一件作品” and “先随便看看”. Browsing works, searching, filtering, and visiting the studio do not require choosing an identity or saving a preference.
