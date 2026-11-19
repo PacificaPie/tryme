@@ -1,0 +1,160 @@
+{
+  "checked_at_utc": "2026-11-19T06:14:15.624601+00:00",
+  "main_commit": "ace1d301b4825ac7b58b277cf12eda6b27ecc52a",
+  "production_deployment": {
+    "id": "4e3bb0d6-9df4-4034-97e7-27eb6a1ae8c7",
+    "created_on": "2026-11-19T04:18:30.25944Z",
+    "versions": [
+      {
+        "version_id": "a62671e0-c983-4c51-a800-24c515ccadb1",
+        "percentage": 100
+      }
+    ]
+  },
+  "http": [
+    {
+      "path": "/api/auth/config",
+      "status": 200,
+      "auth": {
+        "provider": "clerk",
+        "configured": true,
+        "environment": "production"
+      }
+    },
+    {
+      "path": "/api/public/discover",
+      "status": 200
+    },
+    {
+      "path": "/api/me",
+      "status": 401
+    },
+    {
+      "path": "/site.js",
+      "status": 200,
+      "sha256": "7a34e2a57d2faacaf5566fc65d727607f9b1e0b729d93bf96e6617b7eb31940c",
+      "matches_main": true
+    },
+    {
+      "path": "/onboarding.js",
+      "status": 200,
+      "sha256": "d9525a3d5c999d1c9b2beae780faab670cf8ceca6aa3ebea3f614c38cd4caccc",
+      "matches_main": true
+    },
+    {
+      "path": "/opening.js",
+      "status": 200,
+      "sha256": "0160ddc750f9d2127f1a1d1eddc96578a7b18eb0f5c40ea3d4a639a9b3089174",
+      "matches_main": true
+    },
+    {
+      "path": "/notifications.js",
+      "status": 200,
+      "sha256": "74805a59913e5ef8fed1fb6ebe5e6b5700612c95197dd9813c012f36199b5361",
+      "matches_main": true
+    },
+    {
+      "path": "/card-export.js",
+      "status": 200,
+      "sha256": "73d9922b247d6395dc0627684f3f96f0d317d37be1d5318f5bc12823ef3280b5",
+      "matches_main": true
+    },
+    {
+      "path": "/lit-city/index.html",
+      "status": 200,
+      "sha256": "8ed69900957a1cfad9dc0ff0a747bbc49bc00405c66d6b359bb59e217bfe4d53",
+      "matches_main": true
+    }
+  ],
+  "production_migrations": [
+    "0000_dapper_pet_avengers.sql",
+    "0001_brown_mephistopheles.sql",
+    "0002_nervous_pepper_potts.sql",
+    "0003_clear_red_skull.sql",
+    "0004_greedy_iron_lad.sql",
+    "0005_productive_the_watchers.sql",
+    "0006_eager_leader.sql",
+    "0007_work_publication_controls.sql",
+    "0008_direct_feed_publication.sql",
+    "0009_feed_recommendations.sql",
+    "0010_recoverable_work_archive.sql",
+    "0011_automatic_work_covers.sql",
+    "0012_card_deletion.sql",
+    "0013_creator_profiles_and_follows.sql",
+    "0014_comment_version_context.sql",
+    "0015_automatic_video_previews.sql",
+    "0016_work_cover_review.sql",
+    "0017_work_categories.sql",
+    "0018_cover_drafts.sql",
+    "0019_private_publish_media.sql",
+    "0021_interaction_notifications.sql",
+    "0022_first_visit_onboarding.sql"
+  ],
+  "d1_read_only": {
+    "rows_written": 0,
+    "changed_db": false
+  },
+  "open_prs": [
+    {
+      "isDraft": false,
+      "number": 30,
+      "title": "Fix prebuilt HTML imports containing bundled Three.js loaders",
+      "url": "https://github.com/PacificaPie/tryme/pull/30"
+    },
+    {
+      "isDraft": true,
+      "number": 29,
+      "title": "Resume private media when reselecting the same upload",
+      "url": "https://github.com/PacificaPie/tryme/pull/29"
+    },
+    {
+      "isDraft": true,
+      "number": 23,
+      "title": "Experiment: bounded gameplay exploration and clean replay (mock-only)",
+      "url": "https://github.com/PacificaPie/tryme/pull/23"
+    },
+    {
+      "isDraft": true,
+      "number": 22,
+      "title": "Prepare independent WeChat registration and China deployment plan (disabled)",
+      "url": "https://github.com/PacificaPie/tryme/pull/22"
+    },
+    {
+      "isDraft": true,
+      "number": 10,
+      "title": "Prepare TryMe review: card updates/sharing, external metrics, comment reliability and design prototypes",
+      "url": "https://github.com/PacificaPie/tryme/pull/10"
+    },
+    {
+      "isDraft": true,
+      "number": 1,
+      "title": "Prepare WeChat QR login and verified-email account binding",
+      "url": "https://github.com/PacificaPie/tryme/pull/1"
+    }
+  ],
+  "recent_main_ci": [
+    {
+      "conclusion": "success",
+      "headSha": "ace1d301b4825ac7b58b277cf12eda6b27ecc52a",
+      "status": "completed",
+      "url": "https://github.com/PacificaPie/tryme/actions/runs/44457366308"
+    },
+    {
+      "conclusion": "success",
+      "headSha": "e57fcddbb035cbac9b600187228c25e96175cf12",
+      "status": "completed",
+      "url": "https://github.com/PacificaPie/tryme/actions/runs/44411778575"
+    },
+    {
+      "conclusion": "success",
+      "headSha": "a2bb3349c3b2e97ded559b1746787942f249a1af",
+      "status": "completed",
+      "url": "https://github.com/PacificaPie/tryme/actions/runs/44408838738"
+    }
+  ],
+  "limits": [
+    "Read-only deployment, migration ledger and anonymous HTTP checks only.",
+    "No new login, publication, screenshot, video capture, billing or real-device test was performed.",
+    "Static hashes confirm these assets only, not a cryptographic server bundle mapping."
+  ]
+}

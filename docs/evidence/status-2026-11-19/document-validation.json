@@ -1,0 +1,16 @@
+{
+  "checked_at_utc": "2026-11-19T06:21:52.347478+00:00",
+  "npm_check": "passed",
+  "node_tests": {
+    "pass": 671,
+    "fail": 0,
+    "skipped": 0
+  },
+  "mermaid_cli": "12.2.0",
+  "diagrams_rendered": 3,
+  "xml_valid": true,
+  "mermaid_sources_synchronized": true,
+  "local_document_links": "passed",
+  "offline_viewer_tabs": 3,
+  "offline_viewer_page_errors": 0
+}

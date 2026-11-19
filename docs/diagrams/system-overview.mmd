@@ -1,0 +1,49 @@
+flowchart LR
+  Web[浏览器：公开浏览 / 登录后创作与互动
+HTML CSS JS / Three.js / 隔离试玩 iframe]
+  Clerk[Clerk production
+邮箱 / Google]
+  subgraph App[主站 Cloudflare Worker]
+    Gate[身份验证与路由
+公开白名单 / CSRF / 预期账号]
+    Core[业务服务与所有权
+作品 / 版本 / 名片 / 资料 / 消息 / 引导]
+    Media[媒体服务
+私有草稿 / 捕获 / 预算与租约]
+    Gate --> Core
+    Gate --> Media
+  end
+  subgraph Data[独立生产存储]
+    D1[(D1
+业务记录 / 快照 / 事件 / 任务
+互动触发器与通知)]
+    R2[(R2
+HTML / 封面 / MP4
+私有草稿与永久副本)]
+  end
+  subgraph Build[私有仓库构建链路]
+    Builder[构建 Worker
+Durable Object]
+    Container[独立 Container
+固定工具链 / build 禁网]
+    Repo[公开 GitHub / npm
+准备阶段白名单下载]
+    Builder --> Container --> Repo
+  end
+  Browser[Browser Run
+托管 HTML 隔离捕获 / 外链受控截图]
+  External[公开 HTTPS 网站
+地址与重定向检查 / 受控 GET]
+  Cron[Cron
+过期草稿清理 / 既有媒体任务]
+  Web -->|请求| Gate
+  Web -->|登录与会话| Clerk
+  Gate -.服务端验会话.-> Clerk
+  Core --> D1
+  Core --> R2
+  Media --> D1
+  Media --> R2
+  Core -->|service binding；回传校验 HTML| Builder
+  Media -->|截图 / 静音 MP4| Browser
+  Browser -->|仅外链截图受控出网| External
+  Cron --> Media

@@ -1,5 +1,7 @@
 # TryMe
 
+当前入口：[项目现状（2026-11-19）](docs/project-status-2026-11-19.md) · [系统架构与发布/数据关系图](docs/system-architecture-2026-11-19.md)。已核对正式域名、最新 Worker、生产迁移与关键资产；微信/AI 实验及未合并修复单独列出。私有仓库现名为 [PacificaPie/tryme](https://github.com/PacificaPie/tryme)，旧 funtrack 地址重定向。
+
 新合作者请先看 [协作开发交接](docs/collaboration-handoff.md)：包含环境安装、目录分工、分支/PR、迁移与名片快照契约，以及已完成和待验收的边界。当前独立站使用 Cloudflare Worker + D1 + R2 + Clerk；配置见 [独立部署](docs/independent-deployment.md)，本轮分享入口见 [公开名片方案](docs/public-card-sharing-plan.md)。
 
 正式域名 [trymecard.com](https://trymecard.com) 已于 2026-11-17 发布，首版使用邮箱验证码；旧 staging 账号和内容保留原站。版本、资源与实际验收范围见 [正式发布记录](docs/production-launch-2026-11-17.md)，真人登录、上传与分享验收结果单独记录。
@@ -13,7 +15,7 @@ npm run build:standalone
 
 这些检查和本地目标构建不需要云端密钥；完整本地登录、上传和试玩仍需配置 Clerk development 实例。GitHub CI 只检查、测试和构建，不部署。
 
-**以下保留原 Sites 阶段的历史说明与验收证据。** 其中 1 MiB、两模板、owner-only、旧登录与初始迁移命令不再代表当前独立站；当前 HTML 上限为 16 MiB，名片有 5 种模板。新开发按上方协作交接操作，历史推荐验收见 [2026-11-16 记录](docs/recommendation-experiment-2026-11-16.md)。
+**以下保留原 Sites 阶段的历史说明与验收证据。** 其中 1 MiB、两模板、owner-only、旧登录与初始迁移命令不再代表当前独立站；当前 HTML 上限为 16 MiB，名片有 6 种模板。新开发按上方协作交接操作，历史推荐验收见 [2026-11-16 记录](docs/recommendation-experiment-2026-11-16.md)。
 
 发现作品、上传并试玩小游戏、留下反馈，以及用自己的作品制作可分享名片。当前应用入口是 `/site.html#/`，已经连接服务端 API、D1 和 R2；`/wireframe.html` 及早期前端演示仅保留作设计参考，其中的身份和统计不属于当前应用数据。
 

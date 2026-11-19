@@ -1,0 +1,28 @@
+sequenceDiagram
+  actor Author as 登录作者
+  participant Web as 上传界面
+  participant API as 主站 API
+  participant Build as 私有构建器
+  participant Store as D1 / R2
+  participant Browser as Browser Run
+  Author->>Web: 选择 HTML / GitHub / 外链
+  opt GitHub 仓库任务（单文件直读可跳过）
+    Web->>API: 导入公开仓库
+    API->>Build: 提取成品 HTML 或受限云构建
+    Build-->>API: 校验后的 HTML 产物
+  end
+  Web->>API: 创建作者私有发布草稿
+  API->>Store: 保存内容指纹、owner、24h 期限
+  Web->>API: 请求候选封面 / 支持的视频
+  API->>Store: 预留预算与租约
+  API->>Browser: 托管 HTML 捕获；或外链截图
+  Browser-->>API: JPEG / 静音 MP4 ≤8 秒
+  API->>Store: 私有候选媒体与状态
+  API-->>Web: 仅本人可读的候选
+  Author->>Web: 确认候选 / 手动封面 / 明确跳过
+  Author->>Web: 正式发布
+  Web->>API: 草稿 ID + 选择 + 原来源
+  API->>API: 账号 / 所有权 / 指纹 / 选择 / 幂等校验
+  API->>Store: 永久媒体副本 + 作品 / 版本 / metadata
+  API-->>Web: 发布成功；进入 Feed
+  Web-->>Author: 加入或更新名片；显式保存新卡
