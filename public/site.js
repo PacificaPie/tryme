@@ -1,4 +1,4 @@
-import { mountOnboarding, onboardingRoute } from './onboarding.js';
+import { mountOnboarding, onboardingRoute, createOnboardingInvitation, onboardingInvitationMarkup } from './onboarding.js';
 import { createOpening } from './opening.js';
 import { renderCardDraftStart } from './card-draft-flow.js';
 import { createNotificationCenter } from './notifications.js';
@@ -50,6 +50,7 @@ const $$ = (s, root=document) => [...root.querySelectorAll(s)];
 const main = $('#main');
 const opening = createOpening();
 let onboardingState=null, onboardingPanel=null;
+const onboardingInvitation=createOnboardingInvitation();
 mountMenus();
 let discussionPanel = null;
 let finishRouteLoading = null, publishedExternalCover = null, publishCoverDraft = null, publishWizard = null, publishedAutoCover = null, publishedAutoPreview = null, publishedVideos = null;
@@ -95,7 +96,7 @@ async function api(path, options={}) {
 const notificationCenter=createNotificationCenter({header:$('#notification-entry'),api,esc,notify,onSessionChanged:()=>{me=null;authChecked=false;identity();}});
 function signinURL(){return authURL('sign-in','/site.html'+(location.hash||'#/'));}
 function signinLink(label=t("登录")){return `<a class="button primary" href="${esc(signinURL())}" target="_top">${esc(label)}</a>`;}
-function identity(){ notificationCenter.setUser(me); $('#identity').innerHTML=me?`<details class="account-menu"><summary class="avatar" aria-label="${t("账号菜单")}">${avatarMarkup(me,{className:'account-avatar'})}</summary><div class="account-options"><span>${esc(me.name)}</span><a href="#/author/${encodeURIComponent(me.id)}">${t('个人主页')}</a><a href="#/following">${t('关注列表')}</a><button type="button" data-edit-profile>${t('编辑个人资料')}</button><a href="#/studio/works">${t("创作中心")}</a><a href="#/cards">${t("我的名片")}</a><a href="#/welcome">${t('使用偏好')}</a><a href="${esc(authURL('sign-out','/site.html#/feed'))}" target="_top">${t("退出登录")}</a></div></details><span class="identity-name">${esc(me.name)}</span>`:getAuthConfig().provider==='unknown'?'':`<a class="button quiet" href="${esc(signinURL())}" target="_top">${t("登录")}</a>`; }
+function identity(){ notificationCenter.setUser(me); $('#identity').innerHTML=me?`<details class="account-menu"><summary class="avatar" aria-label="${t("账号菜单")}">${avatarMarkup(me,{className:'account-avatar'})}</summary><div class="account-options"><span>${esc(me.name)}</span><a href="#/author/${encodeURIComponent(me.id)}">${t('个人主页')}</a><a href="#/following">${t('关注列表')}</a><button type="button" data-edit-profile>${t('编辑个人资料')}</button><a href="#/studio/works">${t("创作中心")}</a><a href="#/cards">${t("我的名片")}</a><a href="#/welcome">${t('开始创作')}</a><a href="${esc(authURL('sign-out','/site.html#/feed'))}" target="_top">${t("退出登录")}</a></div></details><span class="identity-name">${esc(me.name)}</span>`:getAuthConfig().provider==='unknown'?'':`<a class="button quiet" href="${esc(signinURL())}" target="_top">${t("登录")}</a>`; }
 function editProfile(){
   if(!me)return;const owner=me.id;
   const profileAPI=(path,options)=>{if(me?.id!==owner||draftOwner!==owner)throw new ApiError(t('请重新登录后重试。'),401,'AUTH_SESSION_CHANGED');return api(path,options);};
@@ -189,7 +190,7 @@ async function renderRoute(options={}){
     const welcome=me&&onboardingRoute(onboardingState,r.path);
     if(welcome){location.replace('#'+welcome);return;}
     if(!me&&(r.path!=='/feed'||r.params.get('following')==='1')){applyHTML(pageError(new ApiError('',401)),number);return;}
-    if(r.path==='/welcome')onboardingPanel=mountOnboarding(main,{route:r,user:me,state:onboardingState,api,render:html=>applyHTML(html,number),esc,current:()=>number===routeNumber&&me?.id===draftOwner,onSaved:result=>{me=result.user;onboardingState=result.onboarding;identity();syncCardPreview(me);},go});
+    if(r.path==='/welcome')onboardingPanel=mountOnboarding(main,{route:r,user:me,state:onboardingState,api,render:html=>applyHTML(html,number),esc,current:()=>number===routeNumber&&me?.id===draftOwner,onSaved:result=>{me=result.user;onboardingState=result.onboarding;identity();syncCardPreview(me);},onBrowse:()=>onboardingInvitation.dismiss(me),go});
     else if(r.path==='/feed')await renderDiscover(r,number);
     else if(r.path.startsWith('/author/'))await renderCreator(r,number);
     else if(r.path==='/following'||(r.path==='/cards'&&r.params.get('following')==='1'))await renderFollowing(r,number);
@@ -218,8 +219,15 @@ async function renderRoute(options={}){
 }
 async function renderDiscover(r,number){
   const authorId='',authorCard=null;
-  if(!applyHTML('<div class="page discovery-page"></div>',number))return;
-  const panel=await mountDiscovery($('.discovery-page'),{api,esc,workTile,syncSocial,userId:me?.id||null,authorId,authorCard,onSignIn:()=>go('/following'),initial:{q:r.params.get('q'),category:r.params.get('category'),sort:r.params.get('sort'),following:r.params.get('following')},onQuery:query=>{
+  const owner=me?.id,showInvitation=onboardingInvitation.visible(me,onboardingState);
+  if(!applyHTML(`<div class="page discovery-page">${showInvitation?onboardingInvitationMarkup():''}<div class="discovery-content"></div></div>`,number))return;
+  $('[data-onboarding-browse]')?.addEventListener('click',()=>{
+    if(number!==routeNumber||me?.id!==owner)return;
+    onboardingInvitation.dismiss(me);
+    $('.onboarding-invitation')?.remove();
+    $('#work-search')?.focus();
+  });
+  const panel=await mountDiscovery($('.discovery-content'),{api,esc,workTile,syncSocial,userId:me?.id||null,authorId,authorCard,onSignIn:()=>go('/following'),initial:{q:r.params.get('q'),category:r.params.get('category'),sort:r.params.get('sort'),following:r.params.get('following')},onQuery:query=>{
     if(number!==routeNumber)return;
     const params=new URLSearchParams();if(query.q)params.set('q',query.q);if(query.category!=='all')params.set('category',query.category);if(query.sort!==(authorId?'newest':'recommended'))params.set('sort',query.sort);if(query.following==='1')params.set('following','1');
     const next=r.path+(params.size?'?'+params:'');history.replaceState(null,'','#'+next);currentRoute=next;identity();
