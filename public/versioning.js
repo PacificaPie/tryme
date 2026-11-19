@@ -98,7 +98,7 @@ async function cancelBuild(view){
 async function showPreview(view){
   const ctx=view.ctx;if(!ready(ctx))return;const file=ctx.file,build=ctx.draft.source==='github'?buildFor(ctx):null;
   let html;if(build?.status!=='ready'){try{html=new TextDecoder('utf-8',{fatal:true}).decode(await file.arrayBuffer());}catch{ctx.error='游戏文件须使用 UTF-8 编码。';updateState(view);return;}}
-  if(!visible(view))return;disposePreview();const dialog=document.createElement('dialog');dialog.id='version-preview-dialog';dialog.className='version-preview-dialog';dialog.innerHTML=`<div class="game-tools"><span>${t('新版本预览')}</span><button type="button" class="button quiet small">${t('关闭预览')}</button></div><iframe title="${t('新版本预览')}" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe>`;document.body.appendChild(dialog);
+  if(!visible(view))return;disposePreview();const dialog=document.createElement('dialog');dialog.id='version-preview-dialog';dialog.className='version-preview-dialog';dialog.innerHTML=`<div class="game-tools"><span>${t('新版本预览')}</span><button type="button" class="button quiet small">${t('关闭预览')}</button></div><iframe title="${t('新版本预览')}" sandbox="allow-scripts allow-pointer-lock" referrerpolicy="no-referrer"></iframe>`;document.body.appendChild(dialog);
   q('button',dialog).addEventListener('click',()=>dialog.close());dialog.addEventListener('close',()=>dialog.remove(),{once:true});const frame=q('iframe',dialog);if(build?.status==='ready')frame.src='/api/builds/'+encodeURIComponent(build.id)+'/preview';else frame.srcdoc=localPreviewHTML(html);dialog.showModal();q('button',dialog).focus();
 }
 async function publishVersion(view){
