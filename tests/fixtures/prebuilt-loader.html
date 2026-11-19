@@ -1,0 +1,20 @@
+<!doctype html>
+<html><head><title>Bundled loader regression</title></head><body>
+<canvas id="game" width="64" height="64"></canvas>
+<script>
+// Original minimal fixture for the loader shape in forgetax commit 5b619d9.
+// These generic loaders remain in a bundle but the game uses a local canvas.
+class FileLoader {
+  load(url) { return fetch(new Request(url)).then(response => response.arrayBuffer()); }
+}
+class ImageBitmapLoader {
+  constructor() {
+    if (typeof fetch === 'undefined') console.warn('THREE.ImageBitmapLoader: fetch() not supported.');
+  }
+  load(url, options) { return fetch(url, options).then(response => response.blob()); }
+}
+const help = 'import "./optional.js"; fetch("https://example.invalid/unused")';
+const canvas = document.getElementById('game');
+canvas.getContext('2d').fillRect(0, 0, 64, 64);
+document.body.dataset.ready = 'true';
+</script></body></html>
