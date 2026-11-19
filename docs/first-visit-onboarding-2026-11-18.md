@@ -1,5 +1,7 @@
 # First visit and real onboarding integration
 
+The compulsory Feed choice described below is superseded by [the November 19 onboarding flow](onboarding-flow-2026-11-19.md). This file retains the original release and acceptance record.
+
 Based on `origin/main` e57fcdd (PR #28). Includes the finished city template from d72764e, cherry-picked as a8b01db. The opening source is the user-provided [Claude artifact](https://claude.ai/artifact/BhhPzLCWaVnjPi3PRi13hx), locally preserved in `design/opening-animation-2026-11-18`; the production film contains the approved front-only edit and silver/day and dark/night materials. Its example artwork is promotional imagery, not live Feed data. The final card identity is branded TryMe. Saved user cards always use actual profile/selected works through the existing adapter.
 
 ## Behavior

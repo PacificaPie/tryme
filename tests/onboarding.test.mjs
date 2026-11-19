@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fixture, OWNER, OTHER, handleAPI } from './helpers/router-fixture.mjs';
-import { onboardingRoute, onboardingNext } from '../public/onboarding.js';
+import { onboardingRoute, onboardingNext, createOnboardingInvitation, mountOnboarding } from '../public/onboarding.js';
 import { shouldPlayOpening } from '../public/opening.js';
 import { renderCardDraftStart } from '../public/card-draft-flow.js';
 
@@ -51,14 +51,68 @@ test('onboarding rejects anonymous, CSRF, cross-account and invalid writes witho
   assert.equal(f.count('ft_onboarding'),0);assert.equal(f.count('ft_profiles'),0);
 });
 
-test('deep work/card/version links return first; creator intent bypasses the choice; redirect targets are bounded', () => {
+test('Feed and studio are accessible without onboarding; creation requests a nickname and targets are bounded', () => {
   const pending={required:true,needsCreatorProfile:true};
-  for(const path of ['/work/work-one','/card/card-one','/studio/works/work-one/versions/version-one','/author/person','/notifications'])assert.equal(onboardingRoute(pending,path),null);
-  assert.equal(onboardingRoute(pending,'/feed'),'/welcome');
+  for(const path of ['/feed','/studio','/studio/works','/work/work-one','/card/card-one','/studio/works/work-one/versions/version-one','/author/person','/notifications'])assert.equal(onboardingRoute(pending,path),null);
   assert.match(onboardingRoute(pending,'/publish'),/^\/welcome\?intent=create/);
   assert.equal(onboardingRoute({...pending,required:false,needsCreatorProfile:false},'/feed'),null);
   for(const next of ['https://evil.test','//evil.test','/work/work-one','/cards/me?editCard=old'])assert.equal(onboardingNext(next,{hasWorks:true}),'/publish');
   assert.equal(onboardingNext('/cards/me',{hasWorks:true}),'/cards/me');assert.equal(onboardingNext('/cards/me',{hasWorks:false}),'/publish');
+});
+
+test('invitation dismissal survives reload per account and tolerates unavailable storage', () => {
+  const values=new Map(),storage=()=>({getItem:key=>values.get(key),setItem:(key,value)=>values.set(key,value)});
+  const user={id:'first'},other={id:'second'},state={required:true},invite=createOnboardingInvitation({storage});
+  assert.equal(invite.visible(user,state),true);assert.equal(invite.visible(null,state),false);
+  for(const change of [{required:false},{creatorReady:true},{hasWorks:true},{hasCard:true}])assert.equal(invite.visible(user,{...state,...change}),false);
+  invite.dismiss(user);assert.equal(invite.visible(user,state),false);
+  assert.equal(createOnboardingInvitation({storage}).visible(user,state),false);
+  assert.equal(invite.visible(other,state),true);
+  const denied=createOnboardingInvitation({storage:()=>{throw Error('Storage denied');}});
+  assert.equal(denied.visible(user,state),true);denied.dismiss(user);assert.equal(denied.visible(user,state),false);
+});
+
+function onboardingUI(query='intent=create') {
+  const listeners=new Map(),html=[],navigations=[],calls=[],saved=[];
+  let active=true,browsed=0;
+  const ui=mountOnboarding({querySelector:selector=>({addEventListener:(type,fn)=>listeners.set(selector+':'+type,fn)})},{
+    route:{params:new URLSearchParams(query)},user:{id:'first',name:'创作者'},state:{required:true,needsCreatorProfile:true},
+    api:(path,options)=>{let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});calls.push({path,options,resolve,reject});return promise;},
+    render:value=>{html.push(value);return true;},esc:value=>value,current:()=>active,
+    onSaved:value=>saved.push(value),onBrowse:()=>browsed++,go:path=>navigations.push(path),
+  });
+  return {ui,html,navigations,calls,saved,get browsed(){return browsed;},leave:()=>active=false,
+    name:value=>listeners.get('#onboarding-name:input')({target:{value}}),
+    submit:()=>listeners.get('#onboarding-profile:submit')({preventDefault(){}}),
+    browse:()=>listeners.get('[data-onboarding-browse]:click')(),
+  };
+}
+const settle=()=>new Promise(resolve=>setImmediate(resolve));
+
+test('browsing from either welcome view needs no write or nickname', () => {
+  for(const query of ['', 'intent=create']){
+    const f=onboardingUI(query);f.browse();assert.deepEqual(f.navigations,['/feed']);assert.equal(f.browsed,1);assert.deepEqual(f.calls,[]);
+  }
+});
+
+test('creator nickname saves once and lands on upload, never Feed', async () => {
+  const f=onboardingUI();f.name('  My name  ');f.submit();f.submit();
+  assert.equal(f.calls.length,1);assert.deepEqual(f.calls[0].options.body,{intent:'create',name:'My name'});
+  f.calls[0].resolve({user:{id:'first',name:'My name'},onboarding:{creatorReady:true}});await settle();
+  assert.deepEqual(f.navigations,['/publish']);assert.equal(f.saved.length,1);
+});
+
+test('nickname failure permits retry and browsing; late saves cannot pull a visitor back into creation', async () => {
+  const failed=onboardingUI();failed.name('Keep my name');failed.submit();failed.calls[0].reject(Error('Offline'));await settle();
+  assert.match(failed.html.at(-1),/Offline/);assert.match(failed.html.at(-1),/Keep my name/);
+  failed.submit();assert.equal(failed.calls.length,2);failed.browse();assert.deepEqual(failed.navigations,['/feed']);
+  failed.calls[1].resolve({user:{id:'first'},onboarding:{creatorReady:true}});await settle();
+  assert.deepEqual(failed.navigations,['/feed']);assert.deepEqual(failed.saved,[]);
+  for(const change of ['route','account']){
+    const stale=onboardingUI();stale.name('Name');stale.submit();if(change==='route')stale.leave();
+    stale.calls[0].resolve({user:{id:change==='account'?'second':'first'},onboarding:{creatorReady:true}});await settle();
+    assert.deepEqual(stale.saved,[]);assert.deepEqual(stale.navigations,[]);
+  }
 });
 
 test('opening is first home visit only and fails closed for uncertain authentication, reduced motion and returning users', () => {

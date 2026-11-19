@@ -1,11 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
+import {readFileSync} from 'node:fs';
 import {prepareRepository,prebuiltMetadata,LIMITS} from '../scripts/repo-builder.mjs';
 
 const job={repository:'PacificaPie/rain-between-rooms',commitSha:'0f15da7b9965af440a4e7bac348d30834c5667cf'};
 const html='<!doctype html><html><head><style>body{background:url(data:image/png;base64,eA==)}</style></head><body><img src="data:image/png;base64,eA=="><script>document.body.dataset.ready="yes";</script></body></html>';
 const file=(path,body)=>({path,bytes:Buffer.from(body)});
+test('prebuilt Three.js-style loaders preserve the original game and skip build execution',()=>{
+  const source=readFileSync(new URL('./fixtures/prebuilt-loader.html',import.meta.url),'utf8');
+  const prepared=prepareRepository([file('index.html',source)],job);
+  assert.equal(prepared.kind,'prebuilt');assert.equal(prepared.sourcePath,'index.html');
+  assert.equal(prepared.html.replace(/\n<!--\nSource:[\s\S]*?-->\n/,''),source);
+  assert.equal(prebuiltMetadata(prepared,job).execution.projectScriptsExecuted,false);
+});
 const project=()=>[
   file('package.json',JSON.stringify({scripts:{build:'vite build'},devDependencies:{vite:'7.1.7'}})),
   file('package-lock.json',JSON.stringify({lockfileVersion:3,packages:{'':{},'node_modules/vite':{version:'7.1.7',resolved:'https://registry.npmjs.org/vite/-/vite-7.1.7.tgz',integrity:'sha512-YWJj'}}})),

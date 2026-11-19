@@ -9,6 +9,7 @@ import { createAutoCoverService } from '../lib/funtrack/auto-cover-service.mjs';
 import { captureHostedHTML } from '../lib/funtrack/auto-cover-capture.mjs';
 import { createVideoPreviewService } from '../lib/funtrack/video-preview-service.mjs';
 import { captureVideoPreview } from '../lib/funtrack/video-preview-capture.mjs';
+import { retainPublishCapture } from '../lib/funtrack/publish-capture-lifetime.mjs';
 
 // This entry is selected only by the standalone build. The Sites Worker remains
 // unchanged and retains its platform-owned authentication and resource bindings.
@@ -27,7 +28,7 @@ export default {
     try { await previews.processPending(); } catch { console.warn('Automatic preview job unavailable; publication remains available.'); }
   },
   fetch: createStandaloneHandler({
-    fetch: (request: Request, env: Cloudflare.Env, ctx: ExecutionContext) => handler.fetch(request, env, ctx),
+    fetch: (request: Request, env: Cloudflare.Env, ctx: ExecutionContext) => retainPublishCapture(request, ctx, handler.fetch(request, env, ctx)),
     createClerkClient,
   }),
 };
