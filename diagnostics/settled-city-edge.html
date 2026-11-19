@@ -1,0 +1,20 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>灯城边界验收</title><script src="/theme-init.js"></script><style>
+body{margin:24px;background:#f3f4f6;color:#26313e;font:14px system-ui}h1{font-size:22px}p{line-height:1.6}select,button{font:inherit;padding:10px;border:1px solid #bcc6d1;border-radius:8px;background:white;color:#26313e}iframe{display:block;width:390px;max-width:100%;height:900px;border:1px solid #d2d8e0;border-radius:16px;margin:24px 0;background:#fcfcfd}#result{white-space:pre-wrap}:root[data-theme=dark] body{background:#15191e;color:#dce1e8}
+</style></head><body><h1>灯城名片 · 边界验收</h1><p>仅此本地页面提供测试场景。<a href="/__city">返回名片预览</a></p><select id="scenario" aria-label="测试场景"><option value="empty">零作品草稿</option><option value="missing">缺失与失效封面</option><option value="long">长姓名、简介与作品标题</option><option value="reduce">减少动态效果</option><option value="webgl">WebGL 不可用</option></select><button id="light">日间</button><button id="dark">夜间</button><p id="result" role="status"></p><iframe id="edge" title="边界测试名片"></iframe><script type="module">
+import {createGalleryBridge} from '/gallery/embed.js';
+import {createThemeController} from '/theme.js';
+const theme=createThemeController(),state=await (await fetch('/__city/state')).json(),card=(await (await fetch('/api/public/cards/'+state.cards[9])).json()).card;
+let frame=document.querySelector('#edge'),bridge;const select=document.querySelector('#scenario'),result=document.querySelector('#result');
+for(const mode of ['light','dark'])document.querySelector('#'+mode).onclick=()=>theme.setPreference(mode);
+function render(){
+  bridge?.dispose();const replacement=frame.cloneNode(false);frame.replaceWith(replacement);frame=replacement;const mode=select.value;result.textContent='加载中';
+  const author={name:card.name,headline:card.headline,bio:card.bio,signature:'让作品先说话。',avatarUrl:card.avatarUrl,website:'https://example.com',backStyle:'ink'};
+  const works=card.works.map(w=>({id:w.id,name:w.name,cover:w.coverUrl,desc:w.desc,version:w.version}));
+  if(mode==='empty')works.length=0;
+  if(mode==='missing'){works.length=3;works.forEach((w,i)=>w.cover=i===1?'/missing-cover.png':'');}
+  if(mode==='long'){author.name='这是长姓名与英文排版测试 · Alexandra Creative Studio '.repeat(3);author.headline='创作者的个人介绍与当前创作方向 '.repeat(6);author.bio='这段简介用于检查手机上的文字换行和完整展示。'.repeat(18);works.forEach(w=>w.name='一个包含中英文的长作品标题 A small world full of possibility '.repeat(2));}
+  frame.src='/lit-city/?qa='+mode;
+  bridge=createGalleryBridge({frame,payload:()=>({author,works,locale:'zh-CN'}),onStatus:s=>result.textContent='渲染状态：'+s});
+}
+select.onchange=render;window.addEventListener('message',event=>{if(event.source!==frame.contentWindow||event.origin!==location.origin)return;if(event.data?.type==='funtrack:gallery:resize')frame.style.height=Math.max(400,Math.min(2000,event.data.height))+'px';if(event.data?.type==='funtrack:gallery:open-work')result.textContent='已打开所选作品：'+event.data.workId;});render();
+</script></body></html>

@@ -135,16 +135,17 @@ SP.CFG={
      fx 里：gamma, gain 是这一张画面单独的曝光（先取 gamma 次方再乘 gain，九张的平均亮度拉到同一个量级）；
      rain 雨丝；pulse [幅度, 快慢] 发光处的明灭；mote [r, g, b, 透明度] 和 moteV [vx, vy, 密度, 大小] 是飘着的小光点。 */
   ROWS:{A:{zf:-2.2,yc:0.97},B:{zf:-0.4,yc:0.79},C:{zf:2.1,yc:0.55}},
+  // Geometry slots only. The adapter supplies every title, image and profile.
   WORKS:[
-    {id:'slipway', zh:'九号船台',    en:'SLIPWAY 9',        note:'在雨夜的船坞里打一场机甲对决',       row:'A',x:-4.5,fx:{gamma:1,gain:1.05,rain:0.55}},
-    {id:'neon',    zh:'霓虹广场',    en:'NEON PLAZA',       note:'在夜里的街上走一走',   row:'A',x:0,   yc:1.27,fx:{gamma:1,gain:1.1,pulse:[0.22,2.1]}},
-    {id:'magma',   zh:'熔火之峰',    en:'MAGMA PEAK',       note:'围着一座火山转一圈', row:'A',x:4.5, fx:{gamma:0.8,gain:1.4,pulse:[0.30,1.3],mote:[1.0,0.55,0.2,0.30],moteV:[0.02,0.10,7,0.018]}},
-    {id:'citadel', zh:'法老王城',    en:'PHARAOH CITADEL',  note:'夜里走进法老的城门',     row:'B',x:-2.6,fx:{gamma:0.8,gain:1.3,pulse:[0.26,3.1]}},
-    {id:'giza',    zh:'吉萨自驾',    en:'GIZA TOUR',        note:'开着吉普车绕金字塔',   row:'B',x:2.6, fx:{gamma:1.8,gain:0.78}},
-    {id:'redhood', zh:'小红帽的森林',en:'REDHOOD',          note:'在童话森林里走到外婆家',   row:'C',x:-4.5,fx:{gamma:2.1,gain:0.74}},
-    {id:'sandstorm',zh:'沙暴行动',   en:'SANDSTORM',        note:'在沙尘里的街区执行一次行动',     row:'C',x:-1.5,fx:{gamma:1,gain:1,mote:[0.9,0.82,0.66,0.08],moteV:[0.11,0.012,5,0.035]}},
-    {id:'witch',   zh:'枯朽古树',    en:'THE WITHERED ONE', note:'绕着一棵枯树看萤火',row:'C',x:1.5, fx:{gamma:0.85,gain:1.25,mote:[0.75,0.86,1.0,0.30],moteV:[0.006,0.035,6,0.014]}},
-    {id:'sakura',  zh:'樱·盆景',     en:'SAKURA BONSAI',    note:'养一棵会落花的树', row:'C',x:4.5, fx:{gamma:1.2,gain:0.92,mote:[1.0,0.86,0.93,0.30],moteV:[-0.03,-0.07,7,0.016]}}
+    {id:'slipway', row:'A',x:-4.5},
+    {id:'neon',row:'A',x:0,yc:1.27},
+    {id:'magma',row:'A',x:4.5},
+    {id:'citadel',row:'B',x:-2.6},
+    {id:'giza',row:'B',x:2.6},
+    {id:'redhood',row:'C',x:-4.5},
+    {id:'sandstorm',row:'C',x:-1.5},
+    {id:'witch',row:'C',x:1.5},
+    {id:'sakura',row:'C',x:4.5}
   ],
 
   /* ---------- 街道刻线 ----------
