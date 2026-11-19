@@ -1,3 +1,5 @@
+import { mountOnboarding, onboardingRoute } from './onboarding.js';
+import { createOpening } from './opening.js';
 import { renderCardDraftStart } from './card-draft-flow.js';
 import { createNotificationCenter } from './notifications.js';
 import { mountPublishWizard, publishProgress } from './publish-wizard.js';
@@ -46,6 +48,8 @@ registerMessages({'名片会自动使用你的最新个人资料。':'Your card 
 const $ = (s, root=document) => root.querySelector(s);
 const $$ = (s, root=document) => [...root.querySelectorAll(s)];
 const main = $('#main');
+const opening = createOpening();
+let onboardingState=null, onboardingPanel=null;
 mountMenus();
 let discussionPanel = null;
 let finishRouteLoading = null, publishedExternalCover = null, publishCoverDraft = null, publishWizard = null, publishedAutoCover = null, publishedAutoPreview = null, publishedVideos = null;
@@ -91,7 +95,7 @@ async function api(path, options={}) {
 const notificationCenter=createNotificationCenter({header:$('#notification-entry'),api,esc,notify,onSessionChanged:()=>{me=null;authChecked=false;identity();}});
 function signinURL(){return authURL('sign-in','/site.html'+(location.hash||'#/'));}
 function signinLink(label=t("登录")){return `<a class="button primary" href="${esc(signinURL())}" target="_top">${esc(label)}</a>`;}
-function identity(){ notificationCenter.setUser(me); $('#identity').innerHTML=me?`<details class="account-menu"><summary class="avatar" aria-label="${t("账号菜单")}">${avatarMarkup(me,{className:'account-avatar'})}</summary><div class="account-options"><span>${esc(me.name)}</span><a href="#/author/${encodeURIComponent(me.id)}">${t('个人主页')}</a><a href="#/following">${t('关注列表')}</a><button type="button" data-edit-profile>${t('编辑个人资料')}</button><a href="#/studio/works">${t("创作中心")}</a><a href="#/cards">${t("我的名片")}</a><a href="${esc(authURL('sign-out','/site.html#/feed'))}" target="_top">${t("退出登录")}</a></div></details><span class="identity-name">${esc(me.name)}</span>`:getAuthConfig().provider==='unknown'?'':`<a class="button quiet" href="${esc(signinURL())}" target="_top">${t("登录")}</a>`; }
+function identity(){ notificationCenter.setUser(me); $('#identity').innerHTML=me?`<details class="account-menu"><summary class="avatar" aria-label="${t("账号菜单")}">${avatarMarkup(me,{className:'account-avatar'})}</summary><div class="account-options"><span>${esc(me.name)}</span><a href="#/author/${encodeURIComponent(me.id)}">${t('个人主页')}</a><a href="#/following">${t('关注列表')}</a><button type="button" data-edit-profile>${t('编辑个人资料')}</button><a href="#/studio/works">${t("创作中心")}</a><a href="#/cards">${t("我的名片")}</a><a href="#/welcome">${t('使用偏好')}</a><a href="${esc(authURL('sign-out','/site.html#/feed'))}" target="_top">${t("退出登录")}</a></div></details><span class="identity-name">${esc(me.name)}</span>`:getAuthConfig().provider==='unknown'?'':`<a class="button quiet" href="${esc(signinURL())}" target="_top">${t("登录")}</a>`; }
 function editProfile(){
   if(!me)return;const owner=me.id;
   const profileAPI=(path,options)=>{if(me?.id!==owner||draftOwner!==owner)throw new ApiError(t('请重新登录后重试。'),401,'AUTH_SESSION_CHANGED');return api(path,options);};
@@ -160,7 +164,7 @@ async function activateDrafts(user){
   if(canMigrate){if(!publishFile){publishFile=await fileStore('get','game',null,true);if(publishFile)await fileStore('put','game',publishFile);}if(!coverFile){coverFile=await fileStore('get','cover',null,true);if(coverFile)await fileStore('put','cover',coverFile);}}
   refreshCoverPreview();savePublish();saveCardDraft();saveFeedback();write(storage.preview,preview);write(storage.views,Object.fromEntries(galleryViews));if(!legacyOwner)write('funtrack.real.owner',user.id);write('funtrack.real.migrated:'+user.id,true);
 }
-async function loadMe(){try{const data=await api('/api/me');me=data.user;}catch(e){if(e.status!==401)throw e;me=null;}finally{identity();}authChecked=true;if(me)await activateDrafts(me);}
+async function loadMe(){try{const data=await api('/api/me');me=data.user;onboardingState=data.onboarding||null;}catch(e){if(e.status!==401)throw e;me=null;}finally{identity();}authChecked=true;if(me)await activateDrafts(me);}
 
 function applyHTML(html,number){if(number!==routeNumber)return false;finishRouteLoading?.();finishRouteLoading=null;main.innerHTML=html;syncNavigation();const key=route().raw;requestAnimationFrame(()=>{if(number===routeNumber)window.scrollTo(0,scrolls.get(key)||0);});return true;}
 async function renderRoute(options={}){
@@ -169,6 +173,7 @@ async function renderRoute(options={}){
   const publicPath=(!authChecked||!me)&&legacyPublicCardPath(location.hash);
   if(publicPath){location.replace(publicPath);return;}
   if(!options.localeOnly)visitRecorded=false;
+  onboardingPanel?.dispose();onboardingPanel=null;
   notificationPage?.dispose();notificationPage=null;notificationCenter.onRoute();
   const r=route(),number=++routeNumber;discussionPanel?.dispose();discussionPanel=null;publishWizard?.dispose();publishWizard=null;publishCoverDraft?.dispose();publishCoverDraft=null;publishedExternalCover?.dispose();publishedExternalCover=null;publishedAutoCover?.dispose();publishedAutoCover=null;publishedAutoPreview?.dispose();publishedAutoPreview=null;publishedVideos?.dispose();publishedVideos=null;stopBuildPolling();publishAvailability?.dispose();publishAvailability=null;disposeVersioning();disposeWorkEdit();disposePublicationControls();analyticsPanel?.dispose();analyticsPanel=null;discoveryPanel?.dispose();discoveryPanel=null;creatorPanel?.dispose();creatorPanel=null;templateExperiencePanel?.dispose();templateExperiencePanel=null;
   if(currentRoute&&currentRoute!==r.raw)scrolls.set(currentRoute,window.scrollY);
@@ -180,8 +185,12 @@ async function renderRoute(options={}){
     if(!authChecked){try{await loadMe();}catch(error){if(r.path!=='/feed'||r.params.get('following')==='1')throw error;me=null;}}
     if(number!==routeNumber)return;
     identity();
+    opening.resolve({authenticated:Boolean(me),checked:authChecked,path:r.path});
+    const welcome=me&&onboardingRoute(onboardingState,r.path);
+    if(welcome){location.replace('#'+welcome);return;}
     if(!me&&(r.path!=='/feed'||r.params.get('following')==='1')){applyHTML(pageError(new ApiError('',401)),number);return;}
-    if(r.path==='/feed')await renderDiscover(r,number);
+    if(r.path==='/welcome')onboardingPanel=mountOnboarding(main,{route:r,user:me,state:onboardingState,api,render:html=>applyHTML(html,number),esc,current:()=>number===routeNumber&&me?.id===draftOwner,onSaved:result=>{me=result.user;onboardingState=result.onboarding;identity();syncCardPreview(me);},go});
+    else if(r.path==='/feed')await renderDiscover(r,number);
     else if(r.path.startsWith('/author/'))await renderCreator(r,number);
     else if(r.path==='/following'||(r.path==='/cards'&&r.params.get('following')==='1'))await renderFollowing(r,number);
     else if(r.path==='/cards')await renderCards(number);
@@ -205,7 +214,7 @@ async function renderRoute(options={}){
     else if(r.path.startsWith('/cards/me'))await renderBuilder(r,number);
     else if(r.path.startsWith('/card/'))await renderCard(r,number,!visitRecorded);
     else applyHTML(`<div class="page narrow">${empty(t("页面不存在"),t("可以回到发现页继续看看。"),`<a class="button" href="#/">${t("发现作品")}</a>`)}</div>`,number);
-  }catch(error){if(number===routeNumber)applyHTML(pageError(error),number);}
+  }catch(error){if(number===routeNumber){opening.cancel();applyHTML(pageError(error),number);}}
 }
 async function renderDiscover(r,number){
   const authorId='',authorCard=null;
@@ -506,7 +515,7 @@ async function submitPublish(form){
 }
 async function renderPublished(r,number){
   const {work}=await api('/api/works/'+encodeURIComponent(r.path.split('/')[2]));
-  if(!applyHTML(`<div class="page narrow published-result">${publishProgress(3)}${head(t("作品已发布"),work.name)}<p class="published-result-note">${t('作品已发布，已保存你确认的封面和视频选择。')}</p><div id="published-work-tile" class="work-grid" style="max-width:560px;grid-template-columns:1fr">${workTile(work)}</div><div class="form-footer"><a class="button primary" href="#/cards/me?addWork=${encodeURIComponent(work.id)}">${t("加入或更新名片")}</a><a class="button quiet" href="#/feed">${t("完成，去看 Feed")}</a><a class="button quiet" href="${esc(workHref(work,'/studio/works'))}">${t("试玩作品")}</a><details class="version-secondary"><summary>${t('更多')}</summary><a class="button quiet" href="#${discoveryPath(work.id)}">${t('展示设置')}</a><a class="button quiet" href="#/studio/works">${t("我的作品")}</a></details></div></div>`,number))return;
+  if(!applyHTML(`<div class="page narrow published-result">${publishProgress(3)}${head(t("作品已发布"),work.name)}<p class="published-result-note">${t('作品已发布，已保存你确认的封面和视频选择。')}</p><div id="published-work-tile" class="work-grid" style="max-width:560px;grid-template-columns:1fr">${workTile(work)}</div><div class="form-footer"><a class="button primary" href="#/cards/me?addWork=${encodeURIComponent(work.id)}">${t(onboardingState?.intent==='create'&&!onboardingState.hasCard?"制作我的名片":"加入或更新名片")}</a><a class="button quiet" href="#/feed">${t("完成，去看 Feed")}</a><a class="button quiet" href="${esc(workHref(work,'/studio/works'))}">${t("试玩作品")}</a><details class="version-secondary"><summary>${t('更多')}</summary><a class="button quiet" href="#${discoveryPath(work.id)}">${t('展示设置')}</a><a class="button quiet" href="#/studio/works">${t("我的作品")}</a></details></div></div>`,number))return;
   publishedVideos=mountVideoPreviews($('#published-work-tile'));
 
 }
@@ -615,6 +624,7 @@ async function saveCard(){
   try{
     const {card}=await api('/api/cards',{method:'POST',headers:{'Idempotency-Key':saveKey},body:{workIds:saving.workIds,workRefs:previewReferences(saving),template:saving.template,name:saving.name,bio:saving.bio,...cardProfile(saving),avatarUrl:saving.avatarUrl||''}});
     if(!current())return;
+    if(onboardingState)onboardingState={...onboardingState,hasCard:true,creatorReady:true,needsCreatorProfile:false,required:false};
     if(route().path==='/cards/me/preview')go('/card/'+encodeURIComponent(card.id)+'?saved=1');else notify(t("名片已保存。"));
   }catch(error){
     if(!current())return;
@@ -743,7 +753,7 @@ function receiveGallery(event){
 }
 window.addEventListener('message',event=>{receiveGame(event);receiveGallery(event);});
 document.addEventListener('visibilitychange',()=>activeSession?.clock.setVisible(!document.hidden));
-window.addEventListener('hashchange',renderRoute);
+window.addEventListener('hashchange',()=>{opening.cancel();renderRoute();});
 for(const type of ['wheel','touchstart'])window.addEventListener(type,()=>{if(currentGallery)currentGallery.restoreScroll=null;},{passive:true});
 window.addEventListener('online',()=>{actionQueue.forEach((_,id)=>flushAction(id));sessionQueues.forEach(flushSession);});
 window.addEventListener('pagehide',()=>{endSession('exit');actionQueue.forEach((_,id)=>flushAction(id));sessionQueues.forEach(queue=>{if(queue.pending.length)api('/api/sessions/'+encodeURIComponent(queue.id)+'/events',{method:'POST',body:{token:queue.token,events:queue.pending.slice(0,20)},keepalive:true}).catch(()=>{});});});
@@ -770,7 +780,7 @@ function renderChrome(){
 }
 $('#locale-toggle').addEventListener('click',()=>{
   if(activeSession&&!activeSession.ended){notify(t('结束试玩后可切换语言'));return;}
-  if(publishPending||cardPending||startPending||hasPendingCardDeletion()||hasPendingVersionMutation()||hasPendingWorkEdit()||hasPendingPublicationControl()){notify(t('正在提交，请稍后切换语言'));return;}
+  if(onboardingPanel?.pending||publishPending||cardPending||startPending||hasPendingCardDeletion()||hasPendingVersionMutation()||hasPendingWorkEdit()||hasPendingPublicationControl()){notify(t('正在提交，请稍后切换语言'));return;}
   setLocale(getLocale()==='en'?'zh-CN':'en');
 });
 window.addEventListener('funtrack:localechange',()=>{

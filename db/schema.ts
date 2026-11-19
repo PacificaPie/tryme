@@ -7,6 +7,13 @@ export const profiles = sqliteTable('ft_profiles', {
   website: text('website').notNull().default(''), backStyle: text('back_style').notNull().default('ink'),
   avatarUrl: text('avatar_url').notNull().default(''),
 });
+export const onboardingRollout = sqliteTable('ft_onboarding_rollout', {
+  id: integer('id').primaryKey(), startedAt: integer('started_at').notNull(),
+}, t=>[check('ft_onboarding_rollout_singleton',sql`${t.id} = 1`)]);
+export const onboarding = sqliteTable('ft_onboarding', {
+  ownerId: text('owner_id').primaryKey(), intent: text('intent').notNull(),
+  creatorStartedAt: text('creator_started_at'), completedAt: text('completed_at').notNull(),
+}, t=>[check('ft_onboarding_intent',sql`${t.intent} IN ('discover','create')`)]);
 export const creatorFollows = sqliteTable('ft_creator_follows', {
   followerId: text('follower_id').notNull(), creatorId: text('creator_id').notNull(), createdAt: text('created_at').notNull(),
 }, t=>[primaryKey({columns:[t.followerId,t.creatorId]}),check('ft_creator_follows_not_self',sql`${t.followerId} <> ${t.creatorId}`),index('ft_creator_follows_creator').on(t.creatorId,t.createdAt,t.followerId),index('ft_creator_follows_follower').on(t.followerId,t.createdAt,t.creatorId)]);

@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="zh-CN"><head><script src="/theme-init.js"></script><script src="./theme-init.js"></script><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body>
+
+<title>TryMe</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&family=Jost:wght@400&family=Noto+Sans+SC:wght@300;400&family=Noto+Serif+SC:wght@600;900&display=swap">
+<style>
+/* 版式：整屏一块银幕，画面全在 WebGL 里。放的过程中画面上只有开头的计数和右下角两个按钮，最后出现首页的标题和按钮。
+   界面只有三种颜色：骨白、墨、朱红。名片上的暖黄只属于那座城自己的灯，界面不用。 */
+:root{
+  --night:#0B0B0D; --bone:#ECE9E2; --ink:#15161A; --accent:#E23A2E;
+  --display:"Big Shoulders Display","Arial Narrow",Impact,sans-serif;
+  --serif:"Noto Serif SC","Songti SC","STSong",serif;
+  --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--night);color:#F4F1EA;font-family:var(--mono);font-size:12px;line-height:1.5;overflow:hidden;-webkit-font-smoothing:antialiased}
+button{font:inherit}
+.stage{position:relative;height:100%;overflow:hidden;
+  --b:#F4F1EA;--b-hair:rgba(244,241,234,.3)}
+/* 右下角两个按钮身后是亮的地面时，换成墨色 */
+.stage.bot-ink{--b:#15161A;--b-hair:rgba(21,22,26,.3)}
+.stage.notrans *,.stage.notrans *::before,.stage.notrans *::after{transition:none!important;animation:none!important}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+/* 最上面那层像素点不接鼠标，底下两块画布才点得到 */
+#fx{pointer-events:none}
+.ui{position:absolute;inset:0;pointer-events:none;padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px));padding-block:18px 16px;display:flex;flex-direction:column;justify-content:space-between}
+.row{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.tag{letter-spacing:.09em;font-size:11px;margin:0}
+
+.mid{position:relative;flex:1;min-height:0}
+/* 开头左下角的计数：000 数到 100，灯亮了就淡掉 */
+.count{position:absolute;left:0;bottom:10px;font-family:var(--display);font-weight:900;font-size:clamp(72px,15vw,196px);line-height:.8;letter-spacing:-.01em;font-variant-numeric:tabular-nums;color:var(--accent);opacity:0;transition:opacity .3s ease}
+.count.on{opacity:1}
+/* 手机上开头的计数提前单独成层：开机时就画好，之后只改透明度 */
+.stage.lite .count{will-change:opacity,transform}
+
+/* 最后一帧：首页。夜里的画面上是骨白的字 */
+.home{position:absolute;left:0;top:0;bottom:0;width:calc(clamp(330px,34.5vw,470px) - 20px);display:flex;flex-direction:column;justify-content:center;padding:0 0 4px;color:var(--bone);opacity:0;transform:translateY(10px);transition:opacity .7s ease,transform .9s cubic-bezier(.2,.7,.2,1);pointer-events:none;will-change:opacity,transform}
+.home.on{opacity:1;transform:none}
+.home.on .cta,.home.on .ghost{pointer-events:auto}
+.home .tag{color:rgba(244,241,234,.62)}
+.home h1{font-family:var(--serif);font-weight:900;font-size:clamp(30px,3.9vw,58px);line-height:1.16;margin:14px 0 28px;letter-spacing:.01em;white-space:nowrap}
+.acts{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.cta{display:inline-flex;align-items:center;gap:11px;font:900 15px/1 var(--serif);letter-spacing:.06em;color:var(--ink);background:var(--bone);border:0;border-radius:999px;padding:15px 24px 15px 20px;cursor:pointer;transition:transform .25s cubic-bezier(.2,.7,.2,1),box-shadow .25s ease}
+.cta i{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block;transition:transform .25s ease}
+.ghost{font:900 15px/1 var(--serif);letter-spacing:.06em;color:var(--bone);background:none;border:1px solid rgba(244,241,234,.34);border-radius:999px;padding:14px 22px;cursor:pointer;transition:background .2s ease,color .2s ease,border-color .2s ease}
+
+.bot{position:relative;align-items:flex-end;justify-content:flex-end}
+.ctl{position:relative;display:flex;gap:8px;pointer-events:auto;flex:none}
+.ctl button{background:none;border:1px solid var(--b-hair);border-radius:999px;color:var(--b);font:400 11px/1 var(--mono);letter-spacing:.06em;padding:9px 13px;cursor:pointer;transition:background .2s ease,color .2s ease,border-color .5s ease}
+/* 悬停的样子只给有鼠标的设备。触屏上点过一下以后，"悬停"会一直留在那个按钮上，看起来像一直被按着 */
+@media (hover:hover){
+  .cta:hover{transform:translateY(-2px);box-shadow:0 12px 26px rgba(0,0,0,.5)}
+  .cta:hover i{transform:scale(1.5)}
+  .ghost:hover{background:var(--bone);color:var(--ink);border-color:var(--bone)}
+  .ctl button:hover{background:var(--b);color:var(--ink)}
+  .stage.bot-ink .ctl button:hover{color:var(--bone)}
+}
+.ctl button:focus-visible,.cta:focus-visible,.ghost:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+
+/* 悬停一栋楼时挂在它头顶的名字 */
+.label{position:absolute;left:0;top:0;pointer-events:none;opacity:0;transition:opacity .1s ease;will-change:transform;z-index:3}
+.label.on{opacity:1}
+.label div{position:absolute;left:0;bottom:28px;transform:translateX(-50%);padding:8px 13px 9px;background:rgba(11,11,13,.82);border:1px solid rgba(244,241,234,.18);border-radius:3px;white-space:nowrap;text-align:center}
+.label div::after{content:"";position:absolute;left:50%;top:100%;width:1px;height:22px;background:rgba(244,241,234,.3)}
+.label b{display:block;font:900 15px/1.2 var(--serif);letter-spacing:.08em;color:var(--bone)}
+.label span{display:block;margin-top:4px;font-size:11px;letter-spacing:.08em;color:rgba(244,241,234,.62)}
+/* 竖屏：不跟着楼走，固定成名片下面的一行 */
+.label.line div{bottom:auto;top:0;transform:none;padding:0;background:none;border:0;text-align:left;display:flex;align-items:baseline;gap:.8em}
+.label.line div::after{display:none}
+.label.line span{margin:0}
+.fail{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;font-family:var(--serif);font-size:18px}
+
+/* 竖着的画面（手机、竖放的平板）和很窄的窗口：名片在上，字在下。和名片那个世界换竖屏机位用的是同一个条件（card/config.js 里的 isP）：比 9:10 更窄，或者宽度不到 600 */
+@media (max-aspect-ratio:9/10),(max-width:599.9px){
+  .home{width:auto;right:0;top:auto;bottom:14px;display:block;padding:0}
+  .home .tag{display:none}
+  .home h1{font-size:clamp(28px,8.6vw,44px);margin:0 0 16px}
+  .home h1 br{display:none}
+  .cta,.ghost{font-size:14px}
+  .cta{padding:13px 20px 13px 17px}.ghost{padding:12px 18px}
+}
+@media (max-width:700px){
+  .ctl button{padding:9px 11px}
+}
+@media (prefers-reduced-motion:reduce){.home,.count{transition:none}}
+
+/* Opening sequence: the original city/card stays on its front face. */
+.home .acts,.home .tag,.bot{display:none!important}
+.home{pointer-events:none!important}
+.stage canvas{pointer-events:none!important}
+.home h1{margin-bottom:0}
+</style>
+
+<div class="stage" id="stage">
+  <canvas id="gl" role="img" aria-label="开屏动画：一条不剪的推轨镜头穿过同一位创作者的三间展厅，灯一段一段亮起，墙上的作品从抖点醒成彩色；整个画面碎成像素点散开，再收拢成一张黑色的名片；名片上街道的刻线亮起来，九栋小楼顶出来，每栋楼的橱窗里是一件作品，再收回名片；名片可以翻面，背面是创作者的点阵头像、简介、数字和二维码"></canvas>
+  <canvas id="gl2" aria-hidden="true" style="visibility:hidden;opacity:0"></canvas>
+  <canvas id="fx" aria-hidden="true" style="visibility:hidden"></canvas>
+  <div class="label" id="label" aria-hidden="true"><div><b></b><span></span></div></div>
+  <div class="ui">
+    <div class="mid">
+      <div class="count on" id="count" aria-hidden="true">000</div>
+      <div class="home" id="home">
+        <div>
+          <p class="tag">创作者名片 · CREATOR CARD</p>
+          <h1>作品，<br>就是你的名片。</h1>
+          <div class="acts">
+            <button class="cta" type="button" id="cta"><i></i><span id="ctaT">进城逛逛</span></button>
+            <button class="ghost" type="button" id="flip">翻到背面</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="row bot">
+      <div class="ctl">
+        <button type="button" id="pause">暂停</button>
+        <button type="button" id="replay">重播</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/gallery/vendor/three.min.js"></script>
+<script src="variant.js"></script>
+<script src="quality.js"></script>
+<script src="gallery/covers.js"></script>
+<script src="gallery/live.js"></script>
+<script src="gallery/shaders.js"></script>
+<script src="gallery/core.js"></script>
+<script src="gallery/hall.js"></script>
+<script src="gallery/works.js"></script>
+<script src="card/config.js"></script>
+<script src="card/shaders.js"></script>
+<script src="card/core.js"></script>
+<script src="card/kit.js"></script>
+<script src="card/plan.js"></script>
+<script src="card/scene.js"></script>
+<script src="card/qr.js"></script>
+<script src="card/back.js"></script>
+<script src="card/world.js"></script>
+<script src="dots.js"></script>
+<link rel="stylesheet" href="/opening/theme.css">
+<script src="/opening/theme.js"></script>
+<script src="/opening/timing.js"></script>
+<script src="/opening/bridge.js"></script>
+<script src="main.js"></script>
+
+
+</body></html>

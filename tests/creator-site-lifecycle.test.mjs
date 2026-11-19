@@ -28,7 +28,7 @@ function fixture(path='/cards/me/preview'){
   let activeRoute={path,raw:path,params:new URLSearchParams()};
   const context=vm.createContext({t,CARD_TEMPLATES,createRemixDraft,remixStyle,isPinnedPreview,previewReferences,withCardIdentity,cardPreviewFingerprint,URLSearchParams,JSON,structuredClone,
     me:{id:'mine',name:'My profile',bio:'Profile bio',headline:'Profile role',website:'https://profile.example/',avatarUrl:'/avatars/sun.svg'},draftOwner:'mine',routeNumber:1,
-    cardDraft:{ids:['my-work-one'],template:'wall',name:'Draft name',bio:'Draft bio',headline:'Draft role',signature:'Draft signature',backStyle:'ivory'},preview:structuredClone(originalPreview),cardPending:false,cardError:'',
+    cardDraft:{ids:['my-work-one'],template:'wall',name:'Draft name',bio:'Draft bio',headline:'Draft role',signature:'Draft signature',backStyle:'ivory'},preview:structuredClone(originalPreview),cardPending:false,cardError:'',onboardingState:{intent:'create',hasCard:false},
     storage:{card:'card:mine',preview:'preview:mine'},write:(key,value)=>writes.push({key,value:structuredClone(value)}),uid:()=>`new-key-${++uid}`,
     api:(url,options)=>{const pending=defer();calls.push({url,options,...pending});return pending.promise;},readMine:()=>{const pending=defer();mine.push(pending);return pending.promise;},
     route:()=>activeRoute,go:value=>navigations.push(value),notify:value=>notices.push(value),renderRoute:()=>renders.push(activeRoute.path),identity(){},clearDiscovery(){},
@@ -120,7 +120,7 @@ test('saving synchronizes the latest profile before forming its request and reta
   assert.notEqual(f.calls[0].options.headers['Idempotency-Key'],originalPreview.saveKey);assert.equal(f.calls[0].options.headers['Idempotency-Key'],f.context.preview.saveKey);
   assert.deepEqual(plain(f.calls[0].options.body.workRefs),[{workId:'my-work-one',versionId:'version-one',metadataId:'metadata-one'}]);assert.equal(f.calls[0].options.body.signature,originalPreview.signature);
   f.calls[0].resolve({card:{id:cardId}});await pending;
-  assert.deepEqual(f.navigations,['/card/'+cardId+'?saved=1']);assert.equal(f.context.cardPending,false);
+  assert.deepEqual(f.navigations,['/card/'+cardId+'?saved=1']);assert.equal(f.context.cardPending,false);assert.equal(f.context.onboardingState.hasCard,true);
 });
 
 test('a late old save success or deleted-card error cannot navigate away from or erase a newer preview',async()=>{

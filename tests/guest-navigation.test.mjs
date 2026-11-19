@@ -21,7 +21,7 @@ function routeFixture(path,{authFailure=false}={}){
   const context=vm.createContext({
     me:null,authChecked:false,routeNumber:0,location:{hash:'#'+path,replace(){throw Error('Unexpected redirect');}},legacyPublicCardPath:()=>null,visitRecorded:false,
     route:()=>r,discussionPanel:null,publishCoverDraft:null,publishWizard:null,publishedExternalCover:null,publishedAutoCover:null,publishedAutoPreview:null,publishedVideos:null,publishAvailability:null,analyticsPanel:null,discoveryPanel:null,creatorPanel:null,templateExperiencePanel:null,
-    notificationPage:null,notificationCenter:{onRoute(){}},
+    notificationPage:null,notificationCenter:{onRoute(){}},onboardingPanel:null,onboardingState:null,opening:{resolve(){},cancel(){}},
     currentRoute:'',currentGallery:null,scrolls:new Map(),finishRouteLoading:null,main:{},
     stopBuildPolling(){},disposeVersioning(){},disposeWorkEdit(){},disposePublicationControls(){},endSession(){},$$:()=>[],syncNavigation(){},identity(){},
     beginRouteLoading:()=>()=>{},pageSkeleton:()=>'',t:x=>x,ApiError:class extends Error{constructor(message,status){super(message);this.status=status;}},

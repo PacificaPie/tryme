@@ -1,3 +1,4 @@
+import { createOnboardingService } from './onboarding-service.mjs';
 import { createPublishDraftService, publicationChoices } from './publish-draft-service.mjs';
 import { captureVideoPreview } from './video-preview-capture.mjs';
 import { createNotificationService } from './notification-service.mjs';
@@ -169,6 +170,7 @@ const handleDiscoveryAPI=createDiscoveryService({db,ownWork,getWork,workJSON,bod
 const handleArchiveAPI=createArchiveService({db,ownWork,workJSON,bodyJSON});
 const publicSharing=createPublicSharingService({db,bucket,origin:()=>(env as unknown as {APP_ORIGIN?:string}).APP_ORIGIN||''});
 const creators=createCreatorService({db,bucket,bodyJSON,readForm:readPublicationForm,json});
+const onboarding=createOnboardingService({db,creators,bodyJSON,json});
 const handleWorkEditAPI=createWorkEditService({db,bucket,ownWork,workJSON,hash,readForm:readPublicationForm});
 const handleVersionAPI=createVersionService({db,bucket,ownWork,workJSON,hash,readForm:readPublicationForm,readArtifact,bodyJSON,onPublished});
 
@@ -451,6 +453,7 @@ export async function handleAPI(request:Request) {
     verifyExpectedUser(request.headers,user);
     const cardCoverResponse=await cardCovers.handle(request,user);if(cardCoverResponse)return cardCoverResponse;
     const notificationResponse=await notificationAPI(request,user);if(notificationResponse)return notificationResponse;
+    const onboardingResponse=await onboarding.handle(request,user);if(onboardingResponse)return onboardingResponse;
     const creatorResponse=await creators.handle(request,user);if(creatorResponse)return creatorResponse;
     const publishDraftResponse=await publishDrafts.handle(request,user);if(publishDraftResponse)return publishDraftResponse;
     const draftCoverResponse=await coverDrafts.handle(request,user);if(draftCoverResponse)return draftCoverResponse;
@@ -465,7 +468,7 @@ export async function handleAPI(request:Request) {
     const buildResponse=await handleBuildAPI(request,user);if(buildResponse)return buildResponse;
     const versionResponse=await handleVersionAPI(request,user);if(versionResponse)return versionResponse;
     if(request.method==='GET') {
-      if(parts[0]==='me'&&parts.length===1)return json({user:await userProfile(user),canReview:false});
+      if(parts[0]==='me'&&parts.length===1)return json({user:await userProfile(user),canReview:false,onboarding:await onboarding.status(user,request.headers.get('oai-authenticated-user-created-at'))});
       if(parts[0]==='discover'&&parts.length===1)return await discover(url,user);
       if(parts[0]==='works'&&parts.length===1){if(url.searchParams.get('mine')==='1')return await discover(url,user,true);return json({works:await withWorkStats((await rows(WORK_QUERY+' WHERE '+DISCOVERY_ELIGIBLE+' ORDER BY w.created_at DESC LIMIT 200')).map(workJSON),user)});}
       if(parts[0]==='works'&&parts.length===2)return json({work:(await withWorkStats([workJSON(await getWork(parts[1]))],user))[0]});
