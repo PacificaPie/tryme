@@ -1,0 +1,74 @@
+{
+  "checkedAt": "2026-11-19T20:28:33.018864+00:00",
+  "commit": "838b1498c98fa38e1ded2047f83b1ab7b0715e81",
+  "workerVersion": "07d692a2-b60f-4c67-9e20-6529d7e60ac5",
+  "builderVersion": "3e4a9a44-34b8-4172-bc65-08d9da0f9221",
+  "assets": [
+    {
+      "file": "site.js",
+      "sha256": "02ac480f7c017d98d0df402eed3356bb3aca20a26f998e44f51436f0acde18ad",
+      "match": true
+    },
+    {
+      "file": "onboarding.js",
+      "sha256": "a4e1de7e54a3a281b57abe3cdeb7f4d1aa716870632d62fd2f593253a9a1578d",
+      "match": true
+    },
+    {
+      "file": "onboarding.css",
+      "sha256": "a780084644a73acd15efcbb2a64fbc719ec3778cab2fe7407ff8fb14a964b097",
+      "match": true
+    },
+    {
+      "file": "publish-media.js",
+      "sha256": "b68e920174bbcb03ded2adb64e90ba8f9c8a520db058f846461966ac24f5fc57",
+      "match": true
+    },
+    {
+      "file": "versioning.js",
+      "sha256": "5de44f01fd462e9b626cad63914c47c926d92f39d7a721e5e084306a5b7b97d8",
+      "match": true
+    },
+    {
+      "file": "opening.js",
+      "sha256": "6249cc0deaa82a201e06f4c0f170c45e6ac404f86e0b8b2bc33c29e3f024f524",
+      "match": true
+    },
+    {
+      "file": "opening-init.js",
+      "sha256": "103cafd60ece15e28c1f6c366495d0497fa32b00ca09755698c6aa06be8862ef",
+      "match": true
+    },
+    {
+      "file": "site.html",
+      "sha256": "5772c47f1327c948ea01e61f6894bd5325ac34ee8bce028b9049ea38f5847693",
+      "match": true
+    }
+  ],
+  "api": [
+    {
+      "endpoint": "/api/public/discover",
+      "status": 200
+    },
+    {
+      "endpoint": "/api/me",
+      "status": 401
+    },
+    {
+      "endpoint": "/api/works",
+      "status": 401
+    },
+    {
+      "endpoint": "/api/auth/config",
+      "status": 200,
+      "config": {
+        "provider": "clerk",
+        "configured": true,
+        "publishableKey": "pk_live_Y2xlcmsudHJ5bWVjYXJkLmNvbSQ",
+        "signInPath": "/auth/sign-in.html",
+        "signOutPath": "/auth/sign-out.html",
+        "environment": "production"
+      }
+    }
+  ]
+}
