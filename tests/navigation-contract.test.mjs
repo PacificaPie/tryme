@@ -24,7 +24,7 @@ const otherCard={id:'81160f2c-1946-4d96-a85c-bfdaf5940fe8',authorId:'someone-els
 function siteFixture(){
   const requests=[],renders=[],mounts=[],workspaces=[],identity={innerHTML:''},directory={isConnected:true},context=vm.createContext({
     notificationCenter:{setUser(){}},t,esc,avatarMarkup,emptyState,cardShareText,publicCardPath,URL,
-    me:{id:'my/id',name:'Profile <name>',avatarUrl:'/avatars/moon.svg'},routeNumber:1,creatorPanel:null,
+    me:{id:'my/id',name:'Profile <name>',avatarUrl:'/avatars/moon.svg'},onboardingState:null,routeNumber:1,creatorPanel:null,
     route:()=>({path:'/cards'}),location:{origin:'https://funtrack.test'},
     api:url=>{const pending=deferred();requests.push({url,...pending});return pending.promise;},
     applyHTML:(html,number)=>{renders.push({html,number});return number===context.routeNumber;},
@@ -105,6 +105,13 @@ test('the avatar menu exposes personal profile and following separately from car
   assert.match(html,/data-edit-profile/);assert.match(html,/href="#\/studio\/works"/);
   assert.match(html,/\/avatars\/moon\.svg/);assert.match(html,/Profile &lt;name&gt;/);
   assert.doesNotMatch(html,/#\/cards\?following|#\/creators/);
+  assert.match(html,/aria-label="账号菜单：Profile &lt;name&gt;"/);
+  assert.match(html,/>创作入门<\/a>/);assert.doesNotMatch(html,/>开始创作<\/a>/);
+  f.context.onboardingState={creatorReady:true};f.context.identity();
+  assert.doesNotMatch(f.identity.innerHTML,/#\/welcome/);
+  assert.match(f.identity.innerHTML,/#\/studio\/works/);assert.match(f.identity.innerHTML,/#\/cards/);
+  f.context.onboardingState={creatorReady:false,needsCreatorProfile:true};f.context.identity();
+  assert.match(f.identity.innerHTML,/#\/welcome/,'New creators retain the optional introduction');
   f.context.me=null;f.context.identity();assert.doesNotMatch(f.identity.innerHTML,/account-menu|#\/following|#\/author\//);
 });
 

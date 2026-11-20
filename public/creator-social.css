@@ -10,11 +10,10 @@
 .creator-person p{font-size:13px;color:var(--text-secondary);margin-top:7px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
 .creator-person-meta{display:flex;gap:12px;flex-wrap:wrap;margin-top:11px;font-size:12px;color:var(--text-tertiary)}
 .creator-person-arrow{color:var(--text-tertiary);font-size:20px;flex-shrink:0}
-.account-menu>.avatar{padding:0}.account-avatar{width:32px;height:32px;display:grid;place-items:center;border-radius:50%;overflow:hidden}
-.account-options>button{display:block;text-align:left;border:0;background:transparent;padding:10px 12px;font-size:13px;border-radius:6px;width:100%}.account-options>button:hover{background:var(--surface-hover)}
+.account-avatar{width:32px;height:32px;flex-shrink:0;display:grid;place-items:center;border-radius:50%;overflow:hidden;background:var(--soft);color:var(--text-secondary)}
 .creator-link{display:inline-flex;align-items:center;gap:7px}.creator-link .feed-author-avatar{width:22px;height:22px;display:grid;place-items:center;flex:none;border-radius:50%;overflow:hidden;background:var(--soft);font-size:10px;color:var(--text-secondary)}
 .remix-confirmation{border:1px solid var(--border);border-radius:16px;padding:28px;background:var(--surface);margin-top:24px}.remix-confirmation h2{margin-bottom:12px}.remix-confirmation p{color:var(--text-secondary);font-size:14px;line-height:1.7}.remix-confirmation .remix-draft-notice{padding:14px 16px;background:var(--soft);border-radius:8px;margin-top:18px}
 .card-template-reuse{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:24px 0;padding:20px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}.card-template-reuse strong{font-weight:550;font-size:14px}.card-template-reuse p{margin-top:5px;font-size:12px;color:var(--text-secondary)}
 .card-profile-avatar{width:52px;height:52px;display:grid;place-items:center;border-radius:50%;overflow:hidden;background:var(--soft);color:var(--text-secondary);font-size:18px;margin-bottom:14px}
 .profile-avatar-image{display:block;width:100%;height:100%;object-fit:cover}
-@media(max-width:720px){.creator-people-grid{grid-template-columns:1fr;gap:14px}.creator-person-link{padding:20px;min-height:124px}.feed-scope button,.creator-directory-tabs button{min-height:44px}.card-template-reuse{flex-wrap:wrap}.remix-confirmation{padding:22px}.account-options>button{min-height:44px}}
+@media(max-width:720px){.creator-people-grid{grid-template-columns:1fr;gap:14px}.creator-person-link{padding:20px;min-height:124px}.feed-scope button,.creator-directory-tabs button{min-height:44px}.card-template-reuse{flex-wrap:wrap}.remix-confirmation{padding:22px}}

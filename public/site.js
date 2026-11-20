@@ -96,7 +96,42 @@ async function api(path, options={}) {
 const notificationCenter=createNotificationCenter({header:$('#notification-entry'),api,esc,notify,onSessionChanged:()=>{me=null;authChecked=false;identity();}});
 function signinURL(){return authURL('sign-in','/site.html'+(location.hash||'#/'));}
 function signinLink(label=t("登录")){return `<a class="button primary" href="${esc(signinURL())}" target="_top">${esc(label)}</a>`;}
-function identity(){ notificationCenter.setUser(me); $('#identity').innerHTML=me?`<details class="account-menu"><summary class="avatar" aria-label="${t("账号菜单")}">${avatarMarkup(me,{className:'account-avatar'})}</summary><div class="account-options"><span>${esc(me.name)}</span><a href="#/author/${encodeURIComponent(me.id)}">${t('个人主页')}</a><a href="#/following">${t('关注列表')}</a><button type="button" data-edit-profile>${t('编辑个人资料')}</button><a href="#/studio/works">${t("创作中心")}</a><a href="#/cards">${t("我的名片")}</a><a href="#/welcome">${t('开始创作')}</a><a href="${esc(authURL('sign-out','/site.html#/feed'))}" target="_top">${t("退出登录")}</a></div></details><span class="identity-name">${esc(me.name)}</span>`:getAuthConfig().provider==='unknown'?'':`<a class="button quiet" href="${esc(signinURL())}" target="_top">${t("登录")}</a>`; }
+function identity(){
+  notificationCenter.setUser(me);
+  const previousTrigger=$('.account-trigger');
+  const hadFocus=previousTrigger&&previousTrigger===document.activeElement;
+  $('#identity').innerHTML=me?`<details class="account-menu">
+    <summary class="account-trigger" data-account-id="${esc(me.id)}" aria-label="${esc(t('账号菜单：{name}',{name:me.name}))}">
+      ${avatarMarkup(me,{className:'account-avatar'})}<span class="identity-name" aria-hidden="true">${esc(me.name)}</span>
+      <svg class="account-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+    </summary>
+    <div class="account-options">
+      <div class="account-identity">${avatarMarkup(me,{className:'account-avatar'})}<div><span>${t('当前账号')}</span><strong dir="auto">${esc(me.name)}</strong></div></div>
+      <div class="account-group" role="group" aria-labelledby="account-personal-label">
+        <p class="account-group-label" id="account-personal-label">${t('个人与浏览')}</p>
+        <a href="#/author/${encodeURIComponent(me.id)}">${t('个人主页')}</a>
+        <a href="#/following">${t('关注列表')}</a>
+        <button type="button" data-edit-profile>${t('编辑个人资料')}</button>
+      </div>
+      <div class="account-group" role="group" aria-labelledby="account-creation-label">
+        <p class="account-group-label" id="account-creation-label">${t('创作')}</p>
+        <a href="#/studio/works">${t('创作中心')}</a>
+        <a href="#/cards">${t('我的名片')}</a>
+        ${!onboardingState?.creatorReady?`<a href="#/welcome">${t('创作入门')}</a>`:''}
+      </div>
+      <div class="account-session"><a href="${esc(authURL('sign-out','/site.html#/feed'))}" target="_top">${t('退出登录')}</a></div>
+    </div>
+  </details>`:getAuthConfig().provider==='unknown'?'':`<a class="button quiet" href="${esc(signinURL())}" target="_top">${t('登录')}</a>`;
+  // The profile dialog keeps this node as its return-focus target. Keep it
+  // connected through same-account profile/locale refreshes, with fresh content.
+  if(me&&previousTrigger?.dataset.accountId===me.id){
+    const nextTrigger=$('.account-trigger');
+    previousTrigger.innerHTML=nextTrigger.innerHTML;
+    previousTrigger.setAttribute('aria-label',nextTrigger.getAttribute('aria-label'));
+    nextTrigger.replaceWith(previousTrigger);
+    if(hadFocus)previousTrigger.focus({preventScroll:true});
+  }
+}
 function editProfile(){
   if(!me)return;const owner=me.id;
   const profileAPI=(path,options)=>{if(me?.id!==owner||draftOwner!==owner)throw new ApiError(t('请重新登录后重试。'),401,'AUTH_SESSION_CHANGED');return api(path,options);};
@@ -767,7 +802,6 @@ window.addEventListener('online',()=>{actionQueue.forEach((_,id)=>flushAction(id
 window.addEventListener('pagehide',()=>{endSession('exit');actionQueue.forEach((_,id)=>flushAction(id));sessionQueues.forEach(queue=>{if(queue.pending.length)api('/api/sessions/'+encodeURIComponent(queue.id)+'/events',{method:'POST',body:{token:queue.token,events:queue.pending.slice(0,20)},keepalive:true}).catch(()=>{});});});
 document.addEventListener('click',async event=>{
   const creation=$('.creation-menu');if(creation&&(!creation.contains(event.target)||event.target.closest('a')))creation.open=false;
-  const account=$('.account-menu');if(account&&(!account.contains(event.target)||event.target.closest('a,button')))account.open=false;
   const edit=event.target.closest('[data-edit-profile]');if(edit&&!edit.closest('.creator-home-page'))editProfile();
   const outbound=event.target.closest('[data-outbound]');if(outbound)postAction('outbound_click',{workId:outbound.dataset.outbound,versionId:outbound.dataset.version});
   const button=event.target.closest('[data-action="reload"]');if(button){authChecked=false;clearDiscovery();renderRoute();}
