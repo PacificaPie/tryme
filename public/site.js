@@ -1,3 +1,4 @@
+import { mountCardDiscovery } from './feed-card.js';
 import { mountOnboarding, onboardingRoute, createOnboardingInvitation, onboardingInvitationMarkup } from './onboarding.js';
 import { createOpening } from './opening.js';
 import { renderCardDraftStart } from './card-draft-flow.js';
@@ -227,9 +228,9 @@ async function renderDiscover(r,number){
     $('.onboarding-invitation')?.remove();
     $('#work-search')?.focus();
   });
-  const panel=await mountDiscovery($('.discovery-content'),{api,esc,workTile,syncSocial,userId:me?.id||null,authorId,authorCard,onSignIn:()=>go('/following'),initial:{q:r.params.get('q'),category:r.params.get('category'),sort:r.params.get('sort'),following:r.params.get('following')},onQuery:query=>{
+  const panel=await mountDiscovery($('.discovery-content'),{api,esc,workTile,syncSocial,mixed:!authorId,userId:me?.id||null,authorId,authorCard,onSignIn:()=>go('/following'),initial:{type:r.params.get('type'),q:r.params.get('q'),category:r.params.get('category'),sort:r.params.get('sort'),following:r.params.get('following')},onQuery:query=>{
     if(number!==routeNumber)return;
-    const params=new URLSearchParams();if(query.q)params.set('q',query.q);if(query.category!=='all')params.set('category',query.category);if(query.sort!==(authorId?'newest':'recommended'))params.set('sort',query.sort);if(query.following==='1')params.set('following','1');
+    const params=new URLSearchParams();if(query.type&&query.type!=='all')params.set('type',query.type);if(query.q)params.set('q',query.q);if(query.category!=='all')params.set('category',query.category);if(query.sort!==(authorId?'newest':'recommended'))params.set('sort',query.sort);if(query.following==='1')params.set('following','1');
     const next=r.path+(params.size?'?'+params:'');history.replaceState(null,'','#'+next);currentRoute=next;identity();
   },restoreScroll:()=>window.scrollTo(0,scrolls.get(route().raw)||0)});
   if(number===routeNumber)discoveryPanel=panel;else panel?.dispose();
@@ -648,7 +649,8 @@ async function saveCard(){
 }
 async function renderCard(r,number,countView=true){
   const {card}=await api('/api/cards/'+encodeURIComponent(decodeURIComponent(r.path.split('/')[2]))),own=card.authorId===me.id,shared=location.origin+publicCardPath(card.id),template=CARD_TEMPLATES.find(item=>item.id===card.template)||CARD_TEMPLATES[0];
-  if(!applyHTML(`<div class="page card-view"><div class="card-view-top"><a class="back" href="#/cards">← ${t("名片")}</a>${r.params.has('saved')?`<span class="saved-label" role="status">${t("已保存")}</span>`:''}<button class="button small" data-share-url="${esc(shared)}" data-share-title="${esc(card.name)}" data-share-text="${esc(cardShareText(card,own))}">${t("分享名片")}</button></div>${cardMarkup(card,r.raw,card.id)}<section class="card-template-reuse"><div><h2>${esc(t(template.name))}</h2><p>${esc(t(template.description))}</p></div><a class="button" href="#/cards/me?templateFrom=${encodeURIComponent(card.id)}">${t('用同款制作')} ↗</a></section><div class="card-management"><a class="text-link" href="#/author/${encodeURIComponent(card.authorId)}">${t('查看作者主页')}</a>${own?`<a class="text-link" href="#/cards/me?editCard=${encodeURIComponent(card.id)}">${t("更新名片")}</a><a class="text-link" href="#/cards/covers/${encodeURIComponent(card.id)}">${t("更新名片封面")}</a>`:''}<button class="button quiet small" data-copy-url="${esc(shared)}">${t("复制名片链接")}</button>${own?`<button type="button" class="button quiet small danger-text" data-delete-card="${esc(card.id)}" data-card-name="${esc(card.name)}">${t('删除名片')}</button>`:''}<p class="tiny muted">${t("朋友无需登录即可查看名片，试玩时再登录。")}</p></div></div>`,number))return;
+  if(!applyHTML(`<div class="page card-view"><div class="card-view-top"><a class="back" href="#/cards">← ${t("名片")}</a>${r.params.has('saved')?`<span class="saved-label" role="status">${t("已保存")}</span>`:''}<button class="button small" data-share-url="${esc(shared)}" data-share-title="${esc(card.name)}" data-share-text="${esc(cardShareText(card,own))}">${t("分享名片")}</button></div>${own?'<section class="card-feed-settings" data-card-feed-settings></section>':''}${cardMarkup(card,r.raw,card.id)}<section class="card-template-reuse"><div><h2>${esc(t(template.name))}</h2><p>${esc(t(template.description))}</p></div><a class="button" href="#/cards/me?templateFrom=${encodeURIComponent(card.id)}">${t('用同款制作')} ↗</a></section><div class="card-management"><a class="text-link" href="#/author/${encodeURIComponent(card.authorId)}">${t('查看作者主页')}</a>${own?`<a class="text-link" href="#/cards/me?editCard=${encodeURIComponent(card.id)}">${t("更新名片")}</a><a class="text-link" href="#/cards/covers/${encodeURIComponent(card.id)}">${t("更新名片封面")}</a>`:''}<button class="button quiet small" data-copy-url="${esc(shared)}">${t("复制名片链接")}</button>${own?`<button type="button" class="button quiet small danger-text" data-delete-card="${esc(card.id)}" data-card-name="${esc(card.name)}">${t('删除名片')}</button>`:''}<p class="tiny muted">${t("朋友无需登录即可查看名片，试玩时再登录。")}</p></div></div>`,number))return;
+  if(own)discoveryPanel=mountCardDiscovery($('[data-card-feed-settings]'),{api,cardId:card.id,onChange:clearDiscovery});
   mountCard(card,r.raw);if(countView){postAction('card_view',{cardId:card.id});visitRecorded=true;}
 }
 
