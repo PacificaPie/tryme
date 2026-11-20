@@ -7,6 +7,7 @@ import {avatarMarkup} from '../public/avatars.js';
 import {emptyState} from '../public/empty-state.js';
 import {cardShareText} from '../public/sharing.js';
 import {publicCardPath} from '../public/public-card-links.js';
+import {hasCardDraft} from '../public/card-addition.js';
 import {renderCardWorkspace} from '../public/card-workspace.js';
 import {t,setLocale} from '../public/i18n.js';
 import '../public/site.messages.js';
@@ -23,7 +24,7 @@ const otherCard={id:'81160f2c-1946-4d96-a85c-bfdaf5940fe8',authorId:'someone-els
 
 function siteFixture(){
   const requests=[],renders=[],mounts=[],workspaces=[],identity={innerHTML:''},directory={isConnected:true},context=vm.createContext({
-    notificationCenter:{setUser(){}},t,esc,avatarMarkup,emptyState,cardShareText,publicCardPath,URL,
+    notificationCenter:{setUser(){}},hasCardDraft,cardDraft:{ids:[],template:'wall'},preview:null,t,esc,avatarMarkup,emptyState,cardShareText,publicCardPath,URL,
     me:{id:'my/id',name:'Profile <name>',avatarUrl:'/avatars/moon.svg'},routeNumber:1,creatorPanel:null,
     route:()=>({path:'/cards'}),location:{origin:'https://funtrack.test'},
     api:url=>{const pending=deferred();requests.push({url,...pending});return pending.promise;},
@@ -154,4 +155,14 @@ test('a direct arrival at a personal page does not create a phantom primary indi
   const f=navigationFixture();f.nav.active=null;f.links[0].setAttribute('aria-current','page');
   f.context.syncNavigation();f.flush();
   assert.equal(f.nav.indicator,null);assert(f.links.every(link=>!link.attributes.has('aria-current')));
+});
+
+
+test('the real card route exposes an unfinished draft without writing or replacing the saved card',async()=>{
+  const f=siteFixture();f.context.cardDraft={ids:['draft-work'],template:'editorial',signature:'Keep this'};
+  const before=structuredClone(ownCard),pending=f.context.renderCards(1);
+  f.requests[0].resolve({card:ownCard});await pending;
+  assert.equal(f.workspaces[0].hasDraft,true);
+  assert.deepEqual(ownCard,before);assert.equal(f.context.cardDraft.signature,'Keep this');
+  assert.deepEqual(f.requests.map(request=>request.url),['/api/cards/me']);
 });
