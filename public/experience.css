@@ -164,6 +164,16 @@ button,.button,[data-action-menu]>summary{transition:background var(--motion-fas
 @media(max-width:720px){.discovery-page .feed-sort{gap:6px}.feed-sort-menu>summary{min-height:44px}.discovery-page .feed-refresh{width:44px;height:44px}.feed-sort-options>button{min-height:44px}}
 @media(prefers-reduced-motion:reduce){.discovery-page .feed-refresh[aria-busy=true] svg{animation:none}.sort-chevron{transition:none}}
 
+/* English controls and feedback metadata must fit a 320px viewport. */
+@media(max-width:380px){
+  .discovery-page .feed-controls .filters{min-width:0;flex-wrap:wrap}
+  .discovery-page .feed-controls .filter{font-size:13px;padding-inline:9px}
+  .discovery-page .feed-sort{min-width:0;flex-wrap:wrap;gap:4px}
+  .feed-following{font-size:12px;padding-inline:8px}
+  .feed-sort-menu>summary{font-size:11px;gap:8px;min-width:0;padding-inline:8px}
+  .inbox-comment header{flex-wrap:wrap;gap:6px 10px}
+}
+
 /* Saved-card sharing is common to the workspace and public card page. */
 .share-dialog{max-height:90dvh;overflow:auto}
 .share-dialog .share-item-title{overflow-wrap:anywhere}
