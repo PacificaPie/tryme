@@ -1,0 +1,57 @@
+{
+  "checkedAt": "2026-11-20T20:04:45.154Z",
+  "source": "https://trymecard.com",
+  "baseline": "ae684982",
+  "method": "Anonymous GET; no production writes",
+  "files": [
+    {
+      "path": "/site.js",
+      "status": 200,
+      "productionSha256": "02ac480f7c017d98d0df402eed3356bb3aca20a26f998e44f51436f0acde18ad",
+      "mainSha256": "02ac480f7c017d98d0df402eed3356bb3aca20a26f998e44f51436f0acde18ad",
+      "matchesMain": true
+    },
+    {
+      "path": "/lit-city/controller.js",
+      "status": 200,
+      "productionSha256": "6c1ab48feae1a776def2c1cb2a6ccc96a10641083fba6122ba9295867a54b06e",
+      "mainSha256": "6c1ab48feae1a776def2c1cb2a6ccc96a10641083fba6122ba9295867a54b06e",
+      "matchesMain": true
+    },
+    {
+      "path": "/lit-city/theme.js",
+      "status": 200,
+      "productionSha256": "0cceb31153ce62da72b483a58affc2cb52e58c09221e3f699d45e3b6ef115820",
+      "mainSha256": "0cceb31153ce62da72b483a58affc2cb52e58c09221e3f699d45e3b6ef115820",
+      "matchesMain": true
+    },
+    {
+      "path": "/lit-city/scene.js",
+      "status": 200,
+      "productionSha256": "0e10c17a22ea388be1892ec8f236e7b7cf578b1a1717f3d24b7978c33002d43d",
+      "mainSha256": "0e10c17a22ea388be1892ec8f236e7b7cf578b1a1717f3d24b7978c33002d43d",
+      "matchesMain": true
+    },
+    {
+      "path": "/lit-city/config.js",
+      "status": 200,
+      "productionSha256": "3769b8254165f64bc4478cf9128715f2e80736b9f43b7e4e46940b4ce1372184",
+      "mainSha256": "3769b8254165f64bc4478cf9128715f2e80736b9f43b7e4e46940b4ce1372184",
+      "matchesMain": true
+    },
+    {
+      "path": "/opening/theme.js",
+      "status": 200,
+      "productionSha256": "81e731fe76970e79e6cdda38880a6664f9e4e76f4476c720f305da4e49b18491",
+      "mainSha256": "81e731fe76970e79e6cdda38880a6664f9e4e76f4476c720f305da4e49b18491",
+      "matchesMain": true
+    },
+    {
+      "path": "/opening/card/config.js",
+      "status": 200,
+      "productionSha256": "240759eff32fb5303ad59fb4e12e76b010a2691847c182864204d46877e2c3bb",
+      "mainSha256": "240759eff32fb5303ad59fb4e12e76b010a2691847c182864204d46877e2c3bb",
+      "matchesMain": true
+    }
+  ]
+}

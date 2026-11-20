@@ -40,6 +40,7 @@ http.createServer(async (req,res) => {
     if (url.pathname==='/' || url.pathname==='/__city') response=new Response(review,{headers:{'Content-Type':'text/html; charset=utf-8'}});
     else if(url.pathname==='/__city/state') response=Response.json({cards,workIds:works.map(w=>w.id)});
     else if(url.pathname==='/__city/edge') response=new Response(await readFile('diagnostics/settled-city-edge.html'),{headers:{'Content-Type':'text/html; charset=utf-8'}});
+    else if(url.pathname==='/__city/compare') response=new Response(await readFile('diagnostics/city-opening-compare.html'),{headers:{'Content-Type':'text/html; charset=utf-8'}});
     else if(url.pathname.startsWith('/c/')) response=await sharing.page(new Request(url,{method:req.method}),url.pathname.split('/')[2]);
     else if(url.pathname.startsWith('/game/')) response=await gameResponse(new Request(url,{headers:{'oai-authenticated-user-id':OWNER,'oai-authenticated-user-email':'fixture@example.test'}}),url.pathname.split('/')[2]);
     else if(url.pathname.startsWith('/api/')) {
