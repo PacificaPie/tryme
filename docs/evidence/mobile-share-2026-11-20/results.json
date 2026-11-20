@@ -1,0 +1,182 @@
+{
+  "base": "http://127.0.0.1:4898",
+  "scope": "Local fixture only; no real Clerk/OS share sheet/device acceptance",
+  "results": [
+    {
+      "engine": "chrome",
+      "version": "157.0.8103.79",
+      "width": 320,
+      "height": 640,
+      "theme": "light",
+      "dialog": {
+        "client": 286,
+        "scroll": 286
+      },
+      "clipboard": "native write passed"
+    },
+    {
+      "engine": "chrome",
+      "version": "157.0.8103.79",
+      "width": 320,
+      "height": 640,
+      "theme": "dark",
+      "dialog": {
+        "client": 286,
+        "scroll": 286
+      },
+      "clipboard": "native write passed"
+    },
+    {
+      "engine": "chrome",
+      "version": "157.0.8103.79",
+      "width": 390,
+      "height": 844,
+      "theme": "light",
+      "dialog": {
+        "client": 356,
+        "scroll": 356
+      },
+      "clipboard": "native write passed"
+    },
+    {
+      "engine": "chrome",
+      "version": "157.0.8103.79",
+      "width": 390,
+      "height": 844,
+      "theme": "dark",
+      "dialog": {
+        "client": 356,
+        "scroll": 356
+      },
+      "clipboard": "native write passed",
+      "poster": {
+        "width": 1200,
+        "height": 1440,
+        "url": "http://127.0.0.1:4898/c/460da3dd-6741-4b4f-b65d-c2d9f19c8d2d"
+      },
+      "fullImage": "blob image opened at 1200×1440"
+    },
+    {
+      "engine": "chrome",
+      "version": "157.0.8103.79",
+      "width": 1280,
+      "height": 900,
+      "theme": "light",
+      "dialog": {
+        "client": 458,
+        "scroll": 458
+      },
+      "clipboard": "native write passed"
+    },
+    {
+      "engine": "chrome",
+      "version": "157.0.8103.79",
+      "width": 1280,
+      "height": 900,
+      "theme": "dark",
+      "dialog": {
+        "client": 458,
+        "scroll": 458
+      },
+      "clipboard": "native write passed"
+    },
+    {
+      "engine": "chrome",
+      "nativeSupport": {
+        "share": "function",
+        "canShare": "function"
+      },
+      "shareBranches": "injected success, cancel, denial, unsupported passed",
+      "decoder": "Image fallback passed",
+      "returnFlow": "synthetic account B → saved v1; cookie expiry → private 401/public 200"
+    },
+    {
+      "engine": "webkit",
+      "version": "27.2",
+      "width": 320,
+      "height": 640,
+      "theme": "light",
+      "dialog": {
+        "client": 286,
+        "scroll": 286
+      },
+      "clipboard": "native write passed"
+    },
+    {
+      "engine": "webkit",
+      "version": "27.2",
+      "width": 320,
+      "height": 640,
+      "theme": "dark",
+      "dialog": {
+        "client": 286,
+        "scroll": 286
+      },
+      "clipboard": "native write passed"
+    },
+    {
+      "engine": "webkit",
+      "version": "27.2",
+      "width": 390,
+      "height": 844,
+      "theme": "light",
+      "dialog": {
+        "client": 356,
+        "scroll": 356
+      },
+      "clipboard": "native write passed"
+    },
+    {
+      "engine": "webkit",
+      "version": "27.2",
+      "width": 390,
+      "height": 844,
+      "theme": "dark",
+      "dialog": {
+        "client": 356,
+        "scroll": 356
+      },
+      "clipboard": "native write passed",
+      "poster": {
+        "width": 1200,
+        "height": 1440,
+        "url": "http://127.0.0.1:4898/c/460da3dd-6741-4b4f-b65d-c2d9f19c8d2d"
+      },
+      "fullImage": "blob image opened at 1200×1440"
+    },
+    {
+      "engine": "webkit",
+      "version": "27.2",
+      "width": 1280,
+      "height": 900,
+      "theme": "light",
+      "dialog": {
+        "client": 458,
+        "scroll": 458
+      },
+      "clipboard": "native write passed"
+    },
+    {
+      "engine": "webkit",
+      "version": "27.2",
+      "width": 1280,
+      "height": 900,
+      "theme": "dark",
+      "dialog": {
+        "client": 458,
+        "scroll": 458
+      },
+      "clipboard": "native write passed"
+    },
+    {
+      "engine": "webkit",
+      "nativeSupport": {
+        "share": "function",
+        "canShare": "function"
+      },
+      "shareBranches": "injected success, cancel, denial, unsupported passed",
+      "decoder": "Image fallback passed",
+      "returnFlow": "synthetic account B → saved v1; cookie expiry → private 401/public 200"
+    }
+  ]
+}

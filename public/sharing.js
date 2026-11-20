@@ -22,10 +22,12 @@ registerMessages({
 export const cardShareText = (card, own) => own ? t('看看我在 TryMe 制作的名片吧！') : t('来看看 {name} 在 TryMe 的名片吧！', { name: card.name });
 export const shareMessage = (text, url) => text ? `${text}\n${url}` : url;
 
-export function openShareDialog({ url, title = '', text = '' }) {
+export function openShareDialog({ url, title = '', text = '', returnFocus = null }) {
   const previousDialog = document.querySelector('#share-link-dialog');
   if (previousDialog) { previousDialog.close(); previousDialog.remove(); }
-  const previous = document.activeElement, dialog = document.createElement('dialog');
+  // Safari does not focus a button on pointer activation. Let callers retain
+  // the actual trigger instead of restoring focus to the document body.
+  const previous = returnFocus || document.activeElement, dialog = document.createElement('dialog');
   dialog.id = 'share-link-dialog'; dialog.className = 'share-dialog';
   dialog.setAttribute('aria-labelledby', 'share-title');
   dialog.innerHTML = `<div class="share-dialog-head"><h2 id="share-title"></h2><button class="share-close" type="button">×</button></div><p class="share-item-title"></p><textarea class="share-message" readonly rows="4"></textarea><div class="share-dialog-actions"><button class="button primary share-copy" type="button"></button><button class="button quiet share-link-only" type="button"></button><button class="button quiet share-native" type="button"></button></div><p class="share-status" role="status" aria-live="polite"></p>`;

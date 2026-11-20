@@ -166,6 +166,7 @@ button,.button,[data-action-menu]>summary{transition:background var(--motion-fas
 
 /* Saved-card sharing is common to the workspace and public card page. */
 .share-dialog{max-height:90dvh;overflow:auto}
+.share-dialog .share-item-title{overflow-wrap:anywhere}
 .share-card-tools{border-top:1px solid var(--line);margin-top:20px;padding-top:18px}
 .share-qr-row{display:flex;gap:18px;align-items:center}
 .share-qr-row canvas{width:130px;height:130px;flex-shrink:0;background:#fff}
