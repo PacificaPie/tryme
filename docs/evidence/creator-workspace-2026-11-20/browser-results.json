@@ -1,0 +1,52 @@
+{
+  "passed": true,
+  "scope": "Local Chrome + real frontend/router/SQLite, synthetic auth and memory storage; no production or physical device acceptance",
+  "checks": [
+    "Works, cards, analytics and feedback navigation; work filter survives feedback tab switch",
+    "Public profile and profile editor are distinct; Feed stays reachable",
+    "HTML file and metadata draft survive save/return/reload; publish succeeds; direct return highlights new work",
+    "New work joins explicit existing-card starting point; card draft survives navigation; saving creates a new card; original snapshot and existing versions unchanged",
+    "Legacy studio/card and studio/review routes still work",
+    "320 px English layout stays within viewport; workspace links support keyboard order",
+    "Empty account exposes publishing/card creation; builder explains work requirement; archived-only account routes to restoration"
+  ],
+  "browser": "157.0.8103.79",
+  "writes": [
+    {
+      "path": "/api/publish-drafts",
+      "method": "POST",
+      "status": 200,
+      "owner": "publication-owner"
+    },
+    {
+      "path": "/api/publish-drafts/9d4420d6-eb77-4011-868b-1c002a8d7d99/capture",
+      "method": "POST",
+      "status": 503,
+      "owner": "publication-owner"
+    },
+    {
+      "path": "/api/publish-drafts/9d4420d6-eb77-4011-868b-1c002a8d7d99/capture",
+      "method": "POST",
+      "status": 503,
+      "owner": "publication-owner"
+    },
+    {
+      "path": "/api/works",
+      "method": "POST",
+      "status": 201,
+      "owner": "publication-owner"
+    },
+    {
+      "path": "/api/cards",
+      "method": "POST",
+      "status": 201,
+      "owner": "publication-owner"
+    },
+    {
+      "path": "/api/events",
+      "method": "POST",
+      "status": 200,
+      "owner": "publication-owner"
+    }
+  ]
+}
