@@ -94,6 +94,11 @@ export const cards = sqliteTable('ft_cards', {
   id: text('id').primaryKey(), authorId: text('author_id').notNull(), snapshotJson: text('snapshot_json').notNull(), createdAt: text('created_at').notNull(),
   idempotencyKey: text('idempotency_key'), requestHash: text('request_hash'),
 }, t => [index('ft_cards_owner_created').on(t.authorId,t.createdAt),uniqueIndex('ft_cards_owner_key').on(t.authorId,t.idempotencyKey)]);
+// An append-only author choice; no row means no Feed consent.
+export const cardFeedSelections = sqliteTable('ft_card_feed_selections', {
+  seq: integer('seq').primaryKey({autoIncrement:true}), authorId: text('author_id').notNull(),
+  cardId: text('card_id').references(()=>cards.id), createdAt: text('created_at').notNull(),
+}, t=>[index('ft_card_feed_author_seq').on(t.authorId,t.seq),index('ft_card_feed_card').on(t.cardId)]);
 export const sessions = sqliteTable('ft_play_sessions', {
   id: text('id').primaryKey(), actorId: text('actor_id').notNull(), workId: text('work_id').notNull().references(()=>works.id),
   versionId: text('version_id').notNull().references(()=>versions.id), tokenHash: text('token_hash').notNull(),
