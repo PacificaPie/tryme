@@ -166,9 +166,9 @@ button,.button,[data-action-menu]>summary{transition:background var(--motion-fas
 
 /* English controls and feedback metadata must fit a 320px viewport. */
 @media(max-width:380px){
-  .discovery-page .feed-controls .filters{min-width:0;flex-wrap:wrap}
+  .discovery-page .feed-controls .filters{min-width:0;flex-wrap:wrap;flex-basis:100%}
   .discovery-page .feed-controls .filter{font-size:13px;padding-inline:9px}
-  .discovery-page .feed-sort{min-width:0;flex-wrap:wrap;gap:4px}
+  .discovery-page .feed-sort{min-width:0;flex-wrap:wrap;gap:4px;flex-basis:100%}
   .feed-following{font-size:12px;padding-inline:8px}
   .feed-sort-menu>summary{font-size:11px;gap:8px;min-width:0;padding-inline:8px}
   .inbox-comment header{flex-wrap:wrap;gap:6px 10px}
