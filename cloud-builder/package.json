@@ -2,6 +2,10 @@
   "name": "funtrack-cloud-builder",
   "private": true,
   "type": "module",
-  "scripts": { "deploy": "wrangler deploy", "check": "wrangler deploy --dry-run" },
+  "scripts": {
+    "dev": "wrangler dev --local --name funtrack-builder-local --var FUNTRACK_BUILD_WORKER:funtrack-builder-local",
+    "deploy": "wrangler deploy",
+    "check": "wrangler deploy --dry-run"
+  },
   "devDependencies": { "wrangler": "4.163.0" }
 }

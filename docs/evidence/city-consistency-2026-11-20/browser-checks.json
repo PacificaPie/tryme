@@ -1,0 +1,67 @@
+{
+  "checkedAt": "2026-11-20T20:21:12.541Z",
+  "browser": "Chrome 157.0.8103.79",
+  "viewport": {
+    "width": 390,
+    "height": 844,
+    "deviceScaleFactor": 2,
+    "isMobile": true,
+    "hasTouch": true
+  },
+  "scope": "Local fixture author/API/media, real city/public-card renderers; no production writes or physical phone",
+  "results": [
+    {
+      "case": "saved card 1 works",
+      "status": "passed"
+    },
+    {
+      "case": "saved card 3 works",
+      "status": "passed"
+    },
+    {
+      "case": "saved card 6 works",
+      "status": "passed"
+    },
+    {
+      "case": "saved card 9 works",
+      "status": "passed"
+    },
+    {
+      "case": "saved card 10 works",
+      "status": "passed"
+    },
+    {
+      "case": "saved card 30 works",
+      "status": "passed"
+    },
+    {
+      "case": "theme round trip keeps page/face/expanded; fold/replay/skip/keyboard opens work 30 v1 public dialog and correct sign-in return link",
+      "status": "passed"
+    },
+    {
+      "case": "empty",
+      "status": "passed"
+    },
+    {
+      "case": "missing",
+      "status": "passed"
+    },
+    {
+      "case": "long",
+      "status": "passed"
+    },
+    {
+      "case": "reduce",
+      "status": "passed"
+    },
+    {
+      "case": "webgl",
+      "status": "passed"
+    },
+    {
+      "case": "creator-selected ivory/cobalt back paper and actual identity",
+      "status": "passed"
+    }
+  ],
+  "pageErrors": []
+}

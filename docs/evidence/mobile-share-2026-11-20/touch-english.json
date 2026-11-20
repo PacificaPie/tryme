@@ -1,0 +1,125 @@
+{
+  "scope": "Emulated touch/viewport; 3D renderer visuals not assessed; macOS WebKit reports maxTouchPoints=0 even with hasTouch",
+  "results": [
+    {
+      "engine": "chrome",
+      "template": "wall",
+      "width": 320,
+      "touch": 1,
+      "client": 286,
+      "scroll": 286,
+      "lang": "en",
+      "visible": true
+    },
+    {
+      "engine": "chrome",
+      "template": "editorial",
+      "width": 320,
+      "touch": 1,
+      "client": 286,
+      "scroll": 286,
+      "lang": "en",
+      "visible": true
+    },
+    {
+      "engine": "chrome",
+      "template": "filmstrip",
+      "width": 320,
+      "touch": 1,
+      "client": 286,
+      "scroll": 286,
+      "lang": "en",
+      "visible": true
+    },
+    {
+      "engine": "chrome",
+      "template": "fold",
+      "width": 320,
+      "touch": 1,
+      "client": 286,
+      "scroll": 286,
+      "lang": "en",
+      "visible": true
+    },
+    {
+      "engine": "chrome",
+      "template": "collection",
+      "width": 320,
+      "touch": 1,
+      "client": 286,
+      "scroll": 286,
+      "lang": "en",
+      "visible": true
+    },
+    {
+      "engine": "chrome",
+      "template": "city",
+      "width": 320,
+      "touch": 1,
+      "client": 286,
+      "scroll": 286,
+      "lang": "en",
+      "visible": true
+    },
+    {
+      "engine": "webkit",
+      "template": "wall",
+      "width": 320,
+      "touch": 0,
+      "client": 286,
+      "scroll": 286,
+      "lang": "en",
+      "visible": true
+    },
+    {
+      "engine": "webkit",
+      "template": "editorial",
+      "width": 320,
+      "touch": 0,
+      "client": 286,
+      "scroll": 286,
+      "lang": "en",
+      "visible": true
+    },
+    {
+      "engine": "webkit",
+      "template": "filmstrip",
+      "width": 320,
+      "touch": 0,
+      "client": 286,
+      "scroll": 286,
+      "lang": "en",
+      "visible": true
+    },
+    {
+      "engine": "webkit",
+      "template": "fold",
+      "width": 320,
+      "touch": 0,
+      "client": 286,
+      "scroll": 286,
+      "lang": "en",
+      "visible": true
+    },
+    {
+      "engine": "webkit",
+      "template": "collection",
+      "width": 320,
+      "touch": 0,
+      "client": 286,
+      "scroll": 286,
+      "lang": "en",
+      "visible": true
+    },
+    {
+      "engine": "webkit",
+      "template": "city",
+      "width": 320,
+      "touch": 0,
+      "client": 286,
+      "scroll": 286,
+      "lang": "en",
+      "visible": true
+    }
+  ]
+}

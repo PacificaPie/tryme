@@ -2,13 +2,13 @@
   color-scheme: dark;
   font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
   --bg: #15191e; --ink: #e9e6de; --muted: #aaaeb5; --line: #ffffff24;
-  --hover: #ffffff0a; --accent: #e6c98e; --back: #1c2026; --bio: #b7b8bd;
+  --hover: #ffffff0a; --accent: #e6c98e; --back: #10151b; --bio: #b7b8bd;
   color: var(--ink); background: var(--bg);
 }
 :root[data-theme=light] {
   color-scheme: light;
   --bg: #fcfcfd; --ink: #25303d; --muted: #66717e; --line: #283e5626;
-  --hover: #293e5606; --accent: #485e75; --back: #e4e8ed; --bio: #56616d;
+  --hover: #293e5606; --accent: #485e75; --back: #e8ecf1; --bio: #56616d;
 }
 * { box-sizing: border-box; }
 body { margin: 0; }
@@ -37,15 +37,17 @@ canvas { width: 100%; height: 100%; display: block; }
 #hint { margin: 0 0 22px; color: var(--muted); font-size: 12px; }
 #pager { margin-left: auto; align-items: center; gap: 12px; display: flex; }
 .back { position: relative; min-height: 420px; padding: clamp(24px, 4.6vw, 52px); background: var(--back); display: flex; flex-direction: column; gap: 22px; border: 1px solid var(--line); border-radius: 18px; }
-.back:before { content: ""; position: absolute; right: -8%; top: 0; width: 42%; height: 125%; border-left: 1px solid var(--line); border-right: 1px solid var(--line); transform: rotate(28deg); pointer-events: none; }
-.back-top { display: flex; justify-content: space-between; color: var(--accent); font-size: 11px; letter-spacing: .2em; }
+/* Recall the opening's printed street grid without flattening real profile text
+   into a fixed-size texture. Ivory/cobalt remain the creator's chosen paper. */
+.back:before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: radial-gradient(circle, currentColor .65px, transparent .85px) 16px 16px / 16px 16px; opacity: .12; pointer-events: none; }
+.back-top { position: relative; display: flex; justify-content: space-between; align-items: center; padding-bottom: 16px; border-bottom: 1px solid var(--line); color: var(--accent); font-size: 11px; letter-spacing: .2em; }
 .back-top > span:last-child { font-size: 22px; }
 .identity { position: relative; margin: auto 0; max-width: 85%; }
 .identity h1 { margin: 12px 0 8px; font-size: clamp(24px, 4.5vw, 52px); line-height: 1.15; letter-spacing: -.04em; overflow-wrap: anywhere; }
 .identity #headline { font-size: clamp(13px, 1.6vw, 18px); color: var(--accent); margin: 0 0 16px; overflow-wrap: anywhere; }
 .identity #bio { font-size: clamp(13px, 1.3vw, 15px); line-height: 1.65; white-space: pre-line; color: var(--bio); margin: 0; max-width: 45em; overflow-wrap: anywhere; }
 #avatar { height: 42px; width: 42px; object-fit: cover; border-radius: 50%; }
-.back-footer { position: relative; display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; font-size: 12px; color: var(--muted); }
+.back-footer { position: relative; display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
 .back-footer p { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
 .back-footer a { color: var(--accent); word-break: break-all; text-underline-offset: 4px; }
 .back.ivory { --accent: #735b37; --bio: #67635d; --muted: #67635d; background: #ebe6dc; color: #29282a; }

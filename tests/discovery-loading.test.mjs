@@ -214,3 +214,32 @@ test('empty worksOnly author view remains a clean public portfolio empty state',
   assert.match(f.results().innerHTML,/还没有公开作品/);assert.doesNotMatch(f.results().innerHTML,/发布作品|发现创作者|关注的人/);
   assert.equal(f.root.querySelector('#load-works').hidden,true);assert.equal(f.results().getAttribute('aria-busy'),'false');
 });
+
+test('mixed Feed routes creator cards to public cards, namespaces IDs, and records social state only for works',async t=>{
+  const f=fixture(t);await f.mount({mixed:true,userId:null});
+  assert.equal(new URL(f.calls[0].url,'https://site.test').searchParams.get('type'),'all');
+  const work={type:'work',id:'same-id',name:'Work'},card={type:'card',id:'same-id',name:'Creator',works:[{name:'Saved title',version:'v1',coverUrl:''}]};
+  f.calls[0].resolve({items:[work,card],works:[work],total:4,nextCursor:'next'});await settle();
+  const tiles=f.root.querySelector('.feed-grid').children;
+  assert.equal(tiles.length,2);assert.equal(tiles[0].dataset.workId,'same-id');assert.equal(tiles[1].dataset.cardId,'same-id');assert.equal(tiles[1].dataset.workId,undefined);
+  assert.match(tiles[1].getAttribute('class'),/feed-card-tile/);assert.deepEqual(f.social,[]);
+  f.root.querySelector('#load-works').fire('click');
+  f.calls[1].resolve({items:[work,card,{...card,id:'another-card'},{...card,id:'another-card'}],works:[work],total:3,nextCursor:null});await settle();
+  assert.equal(f.root.querySelector('.feed-grid').children.length,3,'append deduplicates within and between pages');
+  const types=f.root.querySelectorAll('[data-feed-type]');types.find(x=>x.dataset.feedType==='cards').fire('click');
+  let params=new URL(f.calls[2].url,'https://site.test').searchParams;assert.equal(params.get('type'),'cards');assert.equal(f.root.querySelector('.filters').hidden,true);
+  f.calls[2].resolve({items:[],works:[],total:0,nextCursor:null});await settle();
+  assert.match(f.results().innerHTML,/还没有公开内容/);
+  f.root.querySelectorAll('[data-sort]').find(x=>x.dataset.sort==='likes').fire('click');
+  params=new URL(f.calls[3].url,'https://site.test').searchParams;assert.equal(params.get('type'),'works');assert.equal(params.get('sort'),'likes');assert.equal(f.root.querySelector('.filters').hidden,false);
+  types.find(x=>x.dataset.feedType==='all').fire('click');params=new URL(f.calls[4].url,'https://site.test').searchParams;assert.equal(params.get('type'),'all');assert.equal(params.get('sort'),'recommended');
+  f.root.querySelectorAll('[data-filter]').find(x=>x.dataset.filter==='game').fire('click');params=new URL(f.calls[5].url,'https://site.test').searchParams;assert.equal(params.get('type'),'works');assert.equal(params.get('category'),'game');
+});
+
+test('mixed Feed ignores card data in social updates and preserves type in visit cache',async t=>{
+  const f=fixture(t),card={type:'card',id:'card-id',name:'Creator',works:[]},work={type:'work',id:'work-id'};
+  const panel=await f.mount({mixed:true,initial:{type:'cards'}});
+  f.calls[0].resolve({items:[card,work],works:[work],total:2,nextCursor:null});await settle();assert.deepEqual(f.social,[work]);
+  panel.dispose();const restored=new Element();await f.mount({mixed:true,initial:{type:'cards'}},restored);assert.equal(f.calls.length,1);
+  await f.mount({mixed:true,initial:{type:'works'}},new Element());assert.equal(f.calls.length,2);
+});

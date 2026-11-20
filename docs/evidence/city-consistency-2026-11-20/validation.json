@@ -1,0 +1,22 @@
+{
+  "baseline": "ae684982",
+  "checks": {
+    "applicationScriptsAndTypeScript": "passed",
+    "fullApplicationTests": {
+      "passed": 700,
+      "failed": 0
+    },
+    "finalOpeningAndCityTests": {
+      "passed": 17,
+      "failed": 0
+    },
+    "standaloneBuild": "passed; no deployment",
+    "diagnosticModuleParsing": "passed",
+    "diffWhitespace": "passed"
+  },
+  "browsers": {
+    "chrome": "Chrome 157.0.8103.79",
+    "safari": "26.5; native UI smoke, mobile-width light front/expand/flip and dark back; WebDriver disabled"
+  },
+  "scope": "Local fixture rendering and read-only production asset equality; no production/staging write, no physical device acceptance"
+}

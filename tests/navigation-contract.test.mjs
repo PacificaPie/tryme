@@ -7,6 +7,7 @@ import {avatarMarkup} from '../public/avatars.js';
 import {emptyState} from '../public/empty-state.js';
 import {cardShareText} from '../public/sharing.js';
 import {publicCardPath} from '../public/public-card-links.js';
+import {hasCardDraft} from '../public/card-addition.js';
 import {renderCardWorkspace} from '../public/card-workspace.js';
 import {t,setLocale} from '../public/i18n.js';
 import '../public/site.messages.js';
@@ -23,8 +24,8 @@ const otherCard={id:'81160f2c-1946-4d96-a85c-bfdaf5940fe8',authorId:'someone-els
 
 function siteFixture(){
   const requests=[],renders=[],mounts=[],workspaces=[],identity={innerHTML:''},directory={isConnected:true},context=vm.createContext({
-    notificationCenter:{setUser(){}},t,esc,avatarMarkup,emptyState,cardShareText,publicCardPath,URL,
-    me:{id:'my/id',name:'Profile <name>',avatarUrl:'/avatars/moon.svg'},routeNumber:1,creatorPanel:null,
+    notificationCenter:{setUser(){}},hasCardDraft,cardDraft:{ids:[],template:'wall'},preview:null,t,esc,avatarMarkup,emptyState,cardShareText,publicCardPath,URL,
+    me:{id:'my/id',name:'Profile <name>',avatarUrl:'/avatars/moon.svg'},onboardingState:null,routeNumber:1,creatorPanel:null,
     route:()=>({path:'/cards'}),location:{origin:'https://funtrack.test'},
     api:url=>{const pending=deferred();requests.push({url,...pending});return pending.promise;},
     applyHTML:(html,number)=>{renders.push({html,number});return number===context.routeNumber;},
@@ -105,6 +106,13 @@ test('the avatar menu exposes personal profile and following separately from car
   assert.match(html,/data-edit-profile/);assert.match(html,/href="#\/studio\/works"/);
   assert.match(html,/\/avatars\/moon\.svg/);assert.match(html,/Profile &lt;name&gt;/);
   assert.doesNotMatch(html,/#\/cards\?following|#\/creators/);
+  assert.match(html,/aria-label="账号菜单：Profile &lt;name&gt;"/);
+  assert.match(html,/>创作入门<\/a>/);assert.doesNotMatch(html,/>开始创作<\/a>/);
+  f.context.onboardingState={creatorReady:true};f.context.identity();
+  assert.doesNotMatch(f.identity.innerHTML,/#\/welcome/);
+  assert.match(f.identity.innerHTML,/#\/studio\/works/);assert.match(f.identity.innerHTML,/#\/cards/);
+  f.context.onboardingState={creatorReady:false,needsCreatorProfile:true};f.context.identity();
+  assert.match(f.identity.innerHTML,/#\/welcome/,'New creators retain the optional introduction');
   f.context.me=null;f.context.identity();assert.doesNotMatch(f.identity.innerHTML,/account-menu|#\/following|#\/author\//);
 });
 
@@ -154,4 +162,14 @@ test('a direct arrival at a personal page does not create a phantom primary indi
   const f=navigationFixture();f.nav.active=null;f.links[0].setAttribute('aria-current','page');
   f.context.syncNavigation();f.flush();
   assert.equal(f.nav.indicator,null);assert(f.links.every(link=>!link.attributes.has('aria-current')));
+});
+
+
+test('the real card route exposes an unfinished draft without writing or replacing the saved card',async()=>{
+  const f=siteFixture();f.context.cardDraft={ids:['draft-work'],template:'editorial',signature:'Keep this'};
+  const before=structuredClone(ownCard),pending=f.context.renderCards(1);
+  f.requests[0].resolve({card:ownCard});await pending;
+  assert.equal(f.workspaces[0].hasDraft,true);
+  assert.deepEqual(ownCard,before);assert.equal(f.context.cardDraft.signature,'Keep this');
+  assert.deepEqual(f.requests.map(request=>request.url),['/api/cards/me']);
 });

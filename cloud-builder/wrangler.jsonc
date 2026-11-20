@@ -6,7 +6,10 @@
   "compatibility_date": "2026-11-16",
   "workers_dev": false,
   "preview_urls": false,
-  "vars": { "FUNTRACK_SITE_ORIGIN": "https://funtrack-staging.zhayizha-pacificapie.workers.dev" },
+  "vars": {
+    "FUNTRACK_SITE_ORIGIN": "https://funtrack-staging.zhayizha-pacificapie.workers.dev",
+    "FUNTRACK_BUILD_WORKER": "funtrack-builder-staging"
+  },
   "services": [{ "binding": "FUNTRACK_SITE", "service": "funtrack-staging" }],
   "durable_objects": { "bindings": [{ "name": "JOBS", "class_name": "BuildJob" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["BuildJob"] }],

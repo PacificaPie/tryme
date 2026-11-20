@@ -254,3 +254,14 @@ test('signup age is server-derived and email-only users get no public email-deri
   const noDate=fixture();await noDate.handler(request('/api/me',{headers:{'oai-authenticated-user-created-at':String(createdAt)}}),env);
   assert.equal(noDate.calls.app[0].request.headers.get('oai-authenticated-user-created-at'),null);
 });
+
+test('mixed Feed snapshot covers are anonymous reads, but discovery writes and protected assets still require Clerk',async()=>{
+  const {handler,calls}=fixture({state:signedOut()}),base='/api/public/discover/cards/card-12345/works/work-12345';
+  for(const method of ['GET','HEAD']){
+    const response=await handler(request(base+'/cover',{method,headers:{Authorization:'Bearer forged','oai-authenticated-user-id':'spoofed'}}),env);
+    assert.equal(response.status,200);assert.equal(calls.auth.length,0);
+    assert.equal(calls.app.at(-1).request.headers.get('oai-authenticated-user-id'),null);
+  }
+  for(const path of [base+'/game',base+'/html','/api/cards/card-12345/discovery'])assert.equal((await handler(request(path),env)).status,401);
+  assert.equal((await handler(request(base+'/cover',{method:'POST'}),env)).status,401);
+});

@@ -1,3 +1,4 @@
+import { mountCardDiscovery } from './feed-card.js';
 import { mountOnboarding, onboardingRoute, createOnboardingInvitation, onboardingInvitationMarkup } from './onboarding.js';
 import { createOpening } from './opening.js';
 import { renderCardDraftStart } from './card-draft-flow.js';
@@ -24,6 +25,8 @@ import { openProfileEditor } from './profile-editor.js';
 import { mountCreatorHome } from './creator-home.js';
 import { mountCreatorDirectory } from './creator-directory.js';
 import { renderCardWorkspace } from './card-workspace.js';
+import { hasCardDraft } from './card-addition.js';
+import { creatorWorkspace, publishResumeMarkup } from './creator-workspace.js';
 import { renderCardCoverUpdates } from './card-cover-updates.js';
 import { mountTemplateExperience } from './card-template-experience.js';
 import { createRemixDraft, remixStyle } from './card-remix.js';
@@ -96,7 +99,42 @@ async function api(path, options={}) {
 const notificationCenter=createNotificationCenter({header:$('#notification-entry'),api,esc,notify,onSessionChanged:()=>{me=null;authChecked=false;identity();}});
 function signinURL(){return authURL('sign-in','/site.html'+(location.hash||'#/'));}
 function signinLink(label=t("登录")){return `<a class="button primary" href="${esc(signinURL())}" target="_top">${esc(label)}</a>`;}
-function identity(){ notificationCenter.setUser(me); $('#identity').innerHTML=me?`<details class="account-menu"><summary class="avatar" aria-label="${t("账号菜单")}">${avatarMarkup(me,{className:'account-avatar'})}</summary><div class="account-options"><span>${esc(me.name)}</span><a href="#/author/${encodeURIComponent(me.id)}">${t('个人主页')}</a><a href="#/following">${t('关注列表')}</a><button type="button" data-edit-profile>${t('编辑个人资料')}</button><a href="#/studio/works">${t("创作中心")}</a><a href="#/cards">${t("我的名片")}</a><a href="#/welcome">${t('开始创作')}</a><a href="${esc(authURL('sign-out','/site.html#/feed'))}" target="_top">${t("退出登录")}</a></div></details><span class="identity-name">${esc(me.name)}</span>`:getAuthConfig().provider==='unknown'?'':`<a class="button quiet" href="${esc(signinURL())}" target="_top">${t("登录")}</a>`; }
+function identity(){
+  notificationCenter.setUser(me);
+  const previousTrigger=$('.account-trigger');
+  const hadFocus=previousTrigger&&previousTrigger===document.activeElement;
+  $('#identity').innerHTML=me?`<details class="account-menu">
+    <summary class="account-trigger" data-account-id="${esc(me.id)}" aria-label="${esc(t('账号菜单：{name}',{name:me.name}))}">
+      ${avatarMarkup(me,{className:'account-avatar'})}<span class="identity-name" aria-hidden="true">${esc(me.name)}</span>
+      <svg class="account-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+    </summary>
+    <div class="account-options">
+      <div class="account-identity">${avatarMarkup(me,{className:'account-avatar'})}<div><span>${t('当前账号')}</span><strong dir="auto">${esc(me.name)}</strong></div></div>
+      <div class="account-group" role="group" aria-labelledby="account-personal-label">
+        <p class="account-group-label" id="account-personal-label">${t('个人与浏览')}</p>
+        <a href="#/author/${encodeURIComponent(me.id)}">${t('个人主页')}</a>
+        <a href="#/following">${t('关注列表')}</a>
+        <button type="button" data-edit-profile>${t('编辑个人资料')}</button>
+      </div>
+      <div class="account-group" role="group" aria-labelledby="account-creation-label">
+        <p class="account-group-label" id="account-creation-label">${t('创作')}</p>
+        <a href="#/studio/works">${t('创作中心')}</a>
+        <a href="#/cards">${t('我的名片')}</a>
+        ${!onboardingState?.creatorReady?`<a href="#/welcome">${t('创作入门')}</a>`:''}
+      </div>
+      <div class="account-session"><a href="${esc(authURL('sign-out','/site.html#/feed'))}" target="_top">${t('退出登录')}</a></div>
+    </div>
+  </details>`:getAuthConfig().provider==='unknown'?'':`<a class="button quiet" href="${esc(signinURL())}" target="_top">${t('登录')}</a>`;
+  // The profile dialog keeps this node as its return-focus target. Keep it
+  // connected through same-account profile/locale refreshes, with fresh content.
+  if(me&&previousTrigger?.dataset.accountId===me.id){
+    const nextTrigger=$('.account-trigger');
+    previousTrigger.innerHTML=nextTrigger.innerHTML;
+    previousTrigger.setAttribute('aria-label',nextTrigger.getAttribute('aria-label'));
+    nextTrigger.replaceWith(previousTrigger);
+    if(hadFocus)previousTrigger.focus({preventScroll:true});
+  }
+}
 function editProfile(){
   if(!me)return;const owner=me.id;
   const profileAPI=(path,options)=>{if(me?.id!==owner||draftOwner!==owner)throw new ApiError(t('请重新登录后重试。'),401,'AUTH_SESSION_CHANGED');return api(path,options);};
@@ -129,9 +167,9 @@ function commentIcon(){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path
 
 
 function empty(title,description,action=''){const path=route().path;return emptyState({kind:path.includes('feedback')?'activity':path.startsWith('/cards')?'cards':'works',title,description,action});}
-function studio(content,tab){return `<div class="page"><div class="studio"><nav class="studio-nav" aria-label="${t("创作中心")}">${[['works',t("我的作品")],['data',t("数据")]].map(([id,name])=>`<a href="#/studio/${id}" class="${tab===id?'active':''}">${name}</a>`).join('')}</nav><div class="studio-main">${content}</div></div></div>`;}
+function studio(content){return `<div class="page studio-page"><div class="studio-main">${content}</div></div>`;}
 function cardsPage(content,tab='mine'){return `<div class="page cards-page ${tab==='mine'?'card-builder-page':''}">${content}</div>`;}
-function cardBuilderTop(saved=null){return `<div class="card-builder-top"><a class="back" href="#/cards">← ${t("返回名片")}</a>${saved?`<a class="text-link" href="#/card/${encodeURIComponent(saved.id)}">${t("我的已保存名片")} ↗</a>`:''}</div>`;}
+function cardBuilderTop(saved=null){return `<div class="card-builder-top"><a class="back" href="#/cards">← ${t("返回名片管理")}</a>${saved?`<a class="text-link" href="#/card/${encodeURIComponent(saved.id)}">${t("我的已保存名片")} ↗</a>`:''}</div>`;}
 function cardProfile(card){return {signature:typeof card.signature==='string'?card.signature:'',headline:typeof card.headline==='string'?card.headline:'',website:safeExternal(card.website),backStyle:['ink','ivory','cobalt'].includes(card.backStyle)?card.backStyle:'ink'};}
 function pageError(error){if(error.status===401){me=null;identity();const standalone=getAuthConfig().provider==='clerk';return signInState(signinLink(t(standalone?"登录 / 注册":"使用 ChatGPT 登录")));}return `<div class="page narrow"><section class="error-state"><h2>${t("暂时没能加载")}</h2><p>${esc(t(error.message))}</p><button class="button" data-action="reload">${t("重试")}</button></section></div>`;}
 function head(title,subtitle='',action=''){return `<div class="page-head"><div><h1>${esc(title)}</h1>${subtitle?`<p>${esc(subtitle)}</p>`:''}</div>${action}</div>`;}
@@ -167,7 +205,7 @@ async function activateDrafts(user){
 }
 async function loadMe(){try{const data=await api('/api/me');me=data.user;onboardingState=data.onboarding||null;}catch(e){if(e.status!==401)throw e;me=null;}finally{identity();}authChecked=true;if(me)await activateDrafts(me);}
 
-function applyHTML(html,number){if(number!==routeNumber)return false;finishRouteLoading?.();finishRouteLoading=null;main.innerHTML=html;syncNavigation();const key=route().raw;requestAnimationFrame(()=>{if(number===routeNumber)window.scrollTo(0,scrolls.get(key)||0);});return true;}
+function applyHTML(html,number){if(number!==routeNumber)return false;finishRouteLoading?.();finishRouteLoading=null;main.innerHTML=creatorWorkspace(html,{route:route(),user:me});syncNavigation();const key=route().raw;requestAnimationFrame(()=>{if(number===routeNumber)window.scrollTo(0,scrolls.get(key)||0);});return true;}
 async function renderRoute(options={}){
   // Existing shared hash links should reach the public card before Clerk or
   // private APIs load. In-app navigation keeps the signed-in management view.
@@ -227,9 +265,9 @@ async function renderDiscover(r,number){
     $('.onboarding-invitation')?.remove();
     $('#work-search')?.focus();
   });
-  const panel=await mountDiscovery($('.discovery-content'),{api,esc,workTile,syncSocial,userId:me?.id||null,authorId,authorCard,onSignIn:()=>go('/following'),initial:{q:r.params.get('q'),category:r.params.get('category'),sort:r.params.get('sort'),following:r.params.get('following')},onQuery:query=>{
+  const panel=await mountDiscovery($('.discovery-content'),{api,esc,workTile,syncSocial,mixed:!authorId,userId:me?.id||null,authorId,authorCard,onSignIn:()=>go('/following'),initial:{type:r.params.get('type'),q:r.params.get('q'),category:r.params.get('category'),sort:r.params.get('sort'),following:r.params.get('following')},onQuery:query=>{
     if(number!==routeNumber)return;
-    const params=new URLSearchParams();if(query.q)params.set('q',query.q);if(query.category!=='all')params.set('category',query.category);if(query.sort!==(authorId?'newest':'recommended'))params.set('sort',query.sort);if(query.following==='1')params.set('following','1');
+    const params=new URLSearchParams();if(query.type&&query.type!=='all')params.set('type',query.type);if(query.q)params.set('q',query.q);if(query.category!=='all')params.set('category',query.category);if(query.sort!==(authorId?'newest':'recommended'))params.set('sort',query.sort);if(query.following==='1')params.set('following','1');
     const next=r.path+(params.size?'?'+params:'');history.replaceState(null,'','#'+next);currentRoute=next;identity();
   },restoreScroll:()=>window.scrollTo(0,scrolls.get(route().raw)||0)});
   if(number===routeNumber)discoveryPanel=panel;else panel?.dispose();
@@ -239,7 +277,7 @@ async function renderCards(number){
   const owner=me.id;let card=null;
   try{card=(await api('/api/cards/me')).card;}catch(error){if(error.status!==404)throw error;}
   if(number!==routeNumber||me?.id!==owner)return;
-  applyHTML(`<div class="page card-workspace-page">${renderCardWorkspace({card,user:me,esc,safeCover,shareURL:card?location.origin+publicCardPath(card.id):'',shareText:card?cardShareText(card,true):''})}</div>`,number);
+  applyHTML(`<div class="page card-workspace-page">${renderCardWorkspace({card,user:me,esc,safeCover,hasDraft:hasCardDraft(cardDraft,preview,card),shareURL:card?location.origin+publicCardPath(card.id):'',shareText:card?cardShareText(card,true):''})}</div>`,number);
 }
 function renderTemplateExperience(r,number){
   const id=r.path.split('/')[3],template=CARD_TEMPLATES.find(item=>item.id===id);
@@ -317,10 +355,10 @@ async function renderMyWorks(r,number){
     const management=archivedWork
       ? `<a href="#/studio/works/${id}/versions">${t("版本历史")}</a>`
       : `<a href="#/studio/works/${id}/edit">${t("编辑作品信息")}</a>${w.source==='html'?`<a href="#/studio/works/${id}/update">${t("更新版本")}</a><a href="#/studio/works/${id}/versions">${t("版本历史")}</a>`:''}<a href="#${discoveryPath(w.id)}">${t('展示设置')}</a>${d.canHide?`<button type="button" data-discovery-visibility="hide" data-work-id="${esc(w.id)}">${t('从 Feed 隐藏')}</button>`:d.canRestore?`<button type="button" data-discovery-visibility="restore" data-work-id="${esc(w.id)}">${t('恢复到 Feed')}</button>`:''}`;
-    return `<article class="work-row" data-work-row-id="${esc(w.id)}" data-archived="${archivedWork}">${cover(w,workHref(w),false)}<div><a href="${esc(workHref(w))}"><h3>${esc(w.name)}</h3></a><p>${esc(w.desc)}</p><span class="tiny muted">${esc(w.version)} · ${w.source==='url'?t("外链"):'HTML'} · ${date(w.createdAt)}</span><span class="discovery-status work-discovery-status">${esc(t(d.label))}</span></div><div class="row-actions">${archivedWork?`<button type="button" class="button small" data-work-archive="restore" data-work-id="${esc(w.id)}">${t('恢复作品')}</button>`:''}<details class="work-row-more" data-action-menu><summary aria-label="${esc(t('管理 {name}',{name:w.name}))}"><span aria-hidden="true">···</span></summary><div class="action-menu-panel">${archivedWork&&w.source!=='html'?'':management}<a href="#/studio/data?work=${id}">${t("数据")}</a><a href="#/studio/feedback?work=${id}">${t("互动")}</a><a href="${esc(workHref(w))}">${t("打开作品")}</a>${!archivedWork?`<span class="archive-menu-separator" role="separator"></span><button type="button" data-work-archive="archive" data-work-id="${esc(w.id)}">${t('归档作品')}</button>`:''}</div></details></div></article>`;
+    return `<article class="work-row" data-work-row-id="${esc(w.id)}" data-archived="${archivedWork}">${cover(w,workHref(w),false)}<div><a href="${esc(workHref(w))}"><h3>${esc(w.name)}</h3></a><p>${esc(w.desc)}</p><span class="tiny muted">${esc(w.version)} · ${w.source==='url'?t("外链"):'HTML'} · ${date(w.createdAt)}</span><span class="discovery-status work-discovery-status">${esc(t(d.label))}</span></div><div class="row-actions">${archivedWork?`<button type="button" class="button small" data-work-archive="restore" data-work-id="${esc(w.id)}">${t('恢复作品')}</button>`:''}<details class="work-row-more" data-action-menu><summary aria-label="${esc(t('管理 {name}',{name:w.name}))}"><span aria-hidden="true">···</span></summary><div class="action-menu-panel">${archivedWork&&w.source!=='html'?'':management}<a href="#/studio/data?work=${id}">${t("数据")}</a><a href="#/studio/feedback?tab=history&work=${id}">${t("互动")}</a><a href="${esc(workHref(w))}">${t("打开作品")}</a>${!archivedWork?`<a href="#/cards/me?addWork=${id}">${t('加入或更新名片')}</a><span class="archive-menu-separator" role="separator"></span><button type="button" data-work-archive="archive" data-work-id="${esc(w.id)}">${t('归档作品')}</button>`:''}</div></details></div></article>`;
   }).join('');
-  const none=archived?empty(t('还没有归档作品'),t('归档的作品会保留在这里，可以随时恢复。'),`<a class="button primary" href="#/studio/works">${t('返回我的作品')}</a>`):empty(t("发布你的第一件作品"),t("上传一个 HTML 小游戏，或放入已经部署好的作品链接。"),`<a class="button primary" href="#/publish">${t("发布作品")}</a>`);
-  if(!applyHTML(studio(`${archived?`<a class="back" href="#/studio/works">${t('← 我的作品')}</a>`:''}${head(t(archived?'已归档作品':'我的作品'),works.length?`${works.length} ${t("件已发布作品")}`:'',actions)}${archived&&works.length?`<p class="archive-note">${t('归档后仍可查看历史和数据；编辑或更新前请先恢复。')}</p>`:''}${rows||none}`,'works'),number))return;
+  const none=archived?empty(t('还没有归档作品'),t('归档的作品会保留在这里，可以随时恢复。'),`<a class="button primary" href="#/studio/works">${t('返回我的作品')}</a>`):empty(t("发布你的第一件作品"),t("上传一个 HTML 小游戏，或放入已经部署好的作品链接。"),`<a class="button primary" href="#/publish">${t("发布作品")}</a><a class="button quiet" href="#/cards">${t("制作名片")}</a>`);
+  if(!applyHTML(studio(`${archived?`<a class="back" href="#/studio/works">${t('← 我的作品')}</a>`:''}${head(t(archived?'已归档作品':'我的作品'),works.length?`${works.length} ${t("件已发布作品")}`:'',actions)}${archived&&works.length?`<p class="archive-note">${t('归档后仍可查看历史和数据；编辑或更新前请先恢复。')}</p>`:''}${!archived?publishResumeMarkup(publishDraft,publishFile):''}${rows||none}`,'works'),number))return;
   $$('[data-discovery-visibility]').forEach(button=>button.onclick=()=>{const work=works.find(w=>w.id===button.dataset.workId);if(work)changeVisibility(work,button.dataset.discoveryVisibility,publicationHelpers(number));});
   $$('[data-work-archive]').forEach(button=>button.onclick=()=>{const work=works.find(w=>w.id===button.dataset.workId);if(work)changeArchive(work,button.dataset.workArchive,publicationHelpers(number));});
   const focusId=r.params.get('work'),focused=focusId&&$('[data-work-row-id="'+CSS.escape(focusId)+'"]');
@@ -523,7 +561,7 @@ async function submitPublish(form){
 }
 async function renderPublished(r,number){
   const {work}=await api('/api/works/'+encodeURIComponent(r.path.split('/')[2]));
-  if(!applyHTML(`<div class="page narrow published-result">${publishProgress(3)}${head(t("作品已发布"),work.name)}<p class="published-result-note">${t('作品已发布，已保存你确认的封面和视频选择。')}</p><div id="published-work-tile" class="work-grid" style="max-width:560px;grid-template-columns:1fr">${workTile(work)}</div><div class="form-footer"><a class="button primary" href="#/cards/me?addWork=${encodeURIComponent(work.id)}">${t(onboardingState?.intent==='create'&&!onboardingState.hasCard?"制作我的名片":"加入或更新名片")}</a><a class="button quiet" href="#/feed">${t("完成，去看 Feed")}</a><a class="button quiet" href="${esc(workHref(work,'/studio/works'))}">${t("试玩作品")}</a><details class="version-secondary"><summary>${t('更多')}</summary><a class="button quiet" href="#${discoveryPath(work.id)}">${t('展示设置')}</a><a class="button quiet" href="#/studio/works">${t("我的作品")}</a></details></div></div>`,number))return;
+  if(!applyHTML(`<div class="page narrow published-result">${publishProgress(3)}${head(t("作品已发布"),work.name)}<p class="published-result-note">${t('作品已发布，已保存你确认的封面和视频选择。')}</p><div id="published-work-tile" class="work-grid" style="max-width:560px;grid-template-columns:1fr">${workTile(work)}</div><div class="form-footer"><a class="button primary" href="#/cards/me?addWork=${encodeURIComponent(work.id)}">${t(onboardingState?.intent==='create'&&!onboardingState.hasCard?"制作我的名片":"加入或更新名片")}</a><a class="button quiet" href="#/studio/works?work=${encodeURIComponent(work.id)}">${t("返回作品管理")}</a><a class="button quiet" href="#/feed">${t("完成，去看 Feed")}</a><a class="button quiet" href="${esc(workHref(work,'/studio/works'))}">${t("试玩作品")}</a><details class="version-secondary"><summary>${t('更多')}</summary><a class="button quiet" href="#${discoveryPath(work.id)}">${t('展示设置')}</a></details></div></div>`,number))return;
   publishedVideos=mountVideoPreviews($('#published-work-tile'));
 
 }
@@ -648,7 +686,8 @@ async function saveCard(){
 }
 async function renderCard(r,number,countView=true){
   const {card}=await api('/api/cards/'+encodeURIComponent(decodeURIComponent(r.path.split('/')[2]))),own=card.authorId===me.id,shared=location.origin+publicCardPath(card.id),template=CARD_TEMPLATES.find(item=>item.id===card.template)||CARD_TEMPLATES[0];
-  if(!applyHTML(`<div class="page card-view"><div class="card-view-top"><a class="back" href="#/cards">← ${t("名片")}</a>${r.params.has('saved')?`<span class="saved-label" role="status">${t("已保存")}</span>`:''}<button class="button small" data-share-url="${esc(shared)}" data-share-title="${esc(card.name)}" data-share-text="${esc(cardShareText(card,own))}">${t("分享名片")}</button></div>${cardMarkup(card,r.raw,card.id)}<section class="card-template-reuse"><div><h2>${esc(t(template.name))}</h2><p>${esc(t(template.description))}</p></div><a class="button" href="#/cards/me?templateFrom=${encodeURIComponent(card.id)}">${t('用同款制作')} ↗</a></section><div class="card-management"><a class="text-link" href="#/author/${encodeURIComponent(card.authorId)}">${t('查看作者主页')}</a>${own?`<a class="text-link" href="#/cards/me?editCard=${encodeURIComponent(card.id)}">${t("更新名片")}</a><a class="text-link" href="#/cards/covers/${encodeURIComponent(card.id)}">${t("更新名片封面")}</a>`:''}<button class="button quiet small" data-copy-url="${esc(shared)}">${t("复制名片链接")}</button>${own?`<button type="button" class="button quiet small danger-text" data-delete-card="${esc(card.id)}" data-card-name="${esc(card.name)}">${t('删除名片')}</button>`:''}<p class="tiny muted">${t("朋友无需登录即可查看名片，试玩时再登录。")}</p></div></div>`,number))return;
+  if(!applyHTML(`<div class="page card-view"><div class="card-view-top"><a class="back" href="#/cards">← ${t(own?"返回名片管理":"名片")}</a>${own?`<a class="text-link card-return-works" href="#/studio/works">${t("返回作品管理")}</a>`:''}${r.params.has('saved')?`<span class="saved-label" role="status">${t("已保存")}</span>`:''}<button class="button small" data-share-url="${esc(shared)}" data-share-title="${esc(card.name)}" data-share-text="${esc(cardShareText(card,own))}">${t("分享名片")}</button></div>${own?'<section class="card-feed-settings" data-card-feed-settings></section>':''}${cardMarkup(card,r.raw,card.id)}<section class="card-template-reuse"><div><h2>${esc(t(template.name))}</h2><p>${esc(t(template.description))}</p></div><a class="button" href="#/cards/me?templateFrom=${encodeURIComponent(card.id)}">${t('用同款制作')} ↗</a></section><div class="card-management"><a class="text-link" href="#/author/${encodeURIComponent(card.authorId)}">${t('查看作者主页')}</a>${own?`<a class="text-link" href="#/cards/me?editCard=${encodeURIComponent(card.id)}">${t("更新名片")}</a><a class="text-link" href="#/cards/covers/${encodeURIComponent(card.id)}">${t("更新名片封面")}</a>`:''}<button class="button quiet small" data-copy-url="${esc(shared)}">${t("复制名片链接")}</button>${own?`<button type="button" class="button quiet small danger-text" data-delete-card="${esc(card.id)}" data-card-name="${esc(card.name)}">${t('删除名片')}</button>`:''}<p class="tiny muted">${t("朋友无需登录即可查看名片，试玩时再登录。")}</p></div></div>`,number))return;
+  if(own)discoveryPanel=mountCardDiscovery($('[data-card-feed-settings]'),{api,cardId:card.id,onChange:clearDiscovery});
   mountCard(card,r.raw);if(countView){postAction('card_view',{cardId:card.id});visitRecorded=true;}
 }
 
@@ -767,7 +806,6 @@ window.addEventListener('online',()=>{actionQueue.forEach((_,id)=>flushAction(id
 window.addEventListener('pagehide',()=>{endSession('exit');actionQueue.forEach((_,id)=>flushAction(id));sessionQueues.forEach(queue=>{if(queue.pending.length)api('/api/sessions/'+encodeURIComponent(queue.id)+'/events',{method:'POST',body:{token:queue.token,events:queue.pending.slice(0,20)},keepalive:true}).catch(()=>{});});});
 document.addEventListener('click',async event=>{
   const creation=$('.creation-menu');if(creation&&(!creation.contains(event.target)||event.target.closest('a')))creation.open=false;
-  const account=$('.account-menu');if(account&&(!account.contains(event.target)||event.target.closest('a,button')))account.open=false;
   const edit=event.target.closest('[data-edit-profile]');if(edit&&!edit.closest('.creator-home-page'))editProfile();
   const outbound=event.target.closest('[data-outbound]');if(outbound)postAction('outbound_click',{workId:outbound.dataset.outbound,versionId:outbound.dataset.version});
   const button=event.target.closest('[data-action="reload"]');if(button){authChecked=false;clearDiscovery();renderRoute();}

@@ -7,6 +7,18 @@ const HOSTS=['codeload.github.com','registry.npmjs.org'];
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const randomToken=()=>Array.from(crypto.getRandomValues(new Uint8Array(32)),x=>x.toString(16).padStart(2,'0')).join('');
 
+const WORKER_ENVIRONMENTS=new Map([
+  ['funtrack-builder-production','production'],
+  ['funtrack-builder-staging','staging'],
+  ['funtrack-builder-local','local'],
+]);
+function executionIdentity(env) {
+  // Public deployment config only: never infer identity from jobs, artifacts,
+  // request URLs, or secrets. Unknown values must not claim a deployed environment.
+  const worker=env.FUNTRACK_BUILD_WORKER,environment=WORKER_ENVIRONMENTS.get(worker);
+  return environment?{worker,environment}:{worker:'unknown',environment:'unknown'};
+}
+
 // Service bindings are the only ingress. No workers.dev, preview URL or route.
 export default {
   async fetch(request,env) {
@@ -116,7 +128,7 @@ export class BuildJob extends DurableObject {
         const bytes=await readLimited(response,HTML_MAX_BYTES,true,{code:'OUTPUT_TOO_LARGE',label:'最终 HTML'});
         await this.destroy();
         const form=new FormData();form.set('leaseId',task.leaseId);form.set('file',new File([bytes],'index.html',{type:'text/html'}));
-        form.set('metadata',JSON.stringify({...result.metadata,execution:{...result.metadata?.execution,provider:'cloudflare-containers',worker:'funtrack-builder-staging',buildId:task.buildId,network:prebuilt?'repository download allowlist; no project code executed':'install allowlist; build denied',schedulingPolicy:'default'}}));
+        form.set('metadata',JSON.stringify({...result.metadata,execution:{...result.metadata?.execution,provider:'cloudflare-containers',...executionIdentity(this.env),buildId:task.buildId,network:prebuilt?'repository download allowlist; no project code executed':'install allowlist; build denied',schedulingPolicy:'default'}}));
         await api(this.env,`${task.buildId}/complete`,form,{attempts:3});
         await this.finish(task,'ready');
       }catch(error){
