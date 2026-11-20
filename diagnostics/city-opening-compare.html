@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>开屏与灯城 · 本地对照</title><script src="/theme-init.js"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#eef0f3;color:#25303d;font:14px system-ui}header{padding:20px 24px}h1{font-size:22px;margin:0 0 8px}p{line-height:1.6;margin:8px 0}nav{display:flex;gap:12px;align-items:center;flex-wrap:wrap}select,button{font:inherit;padding:8px;border:1px solid #aab3bf;border-radius:6px;background:transparent;color:inherit}main{display:flex;gap:16px;padding:0 24px 24px;width:max-content}section{width:var(--w)}h2{font-size:16px;font-weight:500}iframe{display:block;width:var(--w);height:var(--h);border:1px solid #adb5c0;background:#fcfcfd}:root[data-theme=dark] body{background:#101418;color:#e5e8ed}:root[data-theme=dark] iframe{background:#15191e}
+</style></head><body><header><h1>开屏收稳卡面 ↔ 真实 city 模板</h1><p>同一主题、同一 iframe 视口。左侧保留 TryMe 品牌；右侧由本地 API 保存的测试作者／作品快照驱动。仅冻结开屏时间用于对照，生产代码不注入测试数据。</p><nav>
+<label>视口 <select id="size"><option value="desktop">桌面 960 × 700</option><option value="mobile">手机 390 × 844</option></select></label>
+<label>主题 <select id="theme"><option>light</option><option>dark</option></select></label>
+<label>卡面 <select id="face"><option value="front">正面</option><option value="back">背面</option></select></label>
+<label>作品 <select id="count"><option>1</option><option>3</option><option>6</option><option selected>9</option><option>10</option><option>30</option></select></label>
+<a href="/__city">交互验收</a><a href="/__city/edge">边界验收</a><span id="status" role="status">加载中</span></nav></header>
+<main><section><h2>开屏 · TryMe 品牌</h2><iframe id="opening" title="开屏收稳卡面"></iframe></section><section><h2>名片 · 测试作者与已保存作品</h2><iframe id="city" title="真实 city 模板"></iframe></section></main>
+<script type="module">
+import {createGalleryBridge} from '/gallery/embed.js';
+import {createThemeController} from '/theme.js';
+const $=id=>document.getElementById(id),theme=createThemeController(),params=new URLSearchParams(location.search);
+for(const key of ['size','theme','face','count'])if(params.has(key))$(key).value=params.get(key);
+theme.setPreference($('theme').value);
+const mobile=$('size').value==='mobile';document.documentElement.style.setProperty('--w',mobile?'390px':'960px');document.documentElement.style.setProperty('--h',mobile?'844px':'700px');
+for(const key of ['size','theme','face','count'])$(key).onchange=()=>{for(const field of ['size','theme','face','count'])params.set(field,$(field).value);location.search=params.toString();};
+const state=await(await fetch('/__city/state')).json(),card=(await(await fetch('/api/public/cards/'+state.cards[$('count').value])).json()).card;
+window.reviewCard=card;let openingReady=false,cityReady=false;
+function status(){document.body.dataset.ready=String(openingReady&&cityReady);$('status').textContent=openingReady&&cityReady?'对照已就绪':'加载中';}
+const bridge=createGalleryBridge({frame:$('city'),payload:()=>({author:{name:card.name,headline:card.headline,bio:card.bio,signature:card.signature,avatarUrl:card.avatarUrl,backStyle:card.backStyle},works:card.works.map(w=>({id:w.id,name:w.name,cover:w.coverUrl,desc:w.desc,version:w.version})),face:$('face').value,locale:'zh-CN'}),onStatus:s=>{cityReady=s==='rendered';status();}});
+addEventListener('message',event=>{if(event.origin!==location.origin||event.source!==$('opening').contentWindow||event.data?.channel!=='tryme-opening'||event.data.type!=='ready')return;const seq=$('opening').contentWindow.OpeningSequence;seq.elapsed=$('face').value==='back'?seq.duration:seq.duration-1.8;seq.paused=true;openingReady=true;status();});
+$('city').src='/lit-city/';$('opening').src='/opening/index.html';
+addEventListener('pagehide',()=>bridge.dispose(),{once:true});
+</script></body></html>

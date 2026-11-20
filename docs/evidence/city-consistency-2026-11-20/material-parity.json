@@ -1,0 +1,42 @@
+{
+  "checkedAt": "2026-11-20T20:06:53.534Z",
+  "method": "Execute actual config, shader and theme modules; repeated dark/light switches",
+  "results": [
+    {
+      "theme": "dark",
+      "matches": {
+        "COL": true,
+        "LINE": true,
+        "LIGHT": true,
+        "POST": true
+      }
+    },
+    {
+      "theme": "light",
+      "matches": {
+        "COL": true,
+        "LINE": true,
+        "LIGHT": true,
+        "POST": true
+      }
+    },
+    {
+      "theme": "dark",
+      "matches": {
+        "COL": true,
+        "LINE": true,
+        "LIGHT": true,
+        "POST": true
+      }
+    },
+    {
+      "theme": "light",
+      "matches": {
+        "COL": true,
+        "LINE": true,
+        "LIGHT": true,
+        "POST": true
+      }
+    }
+  ]
+}
