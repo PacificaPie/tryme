@@ -1,3 +1,5 @@
+import { createCardFeedService } from './card-feed-service.mjs';
+import { createMixedFeedService } from './mixed-feed-service.mjs';
 import { createOnboardingService } from './onboarding-service.mjs';
 import { createPublishDraftService, publicationChoices } from './publish-draft-service.mjs';
 import { captureVideoPreview } from './video-preview-capture.mjs';
@@ -81,20 +83,20 @@ async function withWorkStats(works:Row[],user:User|null) {
   return autoPreviews.decorate(works.map(work=>({...work,authorName:profilesById.get(work.authorId)?.name||work.authorName,authorAvatarUrl:profilesById.get(work.authorId)?.avatar_url||'',likesCount:Number(byId.get(work.id)?.n||0),likedByMe:Boolean(byId.get(work.id)?.liked),commentsCount:Number(commentsById.get(work.id)||0)})),user?.id);
 }
 function likeJSON(workId:string,row:Row) {return {workId,liked:Boolean(row.liked),likesCount:Number(row.n||0)};}
-async function discover(url:URL,user:User|null,mine=false) {
+async function discover(url:URL,user:User|null,mine=false,traversal:any=null):Promise<any> {
   if(mine&&!user)fail(401,'AUTH_REQUIRED','请先登录后继续。');
   const params=new URLSearchParams(url.searchParams);if(mine)params.set('author',user!.id);
   if(!user)for(const key of params.keys())if(!['q','source','category','sort','limit','cursor'].includes(key))fail(422,'INVALID_QUERY','公开发现页不支持此筛选。');
   const state=mine?mineWorkState(params.get('state')):'active';
-  const query=discoverQuery(params),cursor=decodeDiscoverCursor(params.get('cursor'),query),scope=!user?'public-feed':mine?'mine:'+user.id+':'+state:query.following?'following:'+user.id:'public',asOf=cursor?.asOf||iso();
+  const query=discoverQuery(params),cursor=decodeDiscoverCursor(params.get('cursor'),query),scope=!user?'public-feed':mine?'mine:'+user.id+':'+state:query.following?'following:'+user.id:'public',asOf=cursor?.asOf||traversal?.asOf||iso();
   if(cursor&&(cursor.scope||'public')!==scope)fail(400,'INVALID_CURSOR','分页游标与当前列表不符，请重新加载');
   // Capture all high-water marks in one SQLite read snapshot. A write that
   // started before asOf but commits after this read cannot reshape page two.
-  const snapshot=query.sort==='recommended'?(cursor?.snapshot||await first(`SELECT
+  const snapshot=traversal?.snapshot||(query.sort==='recommended'?(cursor?.snapshot||await first(`SELECT
     (SELECT COALESCE(MAX(rowid),0) FROM ft_works) works,
     (SELECT COALESCE(MAX(rowid),0) FROM ft_events) events,
     (SELECT COALESCE(MAX(rowid),0) FROM ft_feed_impressions) impressions,
-    (SELECT COALESCE(MAX(rowid),0) FROM ft_contribution_credits) credits`)):null;
+    (SELECT COALESCE(MAX(rowid),0) FROM ft_contribution_credits) credits`)):null);
   const conditions=['w.created_at<=?',...mine?(state==='all'?[]:[state==='archived'?'w.archived_at IS NOT NULL':'w.archived_at IS NULL']):[DISCOVERY_ELIGIBLE]],values:any[]=[asOf];
   if(snapshot){conditions.push('w.rowid<=?');values.push(snapshot.works);}
   if(query.source!=='all'){conditions.push('w.source=?');values.push(query.source);}
@@ -104,7 +106,7 @@ async function discover(url:URL,user:User|null,mine=false) {
   // instr treats '%' and '_' literally instead of expanding them as SQL LIKE wildcards.
   if(query.q){conditions.push("instr(lower(w.name||char(10)||w.description||char(10)||w.author_name),lower(?))>0");values.push(query.q);}
   const where=conditions.join(' AND ');
-  const recommended=snapshot?recommendationRank(asOf,snapshot):null;
+  const recommended=query.sort==='recommended'?recommendationRank(asOf,snapshot):null;
   const rank=recommended?.sql||(query.sort==='likes'?`(SELECT COUNT(*) FROM ft_work_likes l WHERE l.work_id=w.id AND l.created_at<=?)`:query.sort==='comments'?`(SELECT COUNT(*) FROM ft_comments c WHERE c.work_id=w.id AND c.created_at<=?)`:'0');
   const rankValues=recommended?.values||(query.sort==='newest'?[]:[asOf]);
   const selection='WITH ranked AS ('+WORK_QUERY.replace('SELECT ','SELECT '+rank+' AS feed_rank,')+' WHERE '+where+') SELECT * FROM ranked';
@@ -115,7 +117,8 @@ async function discover(url:URL,user:User|null,mine=false) {
     sql('SELECT COUNT(*) n FROM ft_works w'+DISCOVERY_JOIN+' WHERE '+where,...values),
   ]);
   const page=results[0].results.slice(0,query.limit),last=page[page.length-1];
-  const nextCursor=results[0].results.length>query.limit?encodeDiscoverCursor({v:1,scope,filters:{q:query.q,source:query.source,sort:query.sort,author:query.author,...query.category?{category:query.category}:{},...query.following?{following:true}:{}},asOf,...(snapshot?{snapshot}:{}),last:{rank:Number(last.feed_rank),createdAt:last.created_at,id:last.id}}):null;
+  const position=(last:Row)=>encodeDiscoverCursor({v:1,scope,filters:{q:query.q,source:query.source,sort:query.sort,author:query.author,...query.category?{category:query.category}:{},...query.following?{following:true}:{}},asOf,...(snapshot?{snapshot}:{}),last:{rank:Number(last.feed_rank),createdAt:last.created_at,id:last.id}});
+  const nextCursor=results[0].results.length>query.limit?position(last):null;
   // Presentation counts and the viewer's liked state stay live. Ranking uses
   // asOf to prevent new works/comments/likes from changing this traversal.
   // Recommended reads append-only impressions, starts and credits below the
@@ -125,14 +128,16 @@ async function discover(url:URL,user:User|null,mine=false) {
   // Explicit DTO: no identity IDs, external play URLs, version/artifact paths,
   // provenance, moderation state or viewer-specific data cross this boundary.
   const publicWorks=()=>works.map((w:Row)=>({id:w.id,name:w.name,desc:w.desc,source:w.source,category:w.category,authorName:w.authorName,authorAvatarUrl:safeAvatarURL(w.authorAvatarUrl),coverUrl:w.coverUrl?`/api/public/works/${encodeURIComponent(w.id)}/cover`:'',...(w.preview?{preview:w.preview}:{}),likesCount:w.likesCount,commentsCount:w.commentsCount}));
-  return json({works:user?works:publicWorks(),nextCursor,total:Number(results[1].results[0]?.n||0),sort:query.sort,asOf,...(recommended?{rankingVersion:RECOMMENDATION_VERSION}:{})});
+  const result={works:user?works:publicWorks(),nextCursor,total:Number(results[1].results[0]?.n||0),sort:query.sort,asOf,...(recommended?{rankingVersion:RECOMMENDATION_VERSION}:{})};
+  return traversal?{...result,positions:page.map(position)}:json(result);
 }
 async function publicFeedAPI(request:Request) {
   const route=publicFeedReadRoute(request);if(!route)return null;
   if(route.kind==='discover'){
-    const response=await discover(new URL(request.url),null);
+    const response=await discoverFeed(new URL(request.url),null);
     return request.method==='HEAD'?new Response(null,{status:response.status,headers:response.headers}):response;
   }
+  if(route.kind==='cardCover')return cardFeed.cover(request,route.cardId,route.workId);
   if(route.kind==='preview')return autoPreviews.media(request,route.workId,route.previewId);
   // Recheck visibility on every read, including old bookmarked cover URLs.
   const w=await first(WORK_QUERY+' WHERE w.id=? AND '+DISCOVERY_ELIGIBLE,route.workId);
@@ -169,6 +174,8 @@ const recommendations=createRecommendationService({db,bodyJSON});
 const handleDiscoveryAPI=createDiscoveryService({db,ownWork,getWork,workJSON,bodyJSON});
 const handleArchiveAPI=createArchiveService({db,ownWork,workJSON,bodyJSON});
 const publicSharing=createPublicSharingService({db,bucket,origin:()=>(env as unknown as {APP_ORIGIN?:string}).APP_ORIGIN||''});
+const cardFeed=createCardFeedService({db,bodyJSON,json,sharing:publicSharing});
+const discoverFeed=createMixedFeedService({db,readWorks:discover,cardFeed,json});
 const creators=createCreatorService({db,bucket,bodyJSON,readForm:readPublicationForm,json});
 const onboarding=createOnboardingService({db,creators,bodyJSON,json});
 const handleWorkEditAPI=createWorkEditService({db,bucket,ownWork,workJSON,hash,readForm:readPublicationForm});
@@ -451,6 +458,7 @@ export async function handleAPI(request:Request) {
     const user=authenticate(request.headers),url=new URL(request.url),parts=url.pathname.replace(/^\/api\/?/,'').split('/').filter(Boolean);
     if(['POST','PATCH'].includes(request.method))verifyWrite(request);
     verifyExpectedUser(request.headers,user);
+    const cardFeedResponse=await cardFeed.handle(request,user);if(cardFeedResponse)return cardFeedResponse;
     const cardCoverResponse=await cardCovers.handle(request,user);if(cardCoverResponse)return cardCoverResponse;
     const notificationResponse=await notificationAPI(request,user);if(notificationResponse)return notificationResponse;
     const onboardingResponse=await onboarding.handle(request,user);if(onboardingResponse)return onboardingResponse;
@@ -469,7 +477,7 @@ export async function handleAPI(request:Request) {
     const versionResponse=await handleVersionAPI(request,user);if(versionResponse)return versionResponse;
     if(request.method==='GET') {
       if(parts[0]==='me'&&parts.length===1)return json({user:await userProfile(user),canReview:false,onboarding:await onboarding.status(user,request.headers.get('oai-authenticated-user-created-at'))});
-      if(parts[0]==='discover'&&parts.length===1)return await discover(url,user);
+      if(parts[0]==='discover'&&parts.length===1)return await discoverFeed(url,user);
       if(parts[0]==='works'&&parts.length===1){if(url.searchParams.get('mine')==='1')return await discover(url,user,true);return json({works:await withWorkStats((await rows(WORK_QUERY+' WHERE '+DISCOVERY_ELIGIBLE+' ORDER BY w.created_at DESC LIMIT 200')).map(workJSON),user)});}
       if(parts[0]==='works'&&parts.length===2)return json({work:(await withWorkStats([workJSON(await getWork(parts[1]))],user))[0]});
       if(parts[0]==='works'&&parts.length===3&&parts[2]==='like')return await workLike(request,user,parts[1]);
