@@ -69,7 +69,7 @@ function mountPublicPage(root) {
     bridge?.dispose();bridge=null;syncLocale();document.title=card.name+' · TryMe';
     const template=CARD_TEMPLATES.find(item=>item.id===card.template)||CARD_TEMPLATES[0];
     root.innerHTML=`<h1 class="public-card-title">${escape(card.name)}</h1>${renderPublicCard(card)}<section class="public-card-remix"><div><h2>${escape(t(template.name))}</h2><p>${escape(t(template.description))}</p></div><a class="button" href="${escape(publicCardRemixSignInPath(card.id))}">${t('用同款制作')} ↗</a></section><footer class="public-card-footer"><button class="button" data-public-card-share>${t('分享名片')}</button><a href="${joinPath}">${t('加入 TryMe')} <span aria-hidden="true">↗</span></a></footer><dialog class="public-work-dialog" aria-labelledby="public-work-title"></dialog>`;
-    root.querySelector('[data-public-card-share]').addEventListener('click',()=>openShareDialog({url:location.origin+'/c/'+card.id,title:card.name,text:cardShareText(card,false)}));
+    root.querySelector('[data-public-card-share]').addEventListener('click',event=>openShareDialog({url:location.origin+'/c/'+card.id,title:card.name,text:cardShareText(card,false),returnFocus:event.currentTarget}));
     const modal=dialog();modal.addEventListener('cancel',event=>{event.preventDefault();closeWork();});modal.addEventListener('click',event=>{if(event.target!==modal)return;const rect=modal.getBoundingClientRect();if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)closeWork();});
     const frame=root.querySelector('#public-gallery-frame');
     if(frame){
@@ -90,6 +90,14 @@ function mountPublicPage(root) {
     catch(error){if(controller!==fetchController)return;root.innerHTML=`<section class="public-card-error"><h1>${t('名片暂时无法打开')}</h1><p>${t(error.status===404?'这张名片不存在或已不可访问。':'连接暂时中断，请重试。')}</p>${error.status===404?'':`<button type="button" class="button" data-public-retry>${t('重试')}</button>`}</section>`;root.querySelector('[data-public-retry]')?.addEventListener('click',load);}
     finally{clearTimeout(timeout);}
   }
+  // Resource errors do not bubble. Capture them across rerenders and work
+  // dialogs, retaining the saved work name instead of a broken image glyph.
+  root.addEventListener('error',event=>{
+    const image=event.target;
+    if(!image.matches?.('.cover img,.portfolio-story-art img,.reel-art img,.reel-index img,.public-work-art img'))return;
+    const placeholder=document.createElement('span');placeholder.className='public-cover-placeholder';placeholder.textContent=image.alt;
+    image.replaceWith(placeholder);
+  },true);
   root.addEventListener('click',event=>{const link=event.target.closest('a[href^="#work="]');if(!link)return;event.preventDefault();openWork(new URLSearchParams(link.getAttribute('href').slice(1)).get('work'));});
   window.addEventListener('message',event=>{
     const frame=root.querySelector('#public-gallery-frame');if(!frame||event.source!==frame.contentWindow||event.origin!==location.origin)return;
