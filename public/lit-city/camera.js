@@ -15,8 +15,21 @@ SP.createCam=function(core){
     /* fill 是按画面宽度算的。比 16:10 更扁的窗口里按高度收小，城占画面高度的比例和 16:10 时一样，楼顶不会顶出上沿 */
     if(!P)fill*=Math.min(1,1.6/asp);
     if(mood){var CC=CM.city,c=mood.city;phi=U.lerp(phi,CC.phi,c)-CC.hov*mood.hov*(1-c);fill=U.lerp(fill,(P?CC.fillP:CC.fill)*Math.min(1,1.6/asp),c);cx=U.lerp(cx,CC.cx,c);}
+    if(mood&&mood.rotation){theta+=mood.rotation.yaw;phi=Math.max(.24,Math.min(1.48,phi+mood.rotation.pitch));}
     var wproj=C.CARD.w*Math.abs(Math.cos(theta))+C.CARD.d*Math.abs(Math.sin(theta));
-    var d=wproj/(fill*2*TH*asp),vw=2*TH*asp*d,vh=2*TH*d;
+    var d=wproj/(fill*2*TH*asp);
+    // Fit the card and lifted buildings in perspective, including the closer
+    // corners at shallow angles. The camera's offset and clipping planes are
+    // part of the fit, so a full orbit cannot crop the card at its tilt limits.
+    if(mood&&mood.rotation&&(mood.rotation.yaw||mood.rotation.pitch)){
+      var sn=Math.sin(theta),co=Math.cos(theta),sp=Math.sin(phi),cp=Math.cos(phi),bx=.90,by=.84,ox=2*(cx-.5),oy=2*(.5-cy);
+      for(var ix=-1;ix<=1;ix+=2)for(var iz=-1;iz<=1;iz+=2)for(var iy=0;iy<=1;iy++){
+        var x=ix*C.CARD.w/2,z=iz*C.CARD.d/2,y=iy*(mood.height||0);
+        var depth=x*sn*cp+y*sp+z*co*cp,horizontal=(x*co-z*sn)/(TH*asp),vertical=(-x*sp*sn+y*cp-z*sp*co)/TH;
+        d=Math.max(d,(horizontal+bx*depth)/(bx-ox),(-horizontal+bx*depth)/(bx+ox),(vertical+by*depth)/(by-oy),(-vertical+by*depth)/(by+oy),depth/.39,-depth/.59);
+      }
+    }
+    var vw=2*TH*asp*d,vh=2*TH*d;
     oP.set(Math.sin(theta)*Math.cos(phi),Math.sin(phi),Math.cos(theta)*Math.cos(phi)).multiplyScalar(d);oT.set(0,0,0);
     right.set(Math.cos(theta),0,-Math.sin(theta));
     up.set(-Math.sin(phi)*Math.sin(theta),Math.cos(phi),-Math.sin(phi)*Math.cos(theta));

@@ -1,0 +1,57 @@
+{
+  "checkedAt": "2026-11-21T04:11:48.297Z",
+  "browser": "Chrome 157.0.8103.79",
+  "completed": true,
+  "scope": "Local HTTP fixture author/storage; real renderer and pointer events. Camera/state observed with diagnostic-only response wrappers. Desktop + 390x844/DPR2 touch emulation, not a physical phone.",
+  "results": [
+    {
+      "case": "autoplay, removed controls, flip pauses/resumes, theme continues current animation",
+      "status": "passed"
+    },
+    {
+      "case": "desktop hover lifts/leaves fold, drag rotates without opening, theme/flip keep rotation, full orbit at tilt limits stays in frame, click opens saved v1",
+      "status": "passed"
+    },
+    {
+      "case": "30 works remain reachable; page changes keep rotation without replay; keyboard selects/opens last work",
+      "status": "passed"
+    },
+    {
+      "case": "first real emulated touch lifts only; theme/flip keep lifted state; second tap opens correct work",
+      "status": "passed"
+    },
+    {
+      "case": "touch dragging changes yaw/pitch without navigation; cancelled touch does not open a work",
+      "status": "passed"
+    },
+    {
+      "case": "1/3/6/9/10 works and narrow layout",
+      "status": "passed"
+    },
+    {
+      "case": "empty",
+      "status": "passed"
+    },
+    {
+      "case": "missing",
+      "status": "passed"
+    },
+    {
+      "case": "long",
+      "status": "passed"
+    },
+    {
+      "case": "reduce",
+      "status": "passed"
+    },
+    {
+      "case": "webgl",
+      "status": "passed"
+    },
+    {
+      "case": "creator-selected ivory/cobalt back paper and actual identity",
+      "status": "passed"
+    }
+  ],
+  "pageErrors": []
+}
