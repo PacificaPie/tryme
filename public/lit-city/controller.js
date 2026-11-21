@@ -1,4 +1,5 @@
 import {cleanCityCard,cityView,PAGE_SIZE} from './data.js';
+import {createCityPlayer} from './player.js';
 import {createCityTheme} from './theme.js';
 import {THEME_CHANGE_EVENT} from '../theme.js';
 const $=id=>document.getElementById(id),SP=window.SP,blueprints=structuredClone(SP.CFG.WORKS);
@@ -13,7 +14,7 @@ C.CAM.city={...C.CAM.city,cx:.5,fill:.82,fillP:.84};
 // The shared theme module owns system/storage listeners for this document.
 const applyTheme=createCityTheme(SP);
 let theme=document.documentElement.dataset.theme;applyTheme(theme);
-let data=null,view={page:0,face:'front',focusWorkId:null},player=null,failed=false,disposed=false,expanded=false,key='',requestId=null,lastHeight=0,en=false;
+let data=null,view={page:0,face:'front',focusWorkId:null},player=null,failed=false,disposed=false,presented=false,key='',requestId=null,lastHeight=0,en=false;
 const documentId=crypto.randomUUID(),listeners=[],send=message=>{if(parent!==window)parent.postMessage(message,location.origin);};
 const say=(zh,english)=>en?english:zh;
 function listen(node,type,fn){node.addEventListener(type,fn);listeners.push(()=>node.removeEventListener(type,fn));}
@@ -32,12 +33,10 @@ function profile(){
 function text(){
   document.documentElement.lang=en?'en':'zh-CN';$('edition').textContent=say('灯城名片','LIT CITY');
   $('flip').textContent=view.face==='back'?say('回到作品 ↻','View works ↻'):say('翻到背面 ↻','About the creator ↻');
-  $('city').textContent=expanded?say('收回名片','Fold to card'):say('展开城市','Open the city');$('city').setAttribute('aria-pressed',String(expanded));
-  $('front').setAttribute('aria-label',say('作品正面','Works front'));$('back').setAttribute('aria-label',say('身份背面','Creator back'));$('prev').setAttribute('aria-label',say('上一组作品','Previous works'));$('next').setAttribute('aria-label',say('下一组作品','Next works'));$('scene-controls').setAttribute('aria-label',say('城市视图','City view'));
-  $('replay').textContent=say('播放开场','Play intro');$('skip').textContent=say('跳过动画','Skip intro');
-  $('hint').textContent=say('轻触作品，走进它的世界 ↗','Select a work to explore ↗');$('list-title').textContent=say('作品目录','Work index');
-  $('count').textContent=String(data.works.length).padStart(2,'0')+say(' 件作品',' WORKS');$('canvas').setAttribute('aria-label',say('作品城市，方向键选择、回车打开','City of works. Use arrow keys to select and Enter to open.'));
-  $('front').hidden=view.face!=='front';$('back').hidden=view.face!=='back';$('scene-controls').hidden=view.face==='back';$('hint').hidden=view.face==='back';
+  $('front').setAttribute('aria-label',say('作品正面','Works front'));$('back').setAttribute('aria-label',say('身份背面','Creator back'));$('prev').setAttribute('aria-label',say('上一组作品','Previous works'));$('next').setAttribute('aria-label',say('下一组作品','Next works'));$('pager').setAttribute('aria-label',say('作品分页','Work pages'));
+  $('hint').textContent=say('拖动旋转；鼠标悬停抬升，点击进入作品。触屏点一次抬升，再点进入。方向键选择，回车打开；Shift 加方向键旋转，Esc 结束动画并恢复视角。','Drag to rotate. Hover to lift and click to open. On touch, tap to lift, then tap again to open. Arrow keys select, Enter opens, Shift + arrows rotate, Escape ends the intro and resets the view.');$('list-title').textContent=say('作品目录','Work index');
+  $('count').textContent=String(data.works.length).padStart(2,'0')+say(' 件作品',' WORKS');$('canvas').setAttribute('aria-describedby','hint');$('canvas').setAttribute('aria-label',say('作品城市，方向键选择、回车打开','City of works. Use arrow keys to select and Enter to open.'));
+  $('front').hidden=view.face!=='front';$('back').hidden=view.face!=='back';$('pager').hidden=view.face==='back'||data.works.length<=PAGE_SIZE;$('hint').hidden=view.face==='back';
   player?.pause(view.face==='back'||document.hidden);height();
 }
 function list(){
@@ -50,14 +49,14 @@ function list(){
   const pages=Math.max(1,Math.ceil(data.works.length/PAGE_SIZE));$('pager').hidden=pages===1;$('prev').disabled=view.page===0;$('next').disabled=view.page===pages-1;$('page-label').textContent=(view.page+1)+' / '+pages;
 }
 function placeholder(work){const c=document.createElement('canvas');c.width=640;c.height=400;const x=c.getContext('2d');x.fillStyle=theme==='light'?'#e2e6ec':'#1c2331';x.fillRect(0,0,640,400);x.strokeStyle=theme==='light'?'#8995a3':'#d4b877';x.strokeRect(24,24,592,352);x.fillStyle=theme==='light'?'#334155':'#e8dbc0';x.font='32px sans-serif';x.textAlign='center';const chars=Array.from(work.name||say('作品','Work'));for(let i=0;i<Math.min(3,Math.ceil(chars.length/16));i++)x.fillText(chars.slice(i*16,i*16+16).join(''),320,170+i*44);return c;}
-function fallback(){failed=true;player?.dispose();player=null;$('canvas').hidden=true;$('fallback').hidden=false;$('fallback').textContent=say('当前设备无法显示城市，可从下方打开作品。','This device cannot display the city. Open a work from the list below.');$('details').open=true;['city','replay','skip'].forEach(id=>$(id).disabled=true);height();}
+function fallback(){failed=true;player?.dispose();player=null;$('canvas').hidden=true;$('fallback').hidden=false;$('fallback').textContent=say('当前设备无法显示城市，可从下方打开作品。','This device cannot display the city. Open a work from the list below.');$('details').open=true;height();}
 function rebuild(preserveView=false){
-  player?.dispose();player=null;failed=false;if(!preserveView)expanded=false;profile();list();const works=current();
+  const previous=player?.snapshot(),saved=previous&&(preserveView?previous:{...previous,time:C.T.end,playing:false,hoverIndex:-1,touchIndex:-1});player?.dispose();player=null;failed=false;profile();list();const works=current();
   $('hover-title').textContent='';
-  $('canvas').hidden=!works.length;$('fallback').hidden=!!works.length;$('fallback').textContent=say('先选入作品，点亮你的城市。','Choose works to light up your city.');['city','replay','skip'].forEach(id=>$(id).disabled=!works.length);
+  $('canvas').hidden=!works.length;$('fallback').hidden=!!works.length;$('fallback').textContent=say('先选入作品，点亮你的城市。','Choose works to light up your city.');
   if(works.length){
     C.WORKS=works.map((w,i)=>{const b={...blueprints[i],zh:w.name,en:'',note:'',fx:{gamma:1,gain:1}};if(works.length<=3){b.row='B';b.x=(i-(works.length-1)/2)*3.3;}else if(works.length<=6){const cols=Math.ceil(works.length/2);b.row=i<cols?'A':'C';b.x=((i%cols)-(cols-1)/2)*3.6;}return b;});
-    try{player=SP.createCityPlayer($('canvas'),i=>openWork(works[i].id),i=>{$('hover-title').textContent=i>=0?works[i].name:'';});works.forEach((w,i)=>{player.setWork(C.WORKS[i].id,placeholder(w));if(w.cover)player.setWork(C.WORKS[i].id,w.cover);});if(expanded)player.city(true);}catch{fallback();}
+    try{player=createCityPlayer($('canvas'),i=>openWork(works[i].id),i=>{$('hover-title').textContent=i>=0?works[i].name:'';},{autoplay:!presented,state:saved});presented=true;works.forEach((w,i)=>{player.setWork(C.WORKS[i].id,placeholder(w));if(w.cover)player.setWork(C.WORKS[i].id,w.cover);});}catch{fallback();}
   }
   text();
 }
@@ -69,10 +68,9 @@ function initialize(payload){
 }
 listen(window,'message',event=>{if(event.source!==parent||event.origin!==location.origin||disposed)return;const message=event.data;if(message?.type!=='funtrack:gallery:init')return;if(message.requestId!==requestId||requestId===null){if(!initialize(message.payload))return;requestId=message.requestId;}send({type:'funtrack:gallery:initialized',requestId:message.requestId,state:failed?'fallback':data.works.length?'rendered':'empty'});});
 listen($('flip'),'click',()=>{view.face=view.face==='back'?'front':'back';text();state();if(view.face==='front')player?.resize();});
-listen($('city'),'click',()=>{expanded=!expanded;player?.city(expanded);text();});listen($('replay'),'click',()=>{expanded=false;player?.replay();text();});listen($('skip'),'click',()=>player?.skip());
 function page(delta){const next=view.page+delta;if(next<0||next>=Math.ceil(data.works.length/PAGE_SIZE))return;view.page=next;view.focusWorkId=current()[0]?.id||null;rebuild();state();}
 listen($('prev'),'click',()=>page(-1));listen($('next'),'click',()=>page(1));
-listen($('canvas'),'keydown',e=>{if(!data?.works.length)return;let i=data.works.findIndex(w=>w.id===view.focusWorkId);if(i<0)i=view.page*PAGE_SIZE;if(['ArrowLeft','ArrowRight','Home','End'].includes(e.key)){e.preventDefault();i=e.key==='Home'?0:e.key==='End'?data.works.length-1:Math.max(0,Math.min(data.works.length-1,i+(e.key==='ArrowLeft'?-1:1)));const nextPage=Math.floor(i/PAGE_SIZE);view.focusWorkId=data.works[i].id;if(nextPage!==view.page){view.page=nextPage;rebuild();}player?.focus(i%PAGE_SIZE);$('hover-title').textContent=data.works[i].name;$('status').textContent=data.works[i].name;state();}else if(e.key==='Enter'||e.key===' '){e.preventDefault();openWork(data.works[i].id);}});
+listen($('canvas'),'keydown',e=>{if(!data?.works.length)return;if(e.key==='Escape'){e.preventDefault();player?.resetView();return;}if(e.shiftKey&&['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();player?.rotate(e.key==='ArrowLeft'?-.18:e.key==='ArrowRight'?.18:0,e.key==='ArrowUp'?.12:e.key==='ArrowDown'?-.12:0);return;}let i=data.works.findIndex(w=>w.id===view.focusWorkId);if(i<0)i=view.page*PAGE_SIZE;if(['ArrowLeft','ArrowRight','Home','End'].includes(e.key)){e.preventDefault();i=e.key==='Home'?0:e.key==='End'?data.works.length-1:Math.max(0,Math.min(data.works.length-1,i+(e.key==='ArrowLeft'?-1:1)));const nextPage=Math.floor(i/PAGE_SIZE);view.focusWorkId=data.works[i].id;if(nextPage!==view.page){view.page=nextPage;rebuild();}player?.focus(i%PAGE_SIZE);$('hover-title').textContent=data.works[i].name;$('status').textContent=data.works[i].name;state();}else if(e.key==='Enter'||e.key===' '){e.preventDefault();openWork(data.works[i].id);}});
 listen($('canvas'),'webglcontextlost',event=>{event.preventDefault();if(!disposed)fallback();});listen($('details'),'toggle',height);listen($('avatar'),'error',()=>{$('avatar').hidden=true;});
 listen(document,'visibilitychange',()=>player?.pause(document.hidden||view.face==='back'));
 listen(window,THEME_CHANGE_EVENT,event=>{const next=event.detail.theme;if(next===theme)return;theme=next;applyTheme(theme);if(data)rebuild(true);});
