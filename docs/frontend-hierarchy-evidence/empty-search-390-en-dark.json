@@ -1,0 +1,43 @@
+{
+  "authors": [],
+  "cardNames": [],
+  "counts": [
+    {
+      "clientWidth": 0,
+      "color": "rgb(148, 160, 175)",
+      "font": "12px",
+      "height": 0,
+      "overflow": "clip",
+      "scrollWidth": 0,
+      "text": "3 items",
+      "weight": "400",
+      "width": 0,
+      "x": 0,
+      "y": 0
+    }
+  ],
+  "documentWidth": 390,
+  "footer": [
+    {
+      "clientWidth": 358,
+      "color": "rgb(183, 192, 203)",
+      "font": "12px",
+      "height": 79,
+      "overflow": "clip",
+      "scrollWidth": 358,
+      "text": "AboutPrivacyTerms",
+      "weight": "400",
+      "width": 358,
+      "x": 16,
+      "y": 765
+    }
+  ],
+  "height": 844,
+  "lang": "en",
+  "preview": [],
+  "theme": "dark",
+  "titles": [],
+  "url": "http://127.0.0.1:4964/site.html#/feed?q=nonexistent-frontend-fixture",
+  "width": 390,
+  "workspace": []
+}

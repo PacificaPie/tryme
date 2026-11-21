@@ -1,0 +1,30 @@
+{
+  "button": {
+    "height": 44,
+    "width": 44,
+    "x": 203,
+    "y": 400.0234375
+  },
+  "label": "暂停预览",
+  "media": {
+    "height": 107.6875,
+    "width": 173,
+    "x": 201,
+    "y": 398.0234375
+  },
+  "nestedInLink": false,
+  "pressed": "true",
+  "url": "http://127.0.0.1:4964/site.html#/feed",
+  "video": {
+    "currentTime": 0.1282,
+    "error": null,
+    "paused": false,
+    "readyState": 4
+  },
+  "pauseAfterClick": {
+    "paused": true,
+    "pressed": "false",
+    "routeUnchanged": true
+  },
+  "newWritesDuringExplicitPlayPause": []
+}

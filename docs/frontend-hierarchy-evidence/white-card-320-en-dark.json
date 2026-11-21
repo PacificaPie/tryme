@@ -1,0 +1,29 @@
+{
+  "authors": [],
+  "cardNames": [],
+  "counts": [],
+  "documentWidth": 320,
+  "footer": [
+    {
+      "clientWidth": 288,
+      "color": "rgb(183, 192, 203)",
+      "font": "12px",
+      "height": 79,
+      "overflow": "clip",
+      "scrollWidth": 288,
+      "text": "AboutPrivacyTerms",
+      "weight": "400",
+      "width": 288,
+      "x": 16,
+      "y": 1646.3125
+    }
+  ],
+  "height": 740,
+  "lang": "en",
+  "preview": [],
+  "theme": "dark",
+  "titles": [],
+  "url": "http://127.0.0.1:4964/site.html#/card/00dcd1bb-675a-439a-b69d-8dd01f13a79c",
+  "width": 320,
+  "workspace": []
+}
