@@ -83,3 +83,8 @@ summary { cursor: pointer; color: var(--muted); font-size: 13px; padding: 4px 0;
   #hover-title { font-size: 11px; bottom: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .face { animation: none; } }
+
+/* The canvas remains the visible face throughout a physical turn. Full text is
+   optional below it, and is the fallback when 3D is unavailable. */
+#profile-details .back { margin-top: 16px; animation: none; }
+#profile-details:not([open]) > .back { display: none; }

@@ -3,11 +3,12 @@
 <body><main id="shell">
   <header class="toolbar"><span id="edition">灯城名片</span><button disabled id="flip" type="button">翻到背面 ↻</button></header>
   <div id="card" class="card">
-    <section id="front" class="face front" aria-label="作品正面"><div id="stage"><canvas id="canvas" tabindex="0" aria-label="作品城市"></canvas><p id="fallback">正在载入名片…</p><p id="hover-title" aria-live="polite"></p></div><div class="front-foot"><div class="front-identity"><strong id="front-name"></strong><span id="front-headline"></span></div><span id="count"></span></div></section>
-    <section id="back" class="face back" aria-label="身份背面" hidden><div class="back-top"><span>TRYME / CREATOR</span><span aria-hidden="true">✦</span></div><div class="identity"><img id="avatar" alt="" hidden><h1 id="name"></h1><p id="headline"></p><p id="bio"></p></div><footer class="back-footer"><p id="signature"></p><a id="website" target="_blank" rel="noopener noreferrer" hidden></a></footer></section>
+    <section id="front" class="face front" aria-label="作品正面"><div id="stage"><canvas id="canvas" tabindex="0" aria-label="作品城市"></canvas><p id="fallback">正在载入名片…</p><p id="hover-title" aria-live="polite"></p></div><div id="front-foot" class="front-foot"><div class="front-identity"><strong id="front-name"></strong><span id="front-headline"></span></div><span id="count"></span></div></section>
+
   </div>
   <nav id="pager" class="pager" aria-label="作品分页" hidden><button disabled id="prev" type="button" aria-label="上一组作品">←</button><span id="page-label"></span><button disabled id="next" type="button" aria-label="下一组作品">→</button></nav>
   <p id="hint" class="sr"></p>
+  <details id="profile-details" hidden><summary id="profile-title">完整资料</summary><section id="back" class="face back" aria-label="身份背面" hidden><div class="back-top"><span>TRYME / CREATOR</span><span aria-hidden="true">✦</span></div><div class="identity"><img id="avatar" alt="" hidden><h1 id="name"></h1><p id="headline"></p><p id="bio"></p></div><footer class="back-footer"><p id="signature"></p><a id="website" target="_blank" rel="noopener noreferrer" hidden></a></footer></section></details>
   <details id="details"><summary id="list-title">作品目录</summary><ul id="works"></ul></details>
   <p id="status" class="sr" role="status"></p>
 </main><script src="/gallery/vendor/three.min.js"></script><script src="./config.js"></script><script src="./shaders.js"></script><script src="./core.js"></script><script src="./kit.js"></script><script src="./plan.js"></script><script src="./scene.js"></script><script src="./camera.js"></script><script type="module" src="./controller.js"></script></body></html>

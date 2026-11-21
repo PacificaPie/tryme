@@ -1,0 +1,61 @@
+{
+  "checkedAt": "2026-11-21T07:45:02.229Z",
+  "browser": "Chrome 157.0.8103.79",
+  "completed": true,
+  "scope": "Local HTTP fixture and real renderer. Desktop + 390x844/DPR2 touch emulation, not a physical phone. Diagnostic-only wrappers observe Three.js matrices and animation state.",
+  "results": [
+    {
+      "case": "autoplay and theme continuity; flip uses same canvas and underside mesh, HTML profile remains collapsed; theme retains back orientation",
+      "status": "passed"
+    },
+    {
+      "case": "horizontal and vertical drags reveal physical reverse; no work hit through back; returning front restores hover and saved v1 activation",
+      "status": "passed"
+    },
+    {
+      "case": "rapid flip reversal and pointer takeover remain responsive without accidental work activation",
+      "status": "passed"
+    },
+    {
+      "case": "pagination and selected saved version survive physical flip; keyboard reaches work 30 and correct sign-in return URL",
+      "status": "passed"
+    },
+    {
+      "case": "mobile first/second taps still lift/open; real touch drags turn to physical back; light/dark, cancellation and returning front remain correct",
+      "status": "passed"
+    },
+    {
+      "case": "1/3/6/9/10 selected works use the same two-sided card and fit narrow layout",
+      "status": "passed"
+    },
+    {
+      "case": "empty",
+      "status": "passed"
+    },
+    {
+      "case": "missing",
+      "status": "passed"
+    },
+    {
+      "case": "long",
+      "status": "passed"
+    },
+    {
+      "case": "reduce",
+      "status": "passed"
+    },
+    {
+      "case": "webgl",
+      "status": "passed"
+    },
+    {
+      "case": "printed website opens cleaned author URL via physical back hit test; navigation intercepted locally",
+      "status": "passed"
+    },
+    {
+      "case": "creator-selected ivory/cobalt paper renders on physical reverse with actual identity",
+      "status": "passed"
+    }
+  ],
+  "pageErrors": []
+}
