@@ -5,7 +5,11 @@ https://claude.ai/artifact/BBxTkBMiFwefm4u3SasdsD
 
 `config`, `shaders`, `kit`, `plan`, `camera` and the scene/timeline geometry retain the supplied visual design. TryMe's adapter supplies only real selected work snapshots and the current creator profile. Reference images, identity, external CDN/font dependencies, homepage UI and screenshot/debug upload hooks are not used. Three.js is the existing bundled MIT dependency in `../gallery/vendor/`.
 
-Landscape front: automatic folding-city intro, cover windows and accessible work index; nine works per page, maximum thirty. Hover lifts a building on desktop; touch lifts on the first tap and opens the work on the second. Dragging or Shift + arrow keys rotates the view, with full horizontal orbit and bounded vertical tilt. Escape ends the intro and resets the view. The flip button reveals name, title, biography, signature, website and avatar. Same-origin parent handshake and media, public and authenticated card views share the renderer. Reduced motion skips intro, rendering pauses when hidden/on the back and settles when idle; renderer resources are released on page replacement. WebGL failure retains the work index and identity.
+The front and reverse are surfaces of the same thick, rounded 3D card. The front automatically plays the folding-city intro. Desktop hover lifts a building and click opens it; touch lifts on the first tap and opens on the second. Dragging horizontally or vertically can turn the card all the way over. The flip button eases to a readable front/back orientation in the same canvas. Shift + arrow keys rotate; Escape ends the intro and returns to the front.
+
+The reverse geometry/UV orientation follows the opening's physical card in `opening/card/world.js`, printed with the cleaned creator name, headline, biography, avatar, signature and website from the parent payload. Ink follows the site theme; ivory/cobalt remain the creator's paper choice. Back links use a ray hit on the printed website. Work hits are disabled on the reverse and during a flip. Complete profile text and a native website link remain in a collapsed detail section, with visible HTML fallback for empty cards or unavailable WebGL.
+
+There are nine works per page, maximum thirty. Public, saved and preview cards share the renderer and same-origin message protocol. Theme changes preserve view and in-flight flip state. Reduced motion shows the final pose immediately; hidden documents pause, idle cards stop rendering, and resources are released on page replacement.
 
 The settled front now matches the approved opening study in
 `design/opening-animation-2026-11-18/lab/`: silver-grey card, pale buildings and
@@ -18,9 +22,6 @@ The front engraving uses the supplied author name and headline (or card signatur
 Full text also remains available in HTML; long engraving and building labels are
 ellipsized within their texture bounds. Mobile uses the opening's more upright
 settled angle, a centered composition, and a city view that stays inside the card.
-Reduced motion applies selection and rotation immediately. Theme changes preserve
-animation progress, selected building and rotation; page changes preserve rotation
-without replaying the intro. Captured drags and cancelled/multitouch gestures never
-activate a work. The canvas owns touch dragging; surrounding content stays scrollable.
+The camera uses continuous rigid rotations about the slab centre and rotates its up vector too. Both card surfaces and raised buildings are included in the perspective/clipping fit. Captured drags, cancellation and multi-touch never activate a work. The canvas owns touch dragging; surrounding content stays scrollable.
 
-Current local review and verification: `docs/city-direct-interaction-2026-11-20.md`.
+Current local review and verification: `docs/city-physical-back-2026-11-21.md`.
