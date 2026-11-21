@@ -47,7 +47,7 @@ import { previewReferences, isPinnedPreview, prepareCardPreview, frozenAction } 
 import { mountDiscovery, clearDiscovery, updateDiscoveryWork } from './discovery.js';
 import { HTML_UPLOAD_HINT, htmlFileError, htmlImportSizeNotice, isGithubHTMLURL, importErrorText, repositoryImportBlocked, buildAvailabilityMarkup, createBuildAvailability } from './import-status.js';
 let templateExperiencePanel=null, notificationPage=null;
-registerMessages({'名片会自动使用你的最新个人资料。':'Your card automatically uses your latest profile.','模板已选好，继续制作你的名片。':'The template is selected. Continue making your card.','这个名片模板不存在。':'This card template does not exist.','登录后试玩':'Sign in to play'});
+registerMessages({'名片会自动使用你的最新个人资料。':'Your card automatically uses your latest profile.','模板已选好，继续制作你的名片。':'The template is selected. Continue making your card.','这个名片模板不存在。':'This card template does not exist.','登录后试玩':'Sign in to play','网站信息':'Site information','关于':'About','隐私政策':'Privacy','服务条款':'Terms'});
 const $ = (s, root=document) => root.querySelector(s);
 const $$ = (s, root=document) => [...root.querySelectorAll(s)];
 const main = $('#main');
@@ -157,9 +157,9 @@ function workHref(work, from=route().raw, cardId=''){return '#/work/'+encodeURIC
 function cover(work, href, label=true){const src=safeCover(work.coverUrl);return `<a class="cover${src?'':' empty-cover'}" href="${esc(href)}" aria-label="${t("查看")} ${esc(work.name)}">${src?`<img src="${esc(src)}" alt="${esc(work.name)}" loading="lazy">`:`<span aria-hidden="true">${esc(work.name)}</span>`}${label?`<span class="tag">${t(workCategoryLabel(work.category))}</span>`:''}</a>`;}
 function workTile(work,{from=route().raw,creator=true,cardId='',social=false}={}){
   const href=workHref(work,from,cardId),src=safeCover(work.coverUrl);
-  const author=avatarMarkup({name:work.authorName,avatarUrl:work.authorAvatarUrl},{className:'feed-author-avatar'})+esc(work.authorName||t('创作者'));
+  const author=avatarMarkup({name:work.authorName,avatarUrl:work.authorAvatarUrl},{className:'feed-author-avatar'})+`<span class="creator-name">${esc(work.authorName||t('创作者'))}</span>`;
   const creatorMarkup=work.authorId?`<a class="creator-link" href="#/author/${encodeURIComponent(work.authorId)}">${author}</a>`:`<span class="creator-link">${author}</span>`;
-  return `<article class="work-tile"><a class="work-entry" href="${esc(href)}" aria-label="${t("查看")} ${esc(work.name)}"><div class="cover${src?'':' empty-cover'}">${src?`<img src="${esc(src)}" alt="" loading="lazy">`:`<span>${esc(work.name)}</span>`}${previewMarkup(work.preview)}<span class="cover-action" aria-hidden="true">${t(me?"查看作品":"登录后试玩")} ↗</span></div><div class="tile-info"><div class="tile-copy"><h3 class="tile-title">${esc(work.name)}</h3><p class="tile-desc">${esc(work.desc)}</p></div></div></a>${previewButton(work.preview)}<div class="tile-bottom">${creator?creatorMarkup:''}${social?socialControls(work,{share:false,comments:true}):''}</div></article>`;
+  return `<article class="work-tile"><div class="work-tile-media"><a class="work-entry" href="${esc(href)}" aria-label="${t("查看")} ${esc(work.name)}"><div class="cover${src?'':' empty-cover'}">${src?`<img src="${esc(src)}" alt="" loading="lazy">`:`<span>${esc(work.name)}</span>`}${previewMarkup(work.preview)}<span class="cover-action" aria-hidden="true">${t(me?"查看作品":"登录后试玩")} ↗</span></div></a>${previewButton(work.preview)}</div><div class="tile-info"><div class="tile-copy"><h3 class="tile-title"><a href="${esc(href)}">${esc(work.name)}</a></h3><p class="tile-desc">${esc(work.desc)}</p></div></div><div class="tile-bottom">${creator?creatorMarkup:''}${social?socialControls(work,{share:false,comments:true}):''}</div></article>`;
 }
 function workImage(work,className=''){const src=safeCover(work.coverUrl);return src?`<img class="${className}" src="${esc(src)}" alt="${esc(work.name)}">`:`<div class="image-placeholder ${className}">${esc(work.name)}</div>`;}
 function playIcon(){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7Z"/></svg>';}
@@ -822,6 +822,8 @@ function renderChrome(){
   const button=$('#locale-toggle');button.textContent=getLocale()==='en'?'中':'EN';
   button.setAttribute('aria-label',getLocale()==='en'?'切换为中文':'Switch to English');
   button.title=getLocale()==='en'?'中文':'English';
+  $('.site-information nav').setAttribute('aria-label',t('网站信息'));
+  $$('[data-footer-label]').forEach(link=>{link.textContent=t(link.dataset.footerLabel);});
   identity();
 }
 $('#locale-toggle').addEventListener('click',()=>{

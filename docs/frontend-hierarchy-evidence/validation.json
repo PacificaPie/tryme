@@ -1,0 +1,178 @@
+{
+  "date": "2026-11-20",
+  "environment": "Chrome on macOS; local router/SQLite fixture; viewport override",
+  "base": "0d933c89b81d42f31afead095cd5c4210b099572",
+  "feedMatrix": [
+    {
+      "file": "feed-1440-en-dark.json",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "language": "en",
+      "theme": "dark",
+      "documentWidth": 1440,
+      "titleSize": "16px",
+      "authorSize": "13px",
+      "normalAuthorFits": true
+    },
+    {
+      "file": "feed-1440-en-light.json",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "language": "en",
+      "theme": "light",
+      "documentWidth": 1440,
+      "titleSize": "16px",
+      "authorSize": "13px",
+      "normalAuthorFits": true
+    },
+    {
+      "file": "feed-1440-zh-dark.json",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "language": "zh-CN",
+      "theme": "dark",
+      "documentWidth": 1440,
+      "titleSize": "16px",
+      "authorSize": "13px",
+      "normalAuthorFits": true
+    },
+    {
+      "file": "feed-1440-zh-light.json",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "language": "zh-CN",
+      "theme": "light",
+      "documentWidth": 1440,
+      "titleSize": "16px",
+      "authorSize": "13px",
+      "normalAuthorFits": true
+    },
+    {
+      "file": "feed-320-en-dark.json",
+      "viewport": [
+        320,
+        740
+      ],
+      "language": "en",
+      "theme": "dark",
+      "documentWidth": 320,
+      "titleSize": "15px",
+      "authorSize": "13px",
+      "normalAuthorFits": true
+    },
+    {
+      "file": "feed-320-en-light.json",
+      "viewport": [
+        320,
+        740
+      ],
+      "language": "en",
+      "theme": "light",
+      "documentWidth": 320,
+      "titleSize": "15px",
+      "authorSize": "13px",
+      "normalAuthorFits": true
+    },
+    {
+      "file": "feed-320-zh-dark.json",
+      "viewport": [
+        320,
+        740
+      ],
+      "language": "zh-CN",
+      "theme": "dark",
+      "documentWidth": 320,
+      "titleSize": "15px",
+      "authorSize": "13px",
+      "normalAuthorFits": true
+    },
+    {
+      "file": "feed-320-zh-light.json",
+      "viewport": [
+        320,
+        740
+      ],
+      "language": "zh-CN",
+      "theme": "light",
+      "documentWidth": 320,
+      "titleSize": "15px",
+      "authorSize": "13px",
+      "normalAuthorFits": true
+    },
+    {
+      "file": "feed-390-en-dark.json",
+      "viewport": [
+        390,
+        844
+      ],
+      "language": "en",
+      "theme": "dark",
+      "documentWidth": 390,
+      "titleSize": "15px",
+      "authorSize": "13px",
+      "normalAuthorFits": true
+    },
+    {
+      "file": "feed-390-en-light.json",
+      "viewport": [
+        390,
+        844
+      ],
+      "language": "en",
+      "theme": "light",
+      "documentWidth": 390,
+      "titleSize": "15px",
+      "authorSize": "13px",
+      "normalAuthorFits": true
+    },
+    {
+      "file": "feed-390-zh-dark.json",
+      "viewport": [
+        390,
+        844
+      ],
+      "language": "zh-CN",
+      "theme": "dark",
+      "documentWidth": 390,
+      "titleSize": "15px",
+      "authorSize": "13px",
+      "normalAuthorFits": true
+    },
+    {
+      "file": "feed-390-zh-light.json",
+      "viewport": [
+        390,
+        844
+      ],
+      "language": "zh-CN",
+      "theme": "light",
+      "documentWidth": 390,
+      "titleSize": "15px",
+      "authorSize": "13px",
+      "normalAuthorFits": true
+    }
+  ],
+  "checks": {
+    "check": "pass",
+    "test": {
+      "passed": 723,
+      "failed": 0
+    },
+    "build": "pass",
+    "diffCheck": "pass"
+  },
+  "limits": [
+    "No physical mobile or Safari test",
+    "No staging or production deployment",
+    "No live authentication or preview generation test",
+    "Published-success browser page not exercised"
+  ]
+}
