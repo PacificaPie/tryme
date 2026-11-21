@@ -128,6 +128,45 @@ test('changing a filter aborts the prior query; its late success cannot overwrit
   assert.equal(f.results().innerHTML,html);assert.equal(f.status().textContent,status);assert.equal(f.results().getAttribute('aria-busy'),'false');assert.equal(f.timers.size,0);
 });
 
+test('categories start unselected, switch exclusively, and toggle off without losing other Feed filters',async t=>{
+  const f=fixture(t);await f.mount({mixed:true,initial:{type:'works',q:'rain',sort:'likes',following:'1'}});
+  const filters=f.root.querySelectorAll('[data-filter]'),selected=()=>filters.filter(button=>button.getAttribute('aria-pressed')==='true').map(button=>button.dataset.filter);
+  const category=id=>filters.find(button=>button.dataset.filter===id);
+  assert.deepEqual(filters.map(button=>button.dataset.filter),['website','game','other']);
+  assert.deepEqual(selected(),[]);assert(filters.every(button=>!button.classes.has('active')));
+  assert.equal(new URL(f.calls[0].url,'https://site.test').searchParams.get('category'),'all');
+  category('website').fire('click');assert.deepEqual(selected(),['website']);
+  category('game').fire('click');assert.deepEqual(selected(),['game']);assert(!category('website').classes.has('active'));
+  const old=f.calls.at(-1),search=f.root.querySelector('#work-search');search.value=' rain garden ';search.fire('input');
+  category('game').fire('click');
+  assert.equal(old.signal.aborted,true);assert.deepEqual(selected(),[]);assert(filters.every(button=>!button.classes.has('active')));
+  const expected={q:'rain garden',source:'all',category:'all',sort:'likes',following:'1',type:'works'};
+  assert.deepEqual(f.queries.at(-1),expected);
+  assert.deepEqual(Object.fromEntries(new URL(f.calls.at(-1).url,'https://site.test').searchParams),{...expected,limit:'12'});
+  const count=f.calls.length;f.tick(250);assert.equal(f.calls.length,count,'Toggling consumes the pending search');
+  f.calls.at(-1).resolve(empty());await settle();const html=f.results().innerHTML;
+  old.resolve({works:[{id:'stale-game'}],total:1,nextCursor:null});await settle();assert.equal(f.results().innerHTML,html);
+  f.refresh().fire('click');assert.equal(new URL(f.calls.at(-1).url,'https://site.test').searchParams.get('category'),'all');
+  assert.deepEqual(selected(),[]);
+});
+
+test('category links and restored visits keep the same selection, including no category after toggling off',async t=>{
+  const f=fixture(t),initial={type:'works',category:'other',sort:'newest'};
+  const panel=await f.mount({mixed:true,initial});
+  const selected=root=>root.querySelectorAll('[data-filter]').filter(button=>button.getAttribute('aria-pressed')==='true').map(button=>button.dataset.filter);
+  assert.deepEqual(selected(f.root),['other']);
+  assert.equal(new URL(f.calls[0].url,'https://site.test').searchParams.get('category'),'other');
+  f.calls[0].resolve({works:[{id:'other-work'}],total:1,nextCursor:null});await settle();panel.dispose();
+  const returnedRoot=new Element(),returned=await f.mount({mixed:true,initial},returnedRoot);
+  assert.equal(f.calls.length,1,'Returning restores the matching category cache');assert.deepEqual(selected(returnedRoot),['other']);
+  returnedRoot.querySelectorAll('[data-filter]').find(button=>button.dataset.filter==='other').fire('click');
+  const cleared={...f.queries.at(-1)};assert.equal(cleared.category,'all');assert.deepEqual(selected(returnedRoot),[]);
+  f.calls.at(-1).resolve({works:[{id:'other-work'},{id:'game-work'}],total:2,nextCursor:null});await settle();returned.dispose();
+  const restoredRoot=new Element();await f.mount({mixed:true,initial:cleared},restoredRoot);
+  assert.equal(f.calls.length,2);assert.deepEqual(selected(restoredRoot),[]);
+  assert.equal(restoredRoot.querySelector('.feed-grid').children.length,2,'The unfiltered visit must not restore the old category results');
+});
+
 
 test('sort selection updates its label and URL once, retains filters, and ignores a late previous response',async t=>{
   const f=fixture(t),panel=await f.mount();t.after(()=>panel.dispose());
@@ -167,7 +206,8 @@ test('following empty state leads to creators; clearing filters retains followin
   assert.match(f.results().innerHTML,/没有找到作品/);assert.doesNotMatch(f.results().innerHTML,/href="#\/publish"/);
   f.results().fire('click',f.results().querySelector('[data-clear]'));
   const params=new URL(f.calls[1].url,'https://funtrack.test').searchParams;
-  assert.equal(params.get('following'),'1');assert.equal(params.get('q'),'');assert.equal(params.get('source'),'all');assert.equal(params.get('sort'),'likes');
+  assert.equal(params.get('following'),'1');assert.equal(params.get('q'),'');assert.equal(params.get('source'),'all');assert.equal(params.get('sort'),'likes');assert.equal(params.get('category'),'all');
+  assert(f.root.querySelectorAll('[data-filter]').every(button=>button.getAttribute('aria-pressed')==='false'&&!button.classes.has('active')));
   assert.equal(f.root.querySelector('#work-search').value,'');
   f.calls[1].resolve(empty());await settle();
   assert.match(f.results().innerHTML,/关注的人还没有公开作品/);assert.match(f.results().innerHTML,/href="#\/feed"/);assert.match(f.results().innerHTML,/发现作品/);
