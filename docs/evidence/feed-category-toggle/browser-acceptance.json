@@ -1,0 +1,205 @@
+{
+  "base": "http://127.0.0.1:4966",
+  "browser": "isolated headless Chromium",
+  "scope": "Local fixture only; synthetic accounts/data, no production or physical-device acceptance",
+  "records": [
+    {
+      "width": 1440,
+      "locale": "zh-CN",
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "buttons": [
+          {
+            "text": "个人网站",
+            "x": 130,
+            "right": 212,
+            "height": 44,
+            "font": "14px"
+          },
+          {
+            "text": "游戏",
+            "x": 216,
+            "right": 270,
+            "height": 44,
+            "font": "14px"
+          },
+          {
+            "text": "其他",
+            "x": 274,
+            "right": 328,
+            "height": 44,
+            "font": "14px"
+          }
+        ]
+      },
+      "requests": 19,
+      "result": "passed"
+    },
+    {
+      "width": 1440,
+      "locale": "en",
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "buttons": [
+          {
+            "text": "Personal sites",
+            "x": 130,
+            "right": 248.1875,
+            "height": 44,
+            "font": "14px"
+          },
+          {
+            "text": "Games",
+            "x": 252.1875,
+            "right": 323.96875,
+            "height": 44,
+            "font": "14px"
+          },
+          {
+            "text": "Other",
+            "x": 327.96875,
+            "right": 391.578125,
+            "height": 44,
+            "font": "14px"
+          }
+        ]
+      },
+      "requests": 19,
+      "result": "passed"
+    },
+    {
+      "width": 390,
+      "locale": "zh-CN",
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "buttons": [
+          {
+            "text": "个人网站",
+            "x": 16,
+            "right": 98,
+            "height": 44,
+            "font": "14px"
+          },
+          {
+            "text": "游戏",
+            "x": 102,
+            "right": 156,
+            "height": 44,
+            "font": "14px"
+          },
+          {
+            "text": "其他",
+            "x": 160,
+            "right": 214,
+            "height": 44,
+            "font": "14px"
+          }
+        ]
+      },
+      "requests": 19,
+      "result": "passed"
+    },
+    {
+      "width": 390,
+      "locale": "en",
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "buttons": [
+          {
+            "text": "Personal sites",
+            "x": 16,
+            "right": 134.1875,
+            "height": 44,
+            "font": "14px"
+          },
+          {
+            "text": "Games",
+            "x": 138.1875,
+            "right": 209.96875,
+            "height": 44,
+            "font": "14px"
+          },
+          {
+            "text": "Other",
+            "x": 213.96875,
+            "right": 277.578125,
+            "height": 44,
+            "font": "14px"
+          }
+        ]
+      },
+      "requests": 19,
+      "result": "passed"
+    },
+    {
+      "width": 320,
+      "locale": "zh-CN",
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "buttons": [
+          {
+            "text": "个人网站",
+            "x": 16,
+            "right": 90,
+            "height": 44,
+            "font": "14px"
+          },
+          {
+            "text": "游戏",
+            "x": 94,
+            "right": 140,
+            "height": 44,
+            "font": "14px"
+          },
+          {
+            "text": "其他",
+            "x": 144,
+            "right": 190,
+            "height": 44,
+            "font": "14px"
+          }
+        ]
+      },
+      "requests": 19,
+      "result": "passed"
+    },
+    {
+      "width": 320,
+      "locale": "en",
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "buttons": [
+          {
+            "text": "Personal sites",
+            "x": 16,
+            "right": 126.1875,
+            "height": 44,
+            "font": "14px"
+          },
+          {
+            "text": "Games",
+            "x": 130.1875,
+            "right": 193.96875,
+            "height": 44,
+            "font": "14px"
+          },
+          {
+            "text": "Other",
+            "x": 197.96875,
+            "right": 253.578125,
+            "height": 44,
+            "font": "14px"
+          }
+        ]
+      },
+      "requests": 19,
+      "result": "passed"
+    }
+  ]
+}
