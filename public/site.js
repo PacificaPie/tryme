@@ -2,6 +2,7 @@ import { mountCardDiscovery } from './feed-card.js';
 import { mountOnboarding, onboardingRoute, createOnboardingInvitation, onboardingInvitationMarkup } from './onboarding.js';
 import { createOpening } from './opening.js';
 import { renderCardDraftStart } from './card-draft-flow.js';
+import { createPublishedCardPrompt, publishedCardChoiceMarkup, mountPublishedCardChoice } from './published-card-prompt.js';
 import { createNotificationCenter } from './notifications.js';
 import { mountPublishWizard, publishProgress } from './publish-wizard.js';
 import { mountPublishMedia, sourceForm } from './publish-media.js';
@@ -54,6 +55,7 @@ const main = $('#main');
 const opening = createOpening();
 let onboardingState=null, onboardingPanel=null;
 const onboardingInvitation=createOnboardingInvitation();
+const publishedCardPrompt=createPublishedCardPrompt();
 mountMenus();
 let discussionPanel = null;
 let finishRouteLoading = null, publishedExternalCover = null, publishCoverDraft = null, publishWizard = null, publishedAutoCover = null, publishedAutoPreview = null, publishedVideos = null;
@@ -215,6 +217,7 @@ async function renderRoute(options={}){
   onboardingPanel?.dispose();onboardingPanel=null;
   notificationPage?.dispose();notificationPage=null;notificationCenter.onRoute();
   const r=route(),number=++routeNumber;discussionPanel?.dispose();discussionPanel=null;publishWizard?.dispose();publishWizard=null;publishCoverDraft?.dispose();publishCoverDraft=null;publishedExternalCover?.dispose();publishedExternalCover=null;publishedAutoCover?.dispose();publishedAutoCover=null;publishedAutoPreview?.dispose();publishedAutoPreview=null;publishedVideos?.dispose();publishedVideos=null;stopBuildPolling();publishAvailability?.dispose();publishAvailability=null;disposeVersioning();disposeWorkEdit();disposePublicationControls();analyticsPanel?.dispose();analyticsPanel=null;discoveryPanel?.dispose();discoveryPanel=null;creatorPanel?.dispose();creatorPanel=null;templateExperiencePanel?.dispose();templateExperiencePanel=null;
+  publishedCardPrompt.onRoute(r.path);
   if(currentRoute&&currentRoute!==r.raw)scrolls.set(currentRoute,window.scrollY);
   endSession('exit');currentGallery?.dispose?.();currentGallery=null;currentRoute=r.raw;
   const activeNav=r.path.startsWith('/cards')||r.path.startsWith('/card/')?'cards':r.path.startsWith('/studio')||r.path==='/publish'?'studio':r.path.startsWith('/author/')||r.path==='/following'?null:'feed';
@@ -544,7 +547,7 @@ async function importGithub(){
 }
 async function submitPublish(form){
   if(publishPending||githubPending)return;
-  const d=publishDraft;publishError='';publishFailure=null;
+  const d=publishDraft,owner=draftOwner;publishError='';publishFailure=null;
   if(d.source==='html'&&!publishFile){publishError="请先选择 HTML 游戏文件。";refreshPublishState();return;}
   if(d.source==='html'&&htmlFileError(publishFile)){publishError=htmlFileError(publishFile);refreshPublishState();return;}
   if(d.source==='github'&&!githubReady()){publishError="请先完成当前 GitHub 项目的导入。";refreshPublishState();return;}
@@ -556,12 +559,15 @@ async function submitPublish(form){
   for(const [key,value] of Object.entries(publishCoverDraft.choices))body.set(key,value);
   publishPending=true;refreshPublishState();
   try{
-    const {work}=await api('/api/works',{method:'POST',headers:{'Idempotency-Key':d.key},body});stopBuildPolling();publishDraft={name:'',desc:'',source:'html',url:'',key:uid()};publishFile=null;coverFile=null;refreshCoverPreview();savePublish();await Promise.all([fileStore('delete','game'),fileStore('delete','cover')]);publishPending=false;clearDiscovery();if(route().path==='/publish')go('/published/'+encodeURIComponent(work.id));else notify(t("作品已发布。"));
+    const {work}=await api('/api/works',{method:'POST',headers:{'Idempotency-Key':d.key},body});stopBuildPolling();publishDraft={name:'',desc:'',source:'html',url:'',key:uid()};publishFile=null;coverFile=null;refreshCoverPreview();savePublish();await Promise.all([fileStore('delete','game'),fileStore('delete','cover')]);publishPending=false;clearDiscovery();if(route().path==='/publish'&&owner===draftOwner&&me?.id===owner){publishedCardPrompt.published(owner,work);go('/published/'+encodeURIComponent(work.id));}else notify(t("作品已发布。"));
   }catch(error){publishPending=false;publishFailure=error;publishError=['DUPLICATE_WORK','VERSION_UNCHANGED','VERSION_ALREADY_EXISTS'].includes(error.code)?publicationFailureMessage(error):importErrorText(error);refreshPublishState();if(route().path==='/publish'&&error.status===401)$('#publish-error').innerHTML=esc(t(error.message))+` <a class="text-link" target="_top" href="${esc(signinURL())}">${t("重新登录")}</a>`;}
 }
 async function renderPublished(r,number){
+  const owner=draftOwner;
   const {work}=await api('/api/works/'+encodeURIComponent(r.path.split('/')[2]));
-  if(!applyHTML(`<div class="page narrow published-result">${publishProgress(3)}${head(t("作品已发布"),work.name)}<p class="published-result-note">${t('作品已发布，已保存你确认的封面和视频选择。')}</p><div id="published-work-tile" class="work-grid" style="max-width:560px;grid-template-columns:1fr">${workTile(work)}</div><div class="form-footer"><a class="button primary" href="#/cards/me?addWork=${encodeURIComponent(work.id)}">${t(onboardingState?.intent==='create'&&!onboardingState.hasCard?"制作我的名片":"加入或更新名片")}</a><a class="button quiet" href="#/studio/works?work=${encodeURIComponent(work.id)}">${t("返回作品管理")}</a><a class="button quiet" href="#/feed">${t("完成，去看 Feed")}</a><a class="button quiet" href="${esc(workHref(work,'/studio/works'))}">${t("试玩作品")}</a><details class="version-secondary"><summary>${t('更多')}</summary><a class="button quiet" href="#${discoveryPath(work.id)}">${t('展示设置')}</a></details></div></div>`,number))return;
+  if(owner!==draftOwner||me?.id!==owner)return;
+  if(!applyHTML(`<div class="page narrow published-result">${publishProgress(3)}${head(t("作品已发布"),work.name)}<p class="published-result-note">${t('作品已发布，已保存你确认的封面和视频选择。')}</p>${publishedCardChoiceMarkup(owner,work,publishedCardPrompt.shouldOffer(owner,work))}<div id="published-work-tile" class="work-grid" style="max-width:560px;grid-template-columns:1fr">${workTile(work)}</div><div class="form-footer"><a class="button quiet" href="#/studio/works?work=${encodeURIComponent(work.id)}">${t("返回作品管理")}</a><a class="button quiet" href="#/feed">${t("完成，去看 Feed")}</a><a class="button quiet" href="${esc(workHref(work,'/studio/works'))}">${t("试玩作品")}</a><details class="version-secondary"><summary>${t('更多')}</summary><a class="button quiet" href="#${discoveryPath(work.id)}">${t('展示设置')}</a></details></div></div>`,number))return;
+  mountPublishedCardChoice($('#published-card-choice'),{prompt:publishedCardPrompt,owner,work,current:()=>number===routeNumber&&owner===draftOwner&&me?.id===owner,go});
   publishedVideos=mountVideoPreviews($('#published-work-tile'));
 
 }

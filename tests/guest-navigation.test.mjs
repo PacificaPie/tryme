@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
 import {safeAuthReturnTo} from '../public/auth-client.js';
+import {createPublishedCardPrompt} from '../public/published-card-prompt.js';
 
 const source=ts.createSourceFile('site.js',readFileSync(new URL('../public/site.js',import.meta.url),'utf8'),ts.ScriptTarget.Latest,true,ts.ScriptKind.JS);
 const declaration=name=>source.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text===name).getText(source);
@@ -22,6 +23,7 @@ function routeFixture(path,{authFailure=false}={}){
     me:null,authChecked:false,routeNumber:0,location:{hash:'#'+path,replace(){throw Error('Unexpected redirect');}},legacyPublicCardPath:()=>null,visitRecorded:false,
     route:()=>r,discussionPanel:null,publishCoverDraft:null,publishWizard:null,publishedExternalCover:null,publishedAutoCover:null,publishedAutoPreview:null,publishedVideos:null,publishAvailability:null,analyticsPanel:null,discoveryPanel:null,creatorPanel:null,templateExperiencePanel:null,
     notificationPage:null,notificationCenter:{onRoute(){}},onboardingPanel:null,onboardingState:null,opening:{resolve(){},cancel(){}},
+    publishedCardPrompt:createPublishedCardPrompt(),
     currentRoute:'',currentGallery:null,scrolls:new Map(),finishRouteLoading:null,main:{},
     stopBuildPolling(){},disposeVersioning(){},disposeWorkEdit(){},disposePublicationControls(){},endSession(){},$$:()=>[],syncNavigation(){},identity(){},
     beginRouteLoading:()=>()=>{},pageSkeleton:()=>'',t:x=>x,ApiError:class extends Error{constructor(message,status){super(message);this.status=status;}},

@@ -1,0 +1,503 @@
+{
+  "passed": true,
+  "browser": "157.0.8103.79",
+  "base": "http://127.0.0.1:64344",
+  "scope": "Local fixture only, synthetic auth/data; real frontend/router/SQLite, stubbed GitHub file download; no real cloud build, capture, staging, production or physical-device acceptance",
+  "records": [
+    {
+      "width": 320,
+      "locale": "zh-CN",
+      "mode": "first",
+      "source": "html",
+      "id": "f5010a8e-5129-420b-9fb1-ee63a42a78db",
+      "laterId": "2ae06e38-7b1a-4b34-8b43-29a6159991ed",
+      "layout": {
+        "text": "要把这件作品加入名片吗？\n\n继续制作，预览并保存后生效。\n\n加入名片\n暂不加入",
+        "top": 560.625,
+        "buttons": [
+          {
+            "width": 118,
+            "height": 44,
+            "left": 37,
+            "right": 155
+          },
+          {
+            "width": 118,
+            "height": 44,
+            "left": 165,
+            "right": 283
+          }
+        ]
+      },
+      "result": "passed"
+    },
+    {
+      "width": 320,
+      "locale": "zh-CN",
+      "mode": "saved",
+      "source": "url",
+      "id": "a217b636-61a2-4290-93b9-abbcabe9980c",
+      "laterId": "5423bbcd-ce5f-42ba-8899-9985c2f4242f",
+      "layout": {
+        "text": "要把这件作品加入名片吗？\n\n继续制作，预览并保存后生效。\n\n加入名片\n暂不加入",
+        "top": 560.625,
+        "buttons": [
+          {
+            "width": 118,
+            "height": 44,
+            "left": 37,
+            "right": 155
+          },
+          {
+            "width": 118,
+            "height": 44,
+            "left": 165,
+            "right": 283
+          }
+        ]
+      },
+      "result": "passed"
+    },
+    {
+      "width": 320,
+      "locale": "zh-CN",
+      "mode": "draft",
+      "source": "github",
+      "id": "d963507e-ade7-47d3-9030-f0d8840cf4a8",
+      "laterId": "05da76d9-7fcc-47ef-b2aa-56c4a60d10f6",
+      "layout": {
+        "text": "要把这件作品加入名片吗？\n\n继续制作，预览并保存后生效。\n\n加入名片\n暂不加入",
+        "top": 560.625,
+        "buttons": [
+          {
+            "width": 118,
+            "height": 44,
+            "left": 37,
+            "right": 155
+          },
+          {
+            "width": 118,
+            "height": 44,
+            "left": 165,
+            "right": 283
+          }
+        ]
+      },
+      "result": "passed"
+    },
+    {
+      "width": 320,
+      "locale": "en",
+      "mode": "first",
+      "source": "html",
+      "id": "a871fc92-3fb2-4dbe-897f-f98917e7cb20",
+      "laterId": "6551a4ff-126e-4ec5-8adc-afed67f62039",
+      "layout": {
+        "text": "Add this work to your card?\n\nContinue to the card builder, then preview and save.\n\nAdd to card\nNot now",
+        "top": 579.8125,
+        "buttons": [
+          {
+            "width": 118,
+            "height": 44,
+            "left": 37,
+            "right": 155
+          },
+          {
+            "width": 118,
+            "height": 44,
+            "left": 165,
+            "right": 283
+          }
+        ]
+      },
+      "result": "passed"
+    },
+    {
+      "width": 320,
+      "locale": "en",
+      "mode": "saved",
+      "source": "url",
+      "id": "b85ebfe7-04ef-4b47-9de3-2ca647051eb6",
+      "laterId": "ecf4fdba-5bc1-4f37-914f-dcf7b77abf4f",
+      "layout": {
+        "text": "Add this work to your card?\n\nContinue to the card builder, then preview and save.\n\nAdd to card\nNot now",
+        "top": 579.8125,
+        "buttons": [
+          {
+            "width": 118,
+            "height": 44,
+            "left": 37,
+            "right": 155
+          },
+          {
+            "width": 118,
+            "height": 44,
+            "left": 165,
+            "right": 283
+          }
+        ]
+      },
+      "result": "passed"
+    },
+    {
+      "width": 320,
+      "locale": "en",
+      "mode": "draft",
+      "source": "github",
+      "id": "e985e4a9-3f64-447d-8b5e-234edaa576e4",
+      "laterId": "ecb6cc41-0890-4467-a955-83d372d7e8ee",
+      "layout": {
+        "text": "Add this work to your card?\n\nContinue to the card builder, then preview and save.\n\nAdd to card\nNot now",
+        "top": 579.8125,
+        "buttons": [
+          {
+            "width": 118,
+            "height": 44,
+            "left": 37,
+            "right": 155
+          },
+          {
+            "width": 118,
+            "height": 44,
+            "left": 165,
+            "right": 283
+          }
+        ]
+      },
+      "result": "passed"
+    },
+    {
+      "width": 390,
+      "locale": "zh-CN",
+      "mode": "first",
+      "source": "html",
+      "id": "1db176a5-7e4e-4480-9578-3d330d2d199b",
+      "laterId": "b04616f9-4306-4651-8978-3ae6521747e6",
+      "layout": {
+        "text": "要把这件作品加入名片吗？\n\n继续制作，预览并保存后生效。\n\n加入名片\n暂不加入",
+        "top": 487.828125,
+        "buttons": [
+          {
+            "width": 153,
+            "height": 44,
+            "left": 37,
+            "right": 190
+          },
+          {
+            "width": 153,
+            "height": 44,
+            "left": 200,
+            "right": 353
+          }
+        ]
+      },
+      "result": "passed"
+    },
+    {
+      "width": 390,
+      "locale": "zh-CN",
+      "mode": "saved",
+      "source": "url",
+      "id": "f5ea7284-cbe2-43f1-8fa6-006ebc33dcac",
+      "laterId": "6e580432-0f7b-4c10-8680-906590d42340",
+      "layout": {
+        "text": "要把这件作品加入名片吗？\n\n继续制作，预览并保存后生效。\n\n加入名片\n暂不加入",
+        "top": 487.828125,
+        "buttons": [
+          {
+            "width": 153,
+            "height": 44,
+            "left": 37,
+            "right": 190
+          },
+          {
+            "width": 153,
+            "height": 44,
+            "left": 200,
+            "right": 353
+          }
+        ]
+      },
+      "result": "passed"
+    },
+    {
+      "width": 390,
+      "locale": "zh-CN",
+      "mode": "draft",
+      "source": "github",
+      "id": "70c652a2-0dc6-409a-a223-1f2bbecafceb",
+      "laterId": "1e6374c7-8eca-45d1-b526-03d2dda744b9",
+      "layout": {
+        "text": "要把这件作品加入名片吗？\n\n继续制作，预览并保存后生效。\n\n加入名片\n暂不加入",
+        "top": 487.828125,
+        "buttons": [
+          {
+            "width": 153,
+            "height": 44,
+            "left": 37,
+            "right": 190
+          },
+          {
+            "width": 153,
+            "height": 44,
+            "left": 200,
+            "right": 353
+          }
+        ]
+      },
+      "result": "passed"
+    },
+    {
+      "width": 390,
+      "locale": "en",
+      "mode": "first",
+      "source": "html",
+      "id": "8adea6dd-4a9c-48d4-9dfb-0b87ac6f4fd3",
+      "laterId": "57728197-76c0-4cb2-baf7-d1a3a09ca647",
+      "layout": {
+        "text": "Add this work to your card?\n\nContinue to the card builder, then preview and save.\n\nAdd to card\nNot now",
+        "top": 549.59375,
+        "buttons": [
+          {
+            "width": 153,
+            "height": 44,
+            "left": 37,
+            "right": 190
+          },
+          {
+            "width": 153,
+            "height": 44,
+            "left": 200,
+            "right": 353
+          }
+        ]
+      },
+      "result": "passed"
+    },
+    {
+      "width": 390,
+      "locale": "en",
+      "mode": "saved",
+      "source": "url",
+      "id": "854741c4-1997-4f66-8112-00fb960cf326",
+      "laterId": "92952383-1feb-4851-9b4f-9b998624c7e1",
+      "layout": {
+        "text": "Add this work to your card?\n\nContinue to the card builder, then preview and save.\n\nAdd to card\nNot now",
+        "top": 549.59375,
+        "buttons": [
+          {
+            "width": 153,
+            "height": 44,
+            "left": 37,
+            "right": 190
+          },
+          {
+            "width": 153,
+            "height": 44,
+            "left": 200,
+            "right": 353
+          }
+        ]
+      },
+      "result": "passed"
+    },
+    {
+      "width": 390,
+      "locale": "en",
+      "mode": "draft",
+      "source": "github",
+      "id": "5e0955e6-de2b-43c6-bec2-d9ea35a4a9fc",
+      "laterId": "7c5356c5-e819-4162-b635-c21740cfed3a",
+      "layout": {
+        "text": "Add this work to your card?\n\nContinue to the card builder, then preview and save.\n\nAdd to card\nNot now",
+        "top": 549.59375,
+        "buttons": [
+          {
+            "width": 153,
+            "height": 44,
+            "left": 37,
+            "right": 190
+          },
+          {
+            "width": 153,
+            "height": 44,
+            "left": 200,
+            "right": 353
+          }
+        ]
+      },
+      "result": "passed"
+    },
+    {
+      "width": 1440,
+      "locale": "zh-CN",
+      "mode": "first",
+      "source": "html",
+      "id": "a612a213-5558-41bb-93ff-054982e09a23",
+      "laterId": "ba0d0248-a048-4a80-bcb9-29637cf4b82f",
+      "layout": {
+        "text": "要把这件作品加入名片吗？\n\n继续制作，预览并保存后生效。\n\n加入名片\n暂不加入",
+        "top": 462.28125,
+        "buttons": [
+          {
+            "width": 86,
+            "height": 44,
+            "left": 335,
+            "right": 421
+          },
+          {
+            "width": 86,
+            "height": 44,
+            "left": 431,
+            "right": 517
+          }
+        ]
+      },
+      "result": "passed"
+    },
+    {
+      "width": 1440,
+      "locale": "zh-CN",
+      "mode": "saved",
+      "source": "url",
+      "id": "8b0a4856-b27f-4635-b31f-96bafe78ec0c",
+      "laterId": "54101ffb-01aa-439f-828e-05c4a049bb1d",
+      "layout": {
+        "text": "要把这件作品加入名片吗？\n\n继续制作，预览并保存后生效。\n\n加入名片\n暂不加入",
+        "top": 462.28125,
+        "buttons": [
+          {
+            "width": 86,
+            "height": 44,
+            "left": 335,
+            "right": 421
+          },
+          {
+            "width": 86,
+            "height": 44,
+            "left": 431,
+            "right": 517
+          }
+        ]
+      },
+      "result": "passed"
+    },
+    {
+      "width": 1440,
+      "locale": "zh-CN",
+      "mode": "draft",
+      "source": "github",
+      "id": "32db620a-d3ff-4bf4-bcad-5d75938bec43",
+      "laterId": "be03dfb6-41c2-4c15-9984-15a03d4abfa9",
+      "layout": {
+        "text": "要把这件作品加入名片吗？\n\n继续制作，预览并保存后生效。\n\n加入名片\n暂不加入",
+        "top": 462.28125,
+        "buttons": [
+          {
+            "width": 86,
+            "height": 44,
+            "left": 335,
+            "right": 421
+          },
+          {
+            "width": 86,
+            "height": 44,
+            "left": 431,
+            "right": 517
+          }
+        ]
+      },
+      "result": "passed"
+    },
+    {
+      "width": 1440,
+      "locale": "en",
+      "mode": "first",
+      "source": "html",
+      "id": "528420a9-252b-4ceb-942a-bf4cfa4e3ca9",
+      "laterId": "c0b26b20-071c-48c6-b32e-cb9af5484bfd",
+      "layout": {
+        "text": "Add this work to your card?\n\nContinue to the card builder, then preview and save.\n\nAdd to card\nNot now",
+        "top": 462.28125,
+        "buttons": [
+          {
+            "width": 105.75,
+            "height": 44,
+            "left": 335,
+            "right": 440.75
+          },
+          {
+            "width": 85.234375,
+            "height": 44,
+            "left": 450.75,
+            "right": 535.984375
+          }
+        ]
+      },
+      "result": "passed"
+    },
+    {
+      "width": 1440,
+      "locale": "en",
+      "mode": "saved",
+      "source": "url",
+      "id": "ac56fd64-e887-42b1-9e4d-ad7f66c27d8c",
+      "laterId": "f223ca31-775d-49f1-b71b-ed7402fbdd3f",
+      "layout": {
+        "text": "Add this work to your card?\n\nContinue to the card builder, then preview and save.\n\nAdd to card\nNot now",
+        "top": 462.28125,
+        "buttons": [
+          {
+            "width": 105.75,
+            "height": 44,
+            "left": 335,
+            "right": 440.75
+          },
+          {
+            "width": 85.234375,
+            "height": 44,
+            "left": 450.75,
+            "right": 535.984375
+          }
+        ]
+      },
+      "result": "passed"
+    },
+    {
+      "width": 1440,
+      "locale": "en",
+      "mode": "draft",
+      "source": "github",
+      "id": "ef437925-c62b-432b-b8ea-ef7a02dd78fa",
+      "laterId": "27691b09-11bb-48ec-aec1-8c1b615e98b2",
+      "layout": {
+        "text": "Add this work to your card?\n\nContinue to the card builder, then preview and save.\n\nAdd to card\nNot now",
+        "top": 462.28125,
+        "buttons": [
+          {
+            "width": 105.75,
+            "height": 44,
+            "left": 335,
+            "right": 440.75
+          },
+          {
+            "width": 85.234375,
+            "height": 44,
+            "left": 450.75,
+            "right": 535.984375
+          }
+        ]
+      },
+      "result": "passed"
+    },
+    {
+      "result": "passed",
+      "checks": "Unanswered leave/back/forward; fallback resumes; only explicit preview/save creates a new card; prior snapshots unchanged"
+    },
+    {
+      "result": "passed",
+      "checks": "Draft without a saved card; refresh of unanswered prompt; fallback keeps template/signature/order; duplicate addition remains a single work"
+    }
+  ],
+  "errors": []
+}
