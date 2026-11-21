@@ -32,6 +32,7 @@
 .card-builder-footer{position:sticky;bottom:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:32px;padding:18px 0;border-top:1px solid var(--border);background:var(--bg)}
 .card-builder-footer .button.primary{margin-left:auto}
 .card-builder-footer .selection-count{font-size:13px;color:var(--text-secondary)}
+@media(max-width:380px){.card-builder-footer{flex-wrap:wrap}.card-builder-footer .button{max-width:100%;white-space:normal;text-align:center}}
 .card-builder-page .template-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
 .card-builder-page .template{position:relative;text-align:left;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:14px;overflow:hidden;transition:transform 180ms,border-color 160ms,box-shadow 160ms}
 .card-builder-page .template:hover{transform:translateY(-3px);border-color:var(--text-tertiary)}
