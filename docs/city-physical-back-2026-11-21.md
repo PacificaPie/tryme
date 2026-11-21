@@ -47,3 +47,7 @@ PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.mjs node diagnostics/city-p
 ```
 
 [稳定预览入口](http://127.0.0.1:18841/__city)；[边界场景](http://127.0.0.1:18841/__city/edge)。旧 consistency/interaction 验收脚本入口转发到当前脚本，原报告与原截图保留为历史记录。
+
+## 总验收补充
+
+独立浏览器验收复现：点击翻面后立即在 canvas 按 Enter，原实现会在前半段动画仍显示正面时打开作品。键盘入口现与鼠标命中共用 canSelect 判断，翻转中及卡片接近侧边/背面时均不激活作品。已补浏览器回归场景；最终验证记录由发布报告补充。

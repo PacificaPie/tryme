@@ -61,6 +61,7 @@ try{
  p=await point(f);await page.mouse.click(p.x,p.y);await publicCard(page).locator('dialog[open]').waitFor();assert.match(await publicCard(page).locator('.public-work-version').innerText(),/v1/);await publicCard(page).getByRole('button',{name:'关闭作品'}).click();
  report({case:'horizontal and vertical drags reveal physical reverse; no work hit through back; returning front restores hover and saved v1 activation',status:'passed'});
  // Reversing or taking over an in-progress flip must not activate the canvas.
+ await f.locator('#flip').click();await f.locator('canvas').press('Enter');assert.equal(await publicCard(page).locator('dialog[open]').count(),0);await face(f,'back');await flip(f,'front');
  await f.locator('#flip').click();await page.waitForTimeout(150);await f.locator('#flip').click();await face(f,'front');
  await f.locator('#flip').click();await page.waitForTimeout(180);await drag(page,f,30,0);assert.equal(await f.locator('canvas').getAttribute('data-turning'),'false');assert.equal(await publicCard(page).locator('dialog[open]').count(),0);await f.locator('canvas').press('Escape');
  report({case:'rapid flip reversal and pointer takeover remain responsive without accidental work activation',status:'passed'});

@@ -69,7 +69,8 @@ function frame(now){
   draw(dt);if(playing||flip||(!reduce.matches&&(city||now<until)))request();else last=0;
 }
 function rayAt(e){var r=canvas.getBoundingClientRect(),ray=new T.Raycaster();core.camera.updateMatrixWorld(true);ray.setFromCamera(new T.Vector2((e.clientX-r.left)/r.width*2-1,1-(e.clientY-r.top)/r.height*2),core.camera);return ray.ray;}
-function hit(e){return frontAmount>.15&&!flip?scene.pick(rayAt(e),st.rise,e.pointerType==='mouse'?0:.2):-1;}
+function canSelect(){return frontAmount>.15&&!flip;}
+function hit(e){return canSelect()?scene.pick(rayAt(e),st.rise,e.pointerType==='mouse'?0:.2):-1;}
 function websiteHit(e){return frontAmount<-.15&&!flip&&back.websiteHit(rayAt(e));}
 function hover(i){hoverIdx=i;canvas.style.cursor=i>=0?'pointer':'grab';onHover(i);wake();}
 function settle(){var wasPlaying=playing;tt=END;playing=false;if(wasPlaying)draw(reduce.matches?2:0);wake();return wasPlaying;}
@@ -94,7 +95,7 @@ core.onMedia=wake;core.resize();draw(2);if(hoverIdx>=0)onHover(hoverIdx);wake();
 return {
   setWork:scene.setWork,resize:function(){core.resize();wake();},
   snapshot:()=>({time:tt,playing,face:facing,rotation:{...rotation},touchIndex:touchIdx,hoverIndex:hoverIdx,flip:flip?structuredClone(flip):null}),
-  rotate,showFace,flip:function(){showFace((flip?.face||facing)==='back'?'front':'back');},resetView:function(){showFace('front',false);},
+  canSelect,rotate,showFace,flip:function(){showFace((flip?.face||facing)==='back'?'front':'back');},resetView:function(){showFace('front',false);},
   pause:function(value){paused=value;if(value){gestures.cancel();cancelAnimationFrame(raf);raf=0;last=0;}else wake();},
   focus:function(i){if(facing==='back'||flip)showFace('front',false);settle();touchIdx=-1;hover(i);},
   dispose:function(){disposed=true;cancelAnimationFrame(raf);gestures.dispose();reduce.removeEventListener('change',motionChange);back.dispose();scene.dispose();core.dispose();}
