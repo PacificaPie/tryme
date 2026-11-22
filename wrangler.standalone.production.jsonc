@@ -9,6 +9,10 @@
   ],
   "workers_dev": false,
   "preview_urls": false,
+  "observability": {
+    "enabled": true,
+    "logs": { "invocation_logs": false }
+  },
   "vars": {
     "APP_ORIGIN": "https://trymecard.com",
     "FUNTRACK_BUILD_MODE": "cloud",

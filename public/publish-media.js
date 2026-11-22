@@ -8,7 +8,15 @@ registerMessages({
  '请先确认封面和视频，或明确选择跳过。':'Choose your cover and video, or explicitly skip them.',
  '预览仅自己可见，确认并发布后才会进入 Feed。':'Only you can see this preview. It enters Feed after you confirm and publish.',
  '私有草稿已失效，请重新准备。':'Your private draft expired. Prepare it again.',
+ '自动预览次数已用完，可以跳过预览继续发布，或稍后再试。':'Preview attempts are used up. Skip the preview to publish, or try again later.',
+ '自动预览暂不可用，可以跳过预览继续发布。':'Automatic previews are unavailable. Skip the preview to publish.',
 });
+
+export function publishMediaFailure(reason){
+ if(reason==='CAPTURE_LIMIT')return '自动预览次数已用完，可以跳过预览继续发布，或稍后再试。';
+ if(reason==='BROWSER_UNAVAILABLE')return '自动预览暂不可用，可以跳过预览继续发布。';
+ return '预览未完成，可以重试或明确跳过。';
+}
 
 const fingerprints=new WeakMap();
 export async function publishSourceKey(input){
@@ -43,7 +51,7 @@ export function createPublishMediaController({api,saved,onChange=()=>{},onPersis
    try{
     const result=await request(`/api/publish-drafts/${state.id}/capture`,{method:'POST',body:{id:attempt.id,kind,waitMs:attempt.waitMs}});
     if(!current(g))return;accept(kind,result);emit();if(result.status!=='running')return;
-   }catch(error){if(!current(g))return;if(!['CAPTURE_BUSY'].includes(error.code)&&error.status){state[kind]={status:'failed'};emit();return;}}
+   }catch(error){if(!current(g))return;if(!['CAPTURE_BUSY'].includes(error.code)&&error.status){state[kind]={status:'failed',reason:['CAPTURE_LIMIT','BROWSER_UNAVAILABLE'].includes(error.code)?error.code:'CAPTURE_FAILED'};emit();return;}}
    await delay(2000);
   }
   if(current(g)){state[kind]={status:'failed'};emit();}
@@ -90,7 +98,7 @@ export function mountPublishMedia(root,{api,saved,onPersist,onChange,onChoice=()
  let controller;const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  function render(){
   const s=controller?.state||{status:'empty'},button=(action,label,disabled=false)=>`<button type="button" class="button quiet small" data-media-action="${action}" ${disabled?'disabled':''}>${t(label)}</button>`;
-  const panel=kind=>{const c=s[kind],choice=s[kind+'Choice'],busy=c?.status==='running';return `<section class="publish-media-panel"><h3>${t(kind==='cover'?'封面':'视频预览')}</h3><p role="status">${t(choice==='manual'?'已选择手动封面':choice==='skip'?'已跳过':choice==='candidate'?'已选择':busy?'正在准备预览…':c?.status==='ready'?'':c?.status==='failed'?'预览未完成，可以重试或明确跳过。':'正在准备预览…')}</p>${c?.status==='ready'?(kind==='cover'?`<img class="external-cover-image" src="${esc(c.url)}" alt="${t('封面')}" width="1200" height="750">`:`<video class="external-cover-image" src="${esc(c.url)}" controls muted playsinline preload="metadata"></video>`):''}<div class="external-cover-actions">${c?.status==='ready'?button(kind+':candidate',kind==='cover'?'使用这张封面':'使用这段视频'):''}${button(kind+':skip',kind==='cover'?'先不设置封面':'不使用视频')}${button(kind+':retry',kind==='cover'?'重新截图':'重新录制',busy)}${kind==='cover'?button('cover:later','再等几秒截图',busy):''}</div></section>`;};
+  const panel=kind=>{const c=s[kind],choice=s[kind+'Choice'],busy=c?.status==='running';return `<section class="publish-media-panel"><h3>${t(kind==='cover'?'封面':'视频预览')}</h3><p role="status">${t(choice==='manual'?'已选择手动封面':choice==='skip'?'已跳过':choice==='candidate'?'已选择':busy?'正在准备预览…':c?.status==='ready'?'':c?.status==='failed'?publishMediaFailure(c.reason):'正在准备预览…')}</p>${c?.status==='ready'?(kind==='cover'?`<img class="external-cover-image" src="${esc(c.url)}" alt="${t('封面')}" width="1200" height="750">`:`<video class="external-cover-image" src="${esc(c.url)}" controls muted playsinline preload="metadata"></video>`):''}<div class="external-cover-actions">${c?.status==='ready'?button(kind+':candidate',kind==='cover'?'使用这张封面':'使用这段视频'):''}${button(kind+':skip',kind==='cover'?'先不设置封面':'不使用视频')}${button(kind+':retry',kind==='cover'?'重新截图':'重新录制',busy)}${kind==='cover'?button('cover:later','再等几秒截图',busy):''}</div></section>`;};
   root.innerHTML=`<div class="external-cover-heading"><strong>${t('发布前预览')}</strong><span>${t('预览仅自己可见，确认并发布后才会进入 Feed。')}</span></div>${s.status==='ready'?panel('cover')+(s.key.startsWith('url:')?`<p>${t('外链目前仅支持截图。')}</p><div class="external-cover-actions">${button('video:skip',s.videoChoice==='skip'?'已跳过':'不使用视频')}</div>`:panel('video')):`<p role="status">${t(s.status==='failed'?'预览未完成，可以重试或明确跳过。':s.status==='expired'?'私有草稿已失效，请重新准备。':s.status==='empty'?'导入后自动准备截图和视频，只有你能看到。':'正在准备私有草稿…')}</p>${['failed','expired'].includes(s.status)?button('cover:retry','重试'):''}`}`;
   onChange?.();
  }

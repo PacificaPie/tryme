@@ -1,4 +1,5 @@
 import { mountCardDiscovery } from './feed-card.js';
+import { apiTimeout, withRequestDeadline } from './api-request.js';
 import { mountOnboarding, onboardingRoute, createOnboardingInvitation, onboardingInvitationMarkup } from './onboarding.js';
 import { createOpening } from './opening.js';
 import { renderCardDraftStart } from './card-draft-flow.js';
@@ -81,22 +82,26 @@ async function api(path, options={}) {
   // draftOwner pins this document to the account that loaded its drafts.
   // Switching accounts needs a fresh document, never rebinding old callbacks.
   const expectedUserId=publicRead?null:draftOwner;
+  return withRequestDeadline(async signal=>{
   const assertCurrent=()=>{
     if(expectedUserId&&draftOwner!==expectedUserId)throw new ApiError('登录账号已变化，请刷新页面后重试。',409,'AUTH_SESSION_CHANGED');
     if(!publicRead)assertAuthAccount(expectedUserId);
   };
   const headers={...publicRead?{}:await authHeaders(expectedUserId),...(options.headers||{})};
+  signal.throwIfAborted();
   assertCurrent();
   if(expectedUserId)headers['X-Funtrack-Expected-User']=expectedUserId;
   if(options.method&&options.method!=='GET')headers['X-Funtrack-CSRF']='1';
   if(options.body && !(options.body instanceof FormData)) {headers['Content-Type']='application/json';options={...options,body:JSON.stringify(options.body)};}
   let response;
-  try {response=await fetch(path,{...options,credentials:publicRead?'omit':'same-origin',headers});} catch {throw new ApiError("连接暂时中断，请重试。",0,'NETWORK');}
-  let data;try{data=await response.json();}catch{throw new ApiError("服务暂时不可用，请稍后重试。",response.status,'BAD_RESPONSE');}
+  try {response=await fetch(path,{...options,signal,credentials:publicRead?'omit':'same-origin',headers});} catch {signal.throwIfAborted();throw new ApiError("连接暂时中断，请重试。",0,'NETWORK');}
+  let data;try{data=await response.json();}catch{signal.throwIfAborted();throw new ApiError("服务暂时不可用，请稍后重试。",response.status,'BAD_RESPONSE');}
+  signal.throwIfAborted();
   assertCurrent();
   if(path==='/api/me'&&response.ok)assertAuthAccount(data.user?.id);
   if(!response.ok){const error=new ApiError(data.error?.message||"暂时无法完成，请重试。",response.status,data.error?.code);for(const field of ['current','existingWork','existingVersion'])if(data.error?.[field])error[field]=data.error[field];throw error;}
   return data;
+  },{signal:options.signal,timeoutMs:apiTimeout(path,options)});
 }
 const notificationCenter=createNotificationCenter({header:$('#notification-entry'),api,esc,notify,onSessionChanged:()=>{me=null;authChecked=false;identity();}});
 function signinURL(){return authURL('sign-in','/site.html'+(location.hash||'#/'));}

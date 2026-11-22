@@ -186,3 +186,7 @@ registerMessages({
   "正在提交，请稍后切换语言": "Wait for the submission before changing language",
   "查看 {name} 的讨论": "View discussion for {name}"
 });
+registerMessages({
+  '请求超时，请重试。': 'The request timed out. Please retry.',
+  '请求已取消。': 'The request was cancelled.',
+});

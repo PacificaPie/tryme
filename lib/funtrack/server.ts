@@ -1,4 +1,5 @@
 import { createCardFeedService } from './card-feed-service.mjs';
+import { reportUnexpectedError } from './error-reporting.mjs';
 import { createMixedFeedService } from './mixed-feed-service.mjs';
 import { createOnboardingService } from './onboarding-service.mjs';
 import { createPublishDraftService, publicationChoices } from './publish-draft-service.mjs';
@@ -49,7 +50,7 @@ async function onPublished(workId:string,versionId:string,ownerId:string){await 
 const first=(query:string,...values:any[])=>sql(query,...values).first<Row>();
 async function rows(query:string,...values:any[]):Promise<Row[]> { return (await sql(query,...values).all<Row>()).results; }
 export function json(value:unknown,status=200) { return Response.json(value,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}}); }
-function errorResponse(error:unknown) { if(error instanceof ApiError){const details=error as ApiError&{current?:unknown;existingWork?:unknown;existingVersion?:unknown};return json({error:{code:error.code,message:error.message,...(details.current?{current:details.current}:{}),...(details.existingWork?{existingWork:details.existingWork}:{}),...(details.existingVersion?{existingVersion:details.existingVersion}:{})}},error.status);} return json({error:{code:'INTERNAL_ERROR',message:'服务暂不可用，请保留内容后重试'}},500); }
+function errorResponse(error:unknown,operation='api') { if(error instanceof ApiError){const details=error as ApiError&{current?:unknown;existingWork?:unknown;existingVersion?:unknown};return json({error:{code:error.code,message:error.message,...(details.current?{current:details.current}:{}),...(details.existingWork?{existingWork:details.existingWork}:{}),...(details.existingVersion?{existingVersion:details.existingVersion}:{})}},error.status);} const requestId=reportUnexpectedError(error,operation);return json({error:{code:'INTERNAL_ERROR',message:'服务暂不可用，请保留内容后重试',requestId}},500); }
 async function hash(value:string|Uint8Array) {const bytes=typeof value==='string'?new TextEncoder().encode(value):value;const result=await crypto.subtle.digest('SHA-256',bytes as BufferSource);return Array.from(new Uint8Array(result),n=>n.toString(16).padStart(2,'0')).join('');}
 async function limitedBody(request:Request,max:number) {
   const declared=Number(request.headers.get('content-length')||0);if(declared>max)fail(413,'BODY_TOO_LARGE','请求内容过大');
@@ -154,10 +155,8 @@ async function workLike(request:Request,user:User,workId:string) {
   const results=await db().batch<Row>([mutation,...liked?[recommendations.creditStatement(user.id,workId,'like')]:[],countQuery]);
   return json(likeJSON(workId,results[results.length-1].results[0]));
 }
-async function rateLimit(user:User,table:'ft_events'|'ft_play_sessions'|'ft_feedback'|'ft_comments',column:'received_at'|'created_at',limit:number) {
-  const actor=table==='ft_feedback'||table==='ft_comments'?'author_id':'actor_id';const result=await first(`SELECT COUNT(*) AS n FROM ${table} WHERE ${actor}=? AND ${column}>=?`,user.id,new Date(Date.now()-60000).toISOString());
-  if(Number(result?.n)>=limit)throw new ApiError(429,'RATE_LIMITED','提交太频繁，请稍后重试');
-}
+const minuteBefore=(at:string)=>new Date(Date.parse(at)-60000).toISOString();
+const rateLimited=()=>new ApiError(429,'RATE_LIMITED','提交太频繁，请稍后重试');
 function receipt(row:Row) { return {id:row.id,clientEventId:row.client_event_id,type:row.event_type,...(row.work_id?{workId:row.work_id}:{}),...(row.version_id?{versionId:row.version_id}:{}),...(row.card_id?{cardId:row.card_id}:{}),receivedAt:row.received_at}; }
 
 async function readPublicationForm(request:Request,max=PUBLICATION_MAX_BYTES){
@@ -231,9 +230,10 @@ async function createSession(request:Request,user:User) {
   const input=await bodyJSON(request),w=await getWork(input.workId);
   const version=await first('SELECT * FROM ft_work_versions WHERE id=? AND work_id=?',String(input.versionId||''),w.id);
   if(!version||!version.game_key||w.source!=='html')throw new ApiError(422,'NOT_HOSTED_GAME','该版本没有平台托管的游戏');
-  await rateLimit(user,'ft_play_sessions','created_at',30);
   const id=uuid(),token=Array.from(crypto.getRandomValues(new Uint8Array(32)),n=>n.toString(16).padStart(2,'0')).join(''),createdAt=iso(),expiresAt=new Date(Date.now()+3600000).toISOString();
-  await sql('INSERT INTO ft_play_sessions (id,actor_id,work_id,version_id,token_hash,created_at,expires_at) VALUES (?,?,?,?,?,?,?)',id,user.id,w.id,version.id,await hash(token),createdAt,expiresAt).run();
+  const result=await sql(`INSERT INTO ft_play_sessions (id,actor_id,work_id,version_id,token_hash,created_at,expires_at)
+    SELECT ?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM ft_play_sessions WHERE actor_id=? AND created_at>=?)<30`,id,user.id,w.id,version.id,await hash(token),createdAt,expiresAt,user.id,minuteBefore(createdAt)).run();
+  if(!result.meta.changes)throw rateLimited();
   return json({id,token,gameUrl:`/game/${version.id}`,expiresAt},201);
 }
 
@@ -254,16 +254,23 @@ async function ingestSession(request:Request,user:User,id:string) {
     pending.push({...event,recordId:uuid(),receivedAt:iso()});
   }
   if(pending.length){
-    await rateLimit(user,'ft_events','received_at',240);
+    // Each row consumes the same atomic quota as non-session events. A batch
+    // can accept a prefix; the client retries stable event IDs, so committed
+    // rows remain safe replays and the remaining events can resume later.
     await db().batch(pending.map(event=>sql(`INSERT OR IGNORE INTO ft_events (id,client_event_id,actor_id,work_id,version_id,session_id,event_type,seq,elapsed_ms,result_json,received_at)
       SELECT ?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM ft_play_sessions WHERE id=? AND actor_id=? AND expires_at>?)
       AND NOT EXISTS (SELECT 1 FROM ft_events WHERE session_id=? AND (event_type='session_end' OR seq>=?))
-      AND (?<>'game_complete' OR EXISTS (SELECT 1 FROM ft_events WHERE session_id=? AND event_type='play_start'))`,
+      AND (?<>'game_complete' OR EXISTS (SELECT 1 FROM ft_events WHERE session_id=? AND event_type='play_start'))
+      AND (SELECT COUNT(*) FROM ft_events WHERE actor_id=? AND received_at>=?)<240`,
       event.recordId,event.id,user.id,session.work_id,session.version_id,id,event.type,event.seq,event.elapsedMs,event.result?JSON.stringify(event.result):null,event.receivedAt,
-      id,user.id,event.receivedAt,id,event.seq,event.type,id)));
+      id,user.id,event.receivedAt,id,event.seq,event.type,id,user.id,minuteBefore(event.receivedAt))));
   }
   const accepted:Row[]=[];
-  for(const event of pending){const row=await first('SELECT * FROM ft_events WHERE id=?',event.recordId);if(row)accepted.push(receipt(row));else{const duplicate=await first('SELECT * FROM ft_events WHERE session_id=? AND event_type=?',id,event.type);if(duplicate)duplicates.push(event.id);else throw new ApiError(409,'EVENT_ORDER','会话状态已变化，请检查事件顺序');}}
+  for(const event of pending){const row=await first('SELECT * FROM ft_events WHERE id=?',event.recordId);if(row)accepted.push(receipt(row));else{const duplicate=await first('SELECT * FROM ft_events WHERE session_id=? AND event_type=?',id,event.type);if(duplicate)duplicates.push(event.id);else{
+    const used=await first('SELECT COUNT(*) n FROM ft_events WHERE actor_id=? AND received_at>=?',user.id,minuteBefore(event.receivedAt));
+    if(Number(used?.n)>=240)throw rateLimited();
+    throw new ApiError(409,'EVENT_ORDER','会话状态已变化，请检查事件顺序');
+  }}}
   return json({accepted,duplicates});
 }
 
@@ -274,9 +281,10 @@ async function ingestEvent(request:Request,user:User) {
   else if(type==='card_view'){const card=await first('SELECT id FROM ft_cards WHERE id=? AND deleted_at IS NULL',String(input.cardId||''));if(!card)throw new ApiError(404,'CARD_NOT_FOUND','名片不存在');cardId=card.id;}
   else throw new ApiError(422,'INVALID_EVENT','事件类型无效');
   function response(row:Row,duplicate:boolean){if(row.event_type!==type||row.work_id!==workId||row.card_id!==cardId||(input.versionId!==undefined&&row.version_id!==versionId))throw new ApiError(409,'EVENT_CONFLICT','事件标识已用于不同内容');return json({receipt:receipt(row),duplicate});}
-  if(prior)return response(prior,true);await rateLimit(user,'ft_events','received_at',240);
-  const id=uuid();await sql('INSERT OR IGNORE INTO ft_events (id,client_event_id,actor_id,work_id,version_id,card_id,event_type,received_at) VALUES (?,?,?,?,?,?,?,?)',id,clientId,user.id,workId,versionId,cardId,type,iso()).run();
-  const row=await first('SELECT * FROM ft_events WHERE actor_id=? AND client_event_id=?',user.id,clientId);if(!row)throw new Error('Event insertion failed');return response(row,row.id!==id);
+  if(prior)return response(prior,true);
+  const id=uuid(),at=iso();await sql(`INSERT OR IGNORE INTO ft_events (id,client_event_id,actor_id,work_id,version_id,card_id,event_type,received_at)
+    SELECT ?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM ft_events WHERE actor_id=? AND received_at>=?)<240`,id,clientId,user.id,workId,versionId,cardId,type,at,user.id,minuteBefore(at)).run();
+  const row=await first('SELECT * FROM ft_events WHERE actor_id=? AND client_event_id=?',user.id,clientId);if(!row)throw rateLimited();return response(row,row.id!==id);
 }
 
 function feedbackJSON(f:Row) {return {id:f.id,workId:f.work_id,workName:f.work_name,versionId:f.version_id,text:f.text,type:f.type,authorId:f.author_id,authorName:f.author_name,createdAt:f.created_at};}
@@ -293,12 +301,12 @@ async function addFeedback(request:Request,user:User) {
   const versionId=input.versionId===undefined&&prior&&prior.work_id===w.id?prior.version_id:await targetVersion(input.versionId,w);
   function response(f:Row,status:number){if(f.work_id!==w.id||(input.versionId!==undefined&&f.version_id!==versionId)||f.text!==text||f.type!==input.type)throw new ApiError(409,'EVENT_CONFLICT','反馈标识已用于不同内容');return json({feedback:feedbackJSON({...f,work_name:w.name}),receipt:{id:f.id,clientEventId:f.client_event_id,type:'feedback',workId:f.work_id,versionId:f.version_id,receivedAt:f.created_at}},status);}
   if(prior)return response(prior,200);
-  await rateLimit(user,'ft_feedback','created_at',30);
-  const id=uuid();await db().batch([
-    sql('INSERT OR IGNORE INTO ft_feedback (id,client_event_id,work_id,version_id,author_id,author_name,text,type,created_at) VALUES (?,?,?,?,?,?,?,?,?)',id,clientId,w.id,versionId,user.id,(await userProfile(user)).name,text,input.type,iso()),
+  const id=uuid(),at=iso();await db().batch([
+    sql(`INSERT OR IGNORE INTO ft_feedback (id,client_event_id,work_id,version_id,author_id,author_name,text,type,created_at)
+      SELECT ?,?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM ft_feedback WHERE author_id=? AND created_at>=?)<30`,id,clientId,w.id,versionId,user.id,(await userProfile(user)).name,text,input.type,at,user.id,minuteBefore(at)),
     recommendations.creditStatement(user.id,w.id,'feedback',id),
   ]);
-  const f=await first('SELECT * FROM ft_feedback WHERE author_id=? AND client_event_id=?',user.id,clientId);if(!f)throw new Error('Feedback insertion failed');return response(f,f.id===id?201:200);
+  const f=await first('SELECT * FROM ft_feedback WHERE author_id=? AND client_event_id=?',user.id,clientId);if(!f)throw rateLimited();return response(f,f.id===id?201:200);
 }
 
 // These queries deliberately never read ft_feedback. Legacy private messages
@@ -518,11 +526,11 @@ export async function handleAPI(request:Request) {
 }
 
 export async function publicCardPageResponse(request:Request,id:string) {
-  try{return await publicSharing.page(request,id);}catch(e){return errorResponse(e);}
+  try{return await publicSharing.page(request,id);}catch(e){return errorResponse(e,'public_card');}
 }
 export async function mediaResponse(request:Request,id:string) {
-  try{authenticate(request.headers);const v=await first('SELECT cover_key,cover_mime FROM ft_work_versions WHERE id=? UNION ALL SELECT cover_key,cover_mime FROM ft_work_metadata WHERE id=? LIMIT 1',id,id);if(!v?.cover_key)throw new ApiError(404,'MEDIA_NOT_FOUND','封面不存在');const object=await bucket().get(v.cover_key);if(!object)throw new ApiError(404,'MEDIA_NOT_FOUND','封面文件不存在');return new Response(object.body as unknown as BodyInit,{headers:{'Content-Type':v.cover_mime,'Cache-Control':'private, max-age=3600','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'}});}catch(e){return errorResponse(e);}
+  try{authenticate(request.headers);const v=await first('SELECT cover_key,cover_mime FROM ft_work_versions WHERE id=? UNION ALL SELECT cover_key,cover_mime FROM ft_work_metadata WHERE id=? LIMIT 1',id,id);if(!v?.cover_key)throw new ApiError(404,'MEDIA_NOT_FOUND','封面不存在');const object=await bucket().get(v.cover_key);if(!object)throw new ApiError(404,'MEDIA_NOT_FOUND','封面文件不存在');return new Response(object.body as unknown as BodyInit,{headers:{'Content-Type':v.cover_mime,'Cache-Control':'private, max-age=3600','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'}});}catch(e){return errorResponse(e,'media');}
 }
 export async function gameResponse(request:Request,id:string) {
-  try{authenticate(request.headers);const v=await first('SELECT game_key FROM ft_work_versions WHERE id=?',id);if(!v?.game_key)throw new ApiError(404,'GAME_NOT_FOUND','游戏不存在');const object=await bucket().get(v.game_key);if(!object)throw new ApiError(404,'GAME_NOT_FOUND','游戏文件不存在');return new Response(gameDocument(await object.text(),new URL(request.url).origin),{headers:{'Content-Type':'text/html; charset=utf-8','Content-Security-Policy':GAME_CSP,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'}});}catch(e){return errorResponse(e);}
+  try{authenticate(request.headers);const v=await first('SELECT game_key FROM ft_work_versions WHERE id=?',id);if(!v?.game_key)throw new ApiError(404,'GAME_NOT_FOUND','游戏不存在');const object=await bucket().get(v.game_key);if(!object)throw new ApiError(404,'GAME_NOT_FOUND','游戏文件不存在');return new Response(gameDocument(await object.text(),new URL(request.url).origin),{headers:{'Content-Type':'text/html; charset=utf-8','Content-Security-Policy':GAME_CSP,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'}});}catch(e){return errorResponse(e,'game');}
 }

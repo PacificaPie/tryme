@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import {fixture,OWNER,OTHER,handleAPI} from './helpers/router-fixture.mjs';
 import {createAuthClient} from '../public/auth-client.js';
+import {apiTimeout,withRequestDeadline} from '../public/api-request.js';
 
 const expected=id=>({'X-Funtrack-Expected-User':id});
 test('stale page identity is rejected before profile, interaction and publication writes or receipts',async t=>{
@@ -43,12 +44,12 @@ const source=readFileSync(new URL('../public/site.js',import.meta.url),'utf8');
 // Keep this transport harness scoped to the API boundary; the notification
 // widget mounted immediately after it needs a real DOM and has separate tests.
 const apiSource=source.slice(source.indexOf('class ApiError extends Error'),source.indexOf('const notificationCenter='));
-function clientHarness(){
+function clientHarness({timers=globalThis}={}){
   let owner='clerk:a',send=async()=>({ok:true,status:200,json:async()=>({saved:true})});
   const clerk={user:{id:'a'},session:{id:'session-a',getToken:async()=> 'header.payload.signature'},signOut:async()=>{}};
   const auth=createAuthClient({fetchImpl:async()=>({ok:true,json:async()=>({provider:'clerk',configured:true,environment:'test',publishableKey:'pk_test_'+Buffer.from('demo.clerk.accounts.dev$').toString('base64')})}),loadClerk:async()=>clerk});
   // Accessors make every await observe the current account, as the real page does.
-  const scope={get draftOwner(){return owner;},get me(){return {id:owner};},authHeaders:auth.authHeaders,assertAuthAccount:(...args)=>auth.assertAuthAccount(...args),fetch:(...args)=>send(...args)};
+  const scope={apiTimeout,withRequestDeadline:(task,options)=>withRequestDeadline(task,{...options,timers}),get draftOwner(){return owner;},get me(){return {id:owner};},authHeaders:auth.authHeaders,assertAuthAccount:(...args)=>auth.assertAuthAccount(...args),fetch:(...args)=>send(...args)};
   const api=Function('scope',`with(scope){${apiSource};return api;}`)(scope);
   return {api,clerk,setOwner:value=>{owner=value;},transport:fn=>{send=fn;}};
 }
@@ -87,4 +88,41 @@ test('a stale initial me response cannot hydrate a different current Clerk accou
   h.transport(async()=>({ok:true,status:200,json:()=>{started();return new Promise(resolve=>{release=resolve;});}}));
   const pending=h.api('/api/me');await gate;h.clerk.user={id:'b'};release({user:{id:'clerk:a',name:'A'}});
   await assert.rejects(pending,{code:'AUTH_SESSION_CHANGED'});
+});
+
+function deadlineClock(){
+  const jobs=new Map();let id=0;
+  return {jobs,setTimeout(fn,ms){jobs.set(++id,{fn,ms});return id;},clearTimeout(key){jobs.delete(key);},expire(){assert.equal(jobs.size,1);[...jobs.values()][0].fn();}};
+}
+test('the production API deadline covers a hung token and never sends a late write',async()=>{
+  const timers=deadlineClock(),h=clientHarness({timers});let release,started,requests=0;
+  const ready=new Promise(resolve=>{started=resolve;});
+  h.clerk.session.getToken=()=>{started();return new Promise(resolve=>{release=resolve;});};h.transport(async()=>{requests++;return {ok:true,json:async()=>({})};});
+  const pending=h.api('/api/cards',{method:'POST',headers:{'Idempotency-Key':'same-key'},body:{workIds:['work']}});
+  const rejected=assert.rejects(pending,{code:'REQUEST_TIMEOUT',status:0});await ready;timers.expire();await rejected;
+  release('header.payload.signature');await new Promise(resolve=>setImmediate(resolve));assert.equal(requests,0);assert.equal(timers.jobs.size,0);
+});
+test('hung JSON body is bounded; late data is discarded and retry preserves the submission key',async()=>{
+  const timers=deadlineClock(),h=clientHarness({timers}),requests=[];let release,started;
+  const ready=new Promise(resolve=>{started=resolve;});
+  h.transport(async(path,options)=>{requests.push(options);return {ok:true,status:200,json:()=>{started();return new Promise(resolve=>{release=resolve;});}};});
+  const options={method:'POST',headers:{'Idempotency-Key':'same-key'},body:{workIds:['work']}},pending=h.api('/api/cards',options);
+  const rejected=assert.rejects(pending,{code:'REQUEST_TIMEOUT'});await ready;timers.expire();await rejected;assert.equal(requests[0].signal.aborted,true);
+  release({card:{id:'late-card'}});await new Promise(resolve=>setImmediate(resolve));
+  h.transport(async(path,options)=>{requests.push(options);return {ok:true,status:200,json:async()=>({card:{id:'committed-card'}})};});
+  assert.equal((await h.api('/api/cards',options)).card.id,'committed-card');
+  assert.equal(requests[1].headers['Idempotency-Key'],requests[0].headers['Idempotency-Key']);assert.equal(requests[1].body,requests[0].body);assert.equal(timers.jobs.size,0);
+});
+test('a caller cancellation settles ignored transport and an already cancelled request never sends',async()=>{
+  const timers=deadlineClock(),h=clientHarness({timers}),controller=new AbortController();let count=0,started;
+  const ready=new Promise(resolve=>{started=resolve;});h.transport(()=>{count++;started();return new Promise(()=>{});});
+  const pending=h.api('/api/works?mine=1',{signal:controller.signal}),rejected=assert.rejects(pending,{code:'REQUEST_ABORTED'});
+  await ready;controller.abort();await rejected;assert.equal(timers.jobs.size,0);
+  await assert.rejects(h.api('/api/works?mine=1',{signal:controller.signal}),{code:'REQUEST_ABORTED'});assert.equal(count,1);
+});
+test('deadline policy leaves longer bounded windows for uploads, imports and captures',()=>{
+  assert.equal(apiTimeout('/api/me'),15000);assert.equal(apiTimeout('/api/cards',{method:'POST'}),30000);
+  assert.equal(apiTimeout('/api/works',{method:'POST',body:new FormData()}),90000);
+  assert.equal(apiTimeout('/api/imports/github',{method:'POST'}),60000);
+  assert.equal(apiTimeout('/api/publish-drafts/draft-id/capture',{method:'POST'}),45000);
 });

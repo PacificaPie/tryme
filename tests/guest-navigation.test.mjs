@@ -5,12 +5,13 @@ import vm from 'node:vm';
 import ts from 'typescript';
 import {safeAuthReturnTo} from '../public/auth-client.js';
 import {createPublishedCardPrompt} from '../public/published-card-prompt.js';
+import {apiTimeout,withRequestDeadline} from '../public/api-request.js';
 
 const source=ts.createSourceFile('site.js',readFileSync(new URL('../public/site.js',import.meta.url),'utf8'),ts.ScriptTarget.Latest,true,ts.ScriptKind.JS);
 const declaration=name=>source.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text===name).getText(source);
 test('public Feed fetch is independent of Clerk availability and sends neither session credentials nor Bearer tokens',async()=>{
   const calls=[];let authCalls=0;
-  const context=vm.createContext({FormData,draftOwner:null,assertAuthAccount(){},ApiError:Error,authHeaders:async()=>{authCalls++;throw Error('Clerk unavailable');},fetch:async(path,options)=>{calls.push({path,options});return Response.json({works:[]});}});
+  const context=vm.createContext({FormData,apiTimeout,withRequestDeadline,draftOwner:null,assertAuthAccount(){},ApiError:Error,authHeaders:async()=>{authCalls++;throw Error('Clerk unavailable');},fetch:async(path,options)=>{calls.push({path,options});return Response.json({works:[]});}});
   vm.runInContext(declaration('api'),context);
   assert.deepEqual(JSON.parse(JSON.stringify(await context.api('/api/public/discover?q=rain'))),{works:[]});
   assert.equal(authCalls,0);assert.equal(calls[0].options.credentials,'omit');assert.equal(calls[0].options.headers.Authorization,undefined);

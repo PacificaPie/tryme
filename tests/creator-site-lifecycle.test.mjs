@@ -123,6 +123,14 @@ test('saving synchronizes the latest profile before forming its request and reta
   assert.deepEqual(f.navigations,['/card/'+cardId+'?saved=1']);assert.equal(f.context.cardPending,false);assert.equal(f.context.onboardingState.hasCard,true);
 });
 
+test('a timed-out card save releases the button and retries the same pinned snapshot and key',async()=>{
+  const f=fixture(),saving=f.context.preview,pending=f.context.saveCard(),first=f.calls[0];
+  first.reject(Object.assign(Error('请求超时，请重试。'),{status:0,code:'REQUEST_TIMEOUT'}));await pending;
+  assert.equal(f.context.cardPending,false);assert.equal(f.context.preview,saving);assert.equal(f.buttons.get('#save-card').disabled,false);assert.equal(f.buttons.get('#save-card').textContent,'重试保存');
+  const retry=f.context.saveCard();assert.deepEqual(plain(f.calls[1].options),plain(first.options));
+  f.calls[1].resolve({card:{id:cardId}});await retry;assert.deepEqual(f.navigations,['/card/'+cardId+'?saved=1']);
+});
+
 test('a late old save success or deleted-card error cannot navigate away from or erase a newer preview',async()=>{
   for(const outcome of ['success','deleted']){
     const f=fixture(),pending=f.context.saveCard(),newPreview={...structuredClone(originalPreview),saveKey:'new-preview-key',name:'New preview'};
