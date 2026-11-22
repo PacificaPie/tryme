@@ -16,14 +16,14 @@ const source=readFileSync(new URL('../../lib/funtrack/server.ts',import.meta.url
   .replace(/import \{ analyticsResponse \} from '\.\/analytics';/,'const analyticsResponse=async()=>{throw Error("Analytics is outside this fixture");};')
   .replace(/from '(\.\/[^']+)'/g,(_,path)=>`from '${new URL('../../lib/funtrack/'+path.slice(2),import.meta.url).href}'`);
 const compiled=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
-const {handleAPI,gameResponse,testBindings}=await import('data:text/javascript;base64,'+Buffer.from(compiled).toString('base64'));
+const {handleAPI,gameResponse,mediaResponse,publicCardPageResponse,testBindings}=await import('data:text/javascript;base64,'+Buffer.from(compiled).toString('base64'));
 const OWNER='publication-owner',OTHER='publication-other',REVIEWER='publication-reviewer';
 const html=label=>`<!doctype html><html><body><button>${label}</button></body></html>`;
 const digest=value=>createHash('sha256').update(value).digest('hex');
 const migrations=readdirSync('drizzle').filter(file=>file.endsWith('.sql')).sort();
 const png=new Uint8Array([137,80,78,71,13,10,26,10,1,2,3]);
 
-export function fixture(t,{legacy=false,through=legacy?6:Infinity,autoCover=false,autoPreview=false,externalCover=false,prepublish=false}={}){
+export function fixture(t,{legacy=false,through=legacy?6:Infinity,autoCover=false,autoPreview=false,externalCover=false,prepublish=false,moderators=''}={}){
   const database=new DatabaseSync(':memory:');t.after(()=>database.close());database.exec('PRAGMA foreign_keys=ON');
   const applied=migrations.filter(file=>Number(file.slice(0,4))<=through),added=migrations.filter(file=>Number(file.slice(0,4))>through);
   for(const file of applied)database.exec(readFileSync('drizzle/'+file,'utf8'));
@@ -45,7 +45,7 @@ export function fixture(t,{legacy=false,through=legacy?6:Infinity,autoCover=fals
   const bucket={async put(key,value){if(faults.put){faults.put=false;throw Error('R2 unavailable');}objects.set(key,new Uint8Array(value));},
     async delete(keys){for(const key of Array.isArray(keys)?keys:[keys]){deleted.push(key);objects.delete(key);}},
     async get(key){const bytes=objects.get(key);return bytes?{size:bytes.length,body:bytes,async text(){return new TextDecoder().decode(bytes);},async arrayBuffer(){return bytes.slice().buffer;}}:null;}};
-  testBindings({DB:db,BUCKET:bucket,...prepublish?{FUNTRACK_PREPUBLISH_MEDIA_REQUIRED:"1"}:{},FUNTRACK_REVIEWER_IDS:REVIEWER,testBuilds,...autoCover?{FUNTRACK_AUTO_COVER_ENABLED:'1',BROWSER:{fetch:async()=>{throw Error('No real browser in the local fixture');}}}:{},...externalCover?{FUNTRACK_COVER_REVIEW_ENABLED:'1',BROWSER:{fetch:async()=>{throw Error('No real browser in the local fixture');}}}:{},...autoPreview?{FUNTRACK_VIDEO_PREVIEW_ENABLED:'1',BROWSER:{fetch:async()=>{throw Error('No real browser in the local fixture');}}}:{}});
+  testBindings({DB:db,BUCKET:bucket,FUNTRACK_MODERATOR_IDS:moderators,...prepublish?{FUNTRACK_PREPUBLISH_MEDIA_REQUIRED:"1"}:{},FUNTRACK_REVIEWER_IDS:REVIEWER,testBuilds,...autoCover?{FUNTRACK_AUTO_COVER_ENABLED:'1',BROWSER:{fetch:async()=>{throw Error('No real browser in the local fixture');}}}:{},...externalCover?{FUNTRACK_COVER_REVIEW_ENABLED:'1',BROWSER:{fetch:async()=>{throw Error('No real browser in the local fixture');}}}:{},...autoPreview?{FUNTRACK_VIDEO_PREVIEW_ENABLED:'1',BROWSER:{fetch:async()=>{throw Error('No real browser in the local fixture');}}}:{}});
   function request(path,{method='GET',body,owner=OWNER,key=randomUUID(),extraHeaders={}}={}){
     const headers={'oai-authenticated-user-id':owner,'oai-authenticated-user-email':owner+'@example.test','oai-authenticated-user-full-name':owner};
     if(method!=='GET'){headers.Origin='https://site.test';headers['X-Funtrack-CSRF']='1';headers['Idempotency-Key']=key;if(!(body instanceof FormData))headers['Content-Type']='application/json';}
@@ -81,4 +81,4 @@ export function fixture(t,{legacy=false,through=legacy?6:Infinity,autoCover=fals
 }
 
 
-export {OWNER,OTHER,REVIEWER,html,digest,gameResponse,handleAPI};
+export {OWNER,OTHER,REVIEWER,html,digest,gameResponse,mediaResponse,publicCardPageResponse,handleAPI};

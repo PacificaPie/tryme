@@ -1,3 +1,4 @@
+import { reportUnexpectedError, reportJobOutcome } from '../lib/funtrack/error-reporting.mjs';
 import { createPublishDraftService } from '../lib/funtrack/publish-draft-service.mjs';
 import handler from 'vinext/server/fetch-handler';
 import { createClerkClient } from '@clerk/backend';
@@ -17,15 +18,15 @@ export default {
   async scheduled(_controller: ScheduledController, env: Cloudflare.Env) {
     const bindings=env as unknown as { DB: D1Database; BUCKET: R2Bucket; BROWSER?: Fetcher; FUNTRACK_AUTO_COVER_ENABLED?: string; FUNTRACK_VIDEO_PREVIEW_ENABLED?: string; FUNTRACK_COVER_REVIEW_ENABLED?: string };
     const drafts=createCoverDraftService({db:()=>bindings.DB,bucket:()=>bindings.BUCKET,configured:()=>false,capture:async()=>{},bodyJSON:async()=>({})});
-    try { await drafts.cleanup(); } catch { console.warn('Draft cover cleanup deferred.'); }
+    try { await drafts.cleanup(); } catch(error) { reportUnexpectedError(error,'cleanup_cover'); }
     const mediaDrafts=createPublishDraftService({db:()=>bindings.DB,bucket:()=>bindings.BUCKET} as any);
-    try { await mediaDrafts.cleanup(); } catch { console.warn('Private media cleanup deferred.'); }
+    try { await mediaDrafts.cleanup(); } catch(error) { reportUnexpectedError(error,'cleanup_media'); }
     const covers=createAutoCoverService({db:()=>bindings.DB,bucket:()=>bindings.BUCKET,configured:()=>bindings.FUNTRACK_COVER_REVIEW_ENABLED!=='1'&&bindings.FUNTRACK_AUTO_COVER_ENABLED==='1'&&typeof bindings.BROWSER?.fetch==='function',capture:(html:string)=>captureHostedHTML(bindings.BROWSER,html)});
-    try { await covers.processPending(); } catch { console.warn('Automatic cover job unavailable; publication remains available.'); }
+    try { reportJobOutcome(await covers.processPending(),'scheduled_cover'); } catch(error) { reportUnexpectedError(error,'scheduled_cover'); }
     const external=createCoverReviewService({db:()=>bindings.DB,bucket:()=>bindings.BUCKET,configured:()=>bindings.FUNTRACK_COVER_REVIEW_ENABLED==='1'&&typeof bindings.BROWSER?.fetch==='function',capture:(content:string,options:{source:string;waitMs:number})=>options.source==='html'?captureHostedHTML(bindings.BROWSER,content,{settleMs:options.waitMs}):captureExternalCover(bindings.BROWSER,content,options)});
-    try { await external.processPending(); } catch { console.warn('External cover job unavailable; publication remains available.'); }
+    try { reportJobOutcome(await external.processPending(),'scheduled_external'); } catch(error) { reportUnexpectedError(error,'scheduled_external'); }
     const previews=createVideoPreviewService({db:()=>bindings.DB,bucket:()=>bindings.BUCKET,configured:()=>bindings.FUNTRACK_VIDEO_PREVIEW_ENABLED==='1'&&typeof bindings.BROWSER?.fetch==='function',capture:(html:string)=>captureVideoPreview(bindings.BROWSER,html)});
-    try { await previews.processPending(); } catch { console.warn('Automatic preview job unavailable; publication remains available.'); }
+    try { reportJobOutcome(await previews.processPending(),'scheduled_video'); } catch(error) { reportUnexpectedError(error,'scheduled_video'); }
   },
   fetch: createStandaloneHandler({
     fetch: (request: Request, env: Cloudflare.Env, ctx: ExecutionContext) => retainPublishCapture(request, ctx, handler.fetch(request, env, ctx)),

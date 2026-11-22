@@ -1,0 +1,31 @@
+{
+  "checkedAt": "2026-11-22T17:03:55.313Z",
+  "origin": "https://trymecard.com",
+  "ok": true,
+  "checks": [
+    {
+      "name": "site",
+      "ok": true,
+      "status": 200,
+      "elapsedMs": 333
+    },
+    {
+      "name": "discover",
+      "ok": true,
+      "status": 200,
+      "elapsedMs": 942
+    },
+    {
+      "name": "auth_config",
+      "ok": true,
+      "status": 200,
+      "elapsedMs": 652
+    },
+    {
+      "name": "anonymous_boundary",
+      "ok": true,
+      "status": 401,
+      "elapsedMs": 694
+    }
+  ]
+}

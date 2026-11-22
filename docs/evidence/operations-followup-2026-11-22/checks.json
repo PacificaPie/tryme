@@ -1,0 +1,31 @@
+{
+  "check": "passed",
+  "standaloneBuild": "passed",
+  "tests": {
+    "tests": 762,
+    "pass": 762,
+    "fail": 0
+  },
+  "d1": {
+    "passed": true,
+    "scope": "Fresh local D1, real router SQL",
+    "statements": 58,
+    "result": {
+      "actions": 2,
+      "restrictions": 0,
+      "cards": 1
+    }
+  },
+  "alerts": {
+    "verified": false,
+    "endpoints": [
+      "policies",
+      "available_alerts",
+      "destinations/eligible"
+    ],
+    "httpStatus": 403,
+    "apiCode": 10000,
+    "notificationsSent": 0
+  },
+  "deployed": false
+}

@@ -5,9 +5,9 @@ import path from 'node:path';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {readAnalytics} from '../../lib/funtrack/analytics-query.mjs';
-import {fixture,OWNER,handleAPI} from '../helpers/router-fixture.mjs';
+import {fixture,OWNER,handleAPI,publicCardPageResponse} from '../helpers/router-fixture.mjs';
 
-const cleanup=[],f=fixture({after:fn=>cleanup.push(fn)},{prepublish:true});
+const cleanup=[],f=fixture({after:fn=>cleanup.push(fn)},{prepublish:true,moderators:process.env.CREATOR_WORKSPACE_MODERATION==='1'?OWNER:''});
 const root=fileURLToPath(new URL('../../public/',import.meta.url));
 const port=Number(process.env.CREATOR_WORKSPACE_PORT||4937),base=`http://127.0.0.1:${port}`;
 const users={existing:OWNER,empty:'workspace-empty',archived:'workspace-archived'};
@@ -34,8 +34,9 @@ const server=http.createServer(async(req,res)=>{
     if(url.pathname==='/__workspace'){
       const account=url.searchParams.get('account');
       if(account&&Object.hasOwn(users,account))res.setHeader('Set-Cookie',`workspace-account=${account}; Path=/; SameSite=Lax`);
-      return send(res,{works:works.map(w=>w.id),card:card.id,writes,cards:f.database.prepare('SELECT id,snapshot_json FROM ft_cards ORDER BY rowid').all(),versions:f.database.prepare('SELECT * FROM ft_work_versions ORDER BY rowid').all()});
+      return send(res,{works:works.map(w=>w.id),card:card.id,writes,cards:f.database.prepare('SELECT id,snapshot_json FROM ft_cards ORDER BY rowid').all(),moderation:f.database.prepare('SELECT target_type,target_id,action,revision FROM ft_moderation_actions ORDER BY seq').all(),versions:f.database.prepare('SELECT * FROM ft_work_versions ORDER BY rowid').all()});
     }
+    if(url.pathname.startsWith('/c/')){const response=await publicCardPageResponse(new Request(url),url.pathname.split('/')[2]);res.writeHead(response.status,Object.fromEntries(response.headers));res.end(await response.text());return;}
     if(url.pathname==='/api/auth/config')return send(res,{provider:'sites',configured:true});
     if(url.pathname.startsWith('/api/')||url.pathname.startsWith('/media/')){
       const account=/workspace-account=(\w+)/.exec(req.headers.cookie||'')?.[1]||'existing',owner=users[account]||OWNER;

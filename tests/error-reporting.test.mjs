@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {reportUnexpectedError} from '../lib/funtrack/error-reporting.mjs';
+import {reportUnexpectedError,reportJobOutcome} from '../lib/funtrack/error-reporting.mjs';
 import {fixture} from './helpers/router-fixture.mjs';
 
 test('unexpected errors log only bounded metadata, never exception strings, SQL or credentials',()=>{
@@ -22,4 +22,14 @@ test('HTTP 500 responses correlate to a safe log record and expected denials do 
   assert.equal(records.length,1);assert.equal(records[0].requestId,failed.error.requestId);
   assert(!JSON.stringify({failed,records}).includes('private value'));
   const denied=await f.api('/api/me',{extraHeaders:{'X-Funtrack-Expected-User':'other'}});assert.equal(denied.status,409);assert.equal(records.length,1);
+});
+
+
+test('returned job failures are observable without provider text, while idle and successful jobs stay quiet',()=>{
+  const records=[],logger={error:value=>records.push(JSON.parse(value))};
+  for(const result of [{processed:false},{processed:true,status:'ready'},{processed:true,status:'skipped'}])reportJobOutcome(result,'scheduled_video',logger);
+  assert.equal(records.length,0);
+  reportJobOutcome({processed:true,status:'failed',reason:'CAPTURE_TIMEOUT'},'scheduled_video',logger);
+  reportJobOutcome({processed:true,status:'failed',reason:'secret provider URL'},'scheduled_cover',logger);
+  assert.equal(records[0].reason,'CAPTURE_TIMEOUT');assert.equal(records[1].reason,'CAPTURE_FAILED');assert(!JSON.stringify(records).includes('secret'));
 });

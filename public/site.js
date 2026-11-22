@@ -1,3 +1,4 @@
+import {renderModeration} from './moderation.js';
 import { mountCardDiscovery } from './feed-card.js';
 import { apiTimeout, withRequestDeadline } from './api-request.js';
 import { mountOnboarding, onboardingRoute, createOnboardingInvitation, onboardingInvitationMarkup } from './onboarding.js';
@@ -243,6 +244,7 @@ async function renderRoute(options={}){
     else if(r.path==='/cards')await renderCards(number);
     else if(r.path.startsWith('/work/'))await renderWork(r,number,!visitRecorded,options.localeOnly!==true);
     else if(r.path==='/publish')renderPublish(number);
+    else if(r.path==='/admin/moderation'){const owner=me.id;await renderModeration({api,esc,render:html=>applyHTML(html,number),current:()=>number===routeNumber&&me?.id===owner});}
     else if(r.path.startsWith('/published/'))await renderPublished(r,number);
     else if(/^\/studio\/works\/[^/]+\/discovery$/.test(r.path))await renderDiscoverySettings(r,publicationHelpers(number));
     else if(/^\/studio\/works\/[^/]+\/edit$/.test(r.path))await renderWorkEdit(r,{api,esc,owner:me.id,fileStore,signinURL,notify,go,isCurrent:()=>number===routeNumber,render:html=>applyHTML(html,number),onChanged:()=>clearDiscovery()});

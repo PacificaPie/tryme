@@ -123,7 +123,10 @@ test('card search uses live identity and authenticated following applies equally
 });
 
 test('0023 upgrades existing data without opting in old cards or changing old migration history',async t=>{
-  const f=fixture(t,{through:22}),{work}=await f.publish(),card=await save(f,work);
+  const f=fixture(t,{through:22}),seed=f.seed();
+  // Seed pre-upgrade data without running today's router against an old schema.
+  const card={id:crypto.randomUUID(),authorId:OWNER,template:'wall',name:'Legacy card',workIds:[seed.id],works:[{id:seed.id,versionId:seed.versionId,name:'Legacy'}]};
+  f.database.prepare('INSERT INTO ft_cards(id,author_id,snapshot_json,created_at) VALUES(?,?,?,?)').run(card.id,OWNER,JSON.stringify(card),new Date().toISOString());
   const stored=f.database.prepare('SELECT snapshot_json FROM ft_cards WHERE id=?').get(card.id).snapshot_json;
   f.migrate();assert.equal(f.count('ft_card_feed_selections'),0);
   assert.equal(f.database.prepare('SELECT snapshot_json FROM ft_cards WHERE id=?').get(card.id).snapshot_json,stored);

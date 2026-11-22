@@ -204,3 +204,13 @@ export const publishDrafts = sqliteTable('ft_publish_drafts', {
 export const publishCaptures = sqliteTable('ft_publish_captures', {
  id:text('id').primaryKey(),draftId:text('draft_id').notNull().references(()=>publishDrafts.id),kind:text('kind').notNull(),status:text('status').notNull(),waitMs:integer('wait_ms').notNull(),reservedSeconds:integer('reserved_seconds').notNull(),leaseUntil:text('lease_until').notNull(),objectKey:text('object_key'),byteSize:integer('byte_size'),durationMs:integer('duration_ms'),reason:text('reason'),elapsedMs:integer('elapsed_ms'),createdAt:text('created_at').notNull(),
 },t=>[index('ft_publish_captures_draft').on(t.draftId,t.kind,t.createdAt),index('ft_publish_captures_budget').on(t.kind,t.createdAt)]);
+
+// Append-only moderation decisions. The SQL migration defines the current
+// restriction view and audit/write-protection triggers.
+export const moderationActions = sqliteTable('ft_moderation_actions', {
+  seq: integer('seq').primaryKey({autoIncrement:true}), targetType: text('target_type').notNull(), targetId: text('target_id').notNull(),
+  revision: integer('revision').notNull(), action: text('action').notNull(), actorId: text('actor_id').notNull(), reason: text('reason').notNull(),
+  idempotencyKey: text('idempotency_key').notNull(), requestHash: text('request_hash').notNull(), createdAt: text('created_at').notNull(),
+}, t=>[uniqueIndex('ft_moderation_target_revision').on(t.targetType,t.targetId,t.revision),uniqueIndex('ft_moderation_actor_key').on(t.actorId,t.idempotencyKey),
+  check('ft_moderation_target',sql`${t.targetType} IN ('work','card')`),check('ft_moderation_action',sql`${t.action} IN ('block','restore')`),
+  check('ft_moderation_revision',sql`${t.revision} > 0`),check('ft_moderation_reason',sql`length(${t.reason}) BETWEEN 1 AND 1000`)]);
