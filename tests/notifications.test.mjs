@@ -13,9 +13,11 @@ const all=(f,through,owner=OWNER)=>f.api('/api/notifications/read-all',{method:'
 
 test('migration leaves old interactions untouched and only future successful source writes notify',async t=>{
   const f=fixture(t,{through:18}),w=f.seed();
-  assert.equal((await like(f,w.id)).status,200);
-  assert.equal((await comment(f,w.id)).status,201);
-  assert.equal((await follow(f)).status,200);
+  // Historical rows are seeded directly; the current router requires the current schema.
+  const at=new Date().toISOString();
+  f.database.prepare('INSERT INTO ft_work_likes(work_id,actor_id,created_at) VALUES(?,?,?)').run(w.id,OTHER,at);
+  f.database.prepare('INSERT INTO ft_comments(id,work_id,author_id,author_name,body,created_at,idempotency_key,request_hash) VALUES(?,?,?,?,?,?,?,?)').run(randomUUID(),w.id,OTHER,OTHER,'Old comment',at,randomUUID(),'old');
+  f.database.prepare('INSERT INTO ft_creator_follows(follower_id,creator_id,created_at) VALUES(?,?,?)').run(OTHER,OWNER,at);
   const before=['ft_work_likes','ft_comments','ft_creator_follows'].map(table=>f.database.prepare('SELECT * FROM '+table).all());
   f.migrate();
   assert.equal(f.count('ft_notifications'),0);

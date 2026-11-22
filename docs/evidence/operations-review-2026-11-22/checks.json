@@ -1,0 +1,35 @@
+{
+  "baseline": "05b5007944d891ca994b7f4fa15ef855d4b21ea1",
+  "node": "v22.22.0",
+  "check": "passed",
+  "standaloneBuild": "passed; no deployment",
+  "tests": {
+    "tests": 751,
+    "pass": 751,
+    "fail": 0
+  },
+  "builderRunner": {
+    "tests": 6,
+    "pass": 6,
+    "fail": 0
+  },
+  "productionDependencyAudit": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0,
+    "total": 0
+  },
+  "localD1": {
+    "scope": "fresh local D1 only",
+    "mutations": 310,
+    "counts": {
+      "sessions": 30,
+      "events": 240,
+      "feedback": 30,
+      "session_events": 1
+    },
+    "passed": true
+  }
+}

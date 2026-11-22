@@ -1,0 +1,27 @@
+{
+  "browser": "Chrome/157.0.8103.79",
+  "scope": "Local frontend/router/SQLite; synthetic auth/storage and injected capture 429; no real devices or cloud services",
+  "records": [
+    {
+      "scenario": "committed card response lost, real timeout, same-key retry",
+      "width": 390,
+      "elapsedMs": 30025,
+      "attempts": 2,
+      "newCards": 1,
+      "originalSnapshotUnchanged": true
+    },
+    {
+      "scenario": "quota reason, explicit skip, successful local publication",
+      "width": 390,
+      "locale": "zh-CN",
+      "noHorizontalOverflow": true
+    },
+    {
+      "scenario": "quota reason, explicit skip, successful local publication",
+      "width": 320,
+      "locale": "en",
+      "noHorizontalOverflow": true
+    }
+  ],
+  "uncaughtErrors": []
+}

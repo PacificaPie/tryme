@@ -1,0 +1,14 @@
+{
+  "passed": true,
+  "browser": "Chrome/157.0.8103.79",
+  "width": 390,
+  "scope": "Local synthetic accounts, real frontend/router/SQLite",
+  "checks": [
+    "lost committed response retries one decision",
+    "block removes work and public card/page",
+    "restore retains original snapshots and versions",
+    "unprivileged account sees no controls",
+    "no horizontal overflow"
+  ],
+  "uncaughtErrors": []
+}

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createPublishMediaController,publishSourceKey} from '../public/publish-media.js';
+import {createPublishMediaController,publishSourceKey,publishMediaFailure} from '../public/publish-media.js';
 const flush=()=>new Promise(r=>setTimeout(r,2));
 async function until(fn){for(let n=0;n<100;n++){if(fn())return;await flush();}assert.fail('state did not settle');}
 function setup(extra={}){const calls=[],drafts=new Map();let persisted;
@@ -55,4 +55,14 @@ test('reselecting identical HTML while capturing resumes the same draft and atte
  e.c.sync({source:'html',file:new File(['same bytes'],'game.html')});await until(()=>pending);
  e.c.sync({source:'html',file:new File(['same bytes'],'game.html')});await until(()=>e.c.state.video?.status==='ready');
  assert.equal(new Set(drafts).size,1);assert.equal(attempts[0].id,attempts[1].id);assert.equal(attempts[0].path,attempts[1].path);
+});
+
+test('exhausted or unavailable media stops automatic retries and explicit skips still allow publication',async t=>{
+ for(const code of ['CAPTURE_LIMIT','BROWSER_UNAVAILABLE']){
+  const calls=[],e=setup({api:async(path,o)=>{calls.push(path);if(path==='/api/publish-drafts')return {id:o.body.get('id'),expiresAt:new Date(Date.now()+86400000).toISOString()};throw Object.assign(Error('Provider failure'),{status:code==='CAPTURE_LIMIT'?429:503,code});}});
+  t.after(()=>e.c.dispose());e.c.sync({source:'html',file:new File(['test'],'a.html')});await until(()=>e.c.state.video?.status==='failed');
+  assert.equal(e.c.state.cover.reason,code);assert.equal(e.c.state.video.reason,code);assert.equal(calls.length,3);
+  assert.match(publishMediaFailure(code),/跳过预览继续发布/);assert.equal(e.c.canPublish,false);
+  e.c.choose('cover','skip');e.c.choose('video','skip');assert.equal(e.c.canPublish,true);await flush();assert.equal(calls.length,3);
+ }
 });

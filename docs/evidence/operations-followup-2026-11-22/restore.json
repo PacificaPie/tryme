@@ -1,0 +1,14 @@
+{
+  "passed": true,
+  "scope": "Production D1 export and permanent referenced R2 objects restored into fresh local D1/R2 only",
+  "sourceWorker": "funtrack-production",
+  "tables": 34,
+  "rows": 321,
+  "objects": 14,
+  "bytes": 7028011,
+  "cards": 6,
+  "cardWorkReferences": 11,
+  "elapsedMs": 13371,
+  "remoteWrites": false,
+  "temporaryCaptureDraftsIncluded": false
+}
